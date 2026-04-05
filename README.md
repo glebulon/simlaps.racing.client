@@ -158,8 +158,7 @@ sim-laps-client/
 │   ├── core/
 │   │   ├── log_parser.py    # ACE log parsing (refactored, uses models/)
 │   │   ├── api_client.py    # Server communication
-│   │   ├── security.py      # Signing & game detection
-│   │   └── steam_auth.py    # Steam authentication (unused)
+│   │   └── security.py      # Signing & game detection
 │   └── utils/
 │       ├── config.py        # Settings management
 │       └── helpers.py       # Utility functions

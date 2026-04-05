@@ -256,7 +256,7 @@ class LogParser:
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write("\n".join(self.log_buffer))
             return True
-        except Exception as exc:
+        except (OSError, IOError) as exc:
             _debug.log(f"[ERROR] export_logs_to_file: {exc}")
             return False
 
@@ -267,7 +267,7 @@ class LogParser:
         if self.on_status_change:
             try:
                 await self.on_status_change(status)
-            except Exception as exc:
+            except (RuntimeError, asyncio.CancelledError) as exc:
                 _debug.log(f"[ERROR] on_status_change: {exc}")
 
     async def _emit_lap(self, session: SessionData, lap: LapData) -> None:
@@ -278,7 +278,7 @@ class LogParser:
         if self.on_lap_complete:
             try:
                 await self.on_lap_complete(session, lap)
-            except Exception as exc:
+            except (RuntimeError, asyncio.CancelledError) as exc:
                 _debug.log(f"[ERROR] on_lap_complete: {exc}")
 
     async def _emit_game_status(self, is_running: bool) -> None:
@@ -286,7 +286,7 @@ class LogParser:
         if self.on_game_status_change:
             try:
                 await self.on_game_status_change(is_running)
-            except Exception as exc:
+            except (RuntimeError, asyncio.CancelledError) as exc:
                 _debug.log(f"[ERROR] on_game_status_change: {exc}")
 
     async def _emit_user_detected(
@@ -296,7 +296,7 @@ class LogParser:
         if self.on_user_detected:
             try:
                 await self.on_user_detected(steam_id, player_name)
-            except Exception as exc:
+            except (RuntimeError, asyncio.CancelledError) as exc:
                 _debug.log(f"[ERROR] on_user_detected: {exc}")
 
     # ── Stint management ──────────────────────────────────────────────────────
@@ -1281,7 +1281,7 @@ class LogParser:
                     lap = self._process_line(line)
                     if lap:
                         historical_laps += 1
-                except Exception as exc:
+                except (RuntimeError, ValueError, TypeError) as exc:
                     _debug.log(f"[ERROR] Historical parse: {exc}")
 
             _debug.log(
@@ -1314,7 +1314,7 @@ class LogParser:
             if self.context.game_version != "Unknown" and self.on_game_version:
                 try:
                     await self.on_game_version(self.context.game_version)
-                except Exception as exc:
+                except (RuntimeError, asyncio.CancelledError) as exc:
                     _debug.log(f"[ERROR] on_game_version: {exc}")
 
             # ── Live tail ──────────────────────────────────────────────────────
@@ -1339,7 +1339,7 @@ class LogParser:
 
                     try:
                         completed = self._process_line(line)
-                    except Exception as exc:
+                    except (RuntimeError, ValueError, TypeError) as exc:
                         _debug.log(f"[ERROR] Live process_line: {exc}")
                         continue
 
@@ -1349,7 +1349,7 @@ class LogParser:
                         )
                         try:
                             await self._emit_lap(session, completed)
-                        except Exception as exc:
+                        except (RuntimeError, asyncio.CancelledError) as exc:
                             _debug.log(f"[ERROR] emit_lap: {exc}")
                     continue
 

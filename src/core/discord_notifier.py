@@ -46,21 +46,6 @@ class DiscordNotifier:
         self.webhook_url = webhook_url
         self.timeout = timeout
     
-    def format_lap_time(self, lap_time_ms: int) -> str:
-        """
-        Format lap time in minutes:seconds.milliseconds.
-        
-        Args:
-            lap_time_ms: Lap time in milliseconds
-            
-        Returns:
-            Formatted lap time string
-        """
-        total_seconds = lap_time_ms / 1000
-        minutes = int(total_seconds // 60)
-        seconds = total_seconds % 60
-        return f"{minutes}:{seconds:06.3f}"
-    
     def create_lap_embed(self, lap_data: LapData) -> Dict[str, Any]:
         """
         Create Discord embed for lap data.
@@ -82,11 +67,13 @@ class DiscordNotifier:
         # Title with PB indicator (now included in field)
         title = "Lap Time Recorded"
         
+        from src.utils.helpers import format_lap_time
+        
         # Format sectors as code block
         sectors_code = ""
         if lap_data.sector_times_ms and len(lap_data.sector_times_ms) >= 3:
             s1, s2, s3 = lap_data.sector_times_ms[:3]
-            sectors_code = f"```\nS1: {self.format_lap_time(s1)}\nS2: {self.format_lap_time(s2)}\nS3: {self.format_lap_time(s3)}\n```"
+            sectors_code = f"```\nS1: {format_lap_time(s1)}\nS2: {format_lap_time(s2)}\nS3: {format_lap_time(s3)}\n```"
         
         # Format session details
         session_details = []
@@ -103,7 +90,7 @@ class DiscordNotifier:
         field_name = "🫙 New PB" if lap_data.is_personal_best else "Lap Recorded"
         fields.append({
             "name": field_name,
-            "value": f"**Driver:** {lap_data.steam_name or 'Unknown'}\n🏎️ **Car:** {lap_data.car_name.replace('_', ' ').replace('ks_', '').title()} • 🏁 **Track:** {lap_data.track_name.replace('_', ' ').title()} • ⏱️ **Lap Time:** {self.format_lap_time(lap_data.lap_time_ms)}",
+            "value": f"**Driver:** {lap_data.steam_name or 'Unknown'}\n🏎️ **Car:** {lap_data.car_name.replace('_', ' ').replace('ks_', '').title()} • 🏁 **Track:** {lap_data.track_name.replace('_', ' ').title()} • ⏱️ **Lap Time:** {format_lap_time(lap_data.lap_time_ms)}",
             "inline": False
         })
         
@@ -175,7 +162,7 @@ class DiscordNotifier:
         except httpx.RequestError as e:
             print(f"Discord webhook request failed: {e}")
             return False
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             print(f"Unexpected error posting to Discord: {e}")
             return False
     
@@ -218,7 +205,7 @@ class DiscordNotifier:
                 
                 return response.status_code in (200, 204)
                 
-        except Exception as e:
+        except (RuntimeError, ValueError, TypeError) as e:
             print(f"Discord test message failed: {e}")
             return False
     

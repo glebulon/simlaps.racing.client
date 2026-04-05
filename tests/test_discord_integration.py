@@ -18,13 +18,13 @@ class TestDiscordNotifier:
     
     def test_format_lap_time(self):
         """Test lap time formatting."""
-        notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+        from src.utils.helpers import format_lap_time
         
         # Test various lap times
-        assert notifier.format_lap_time(65432) == "1:05.432"
-        assert notifier.format_lap_time(120000) == "2:00.000"
-        assert notifier.format_lap_time(95847) == "1:35.847"
-        assert notifier.format_lap_time(60000) == "1:00.000"
+        assert format_lap_time(65432) == "1:05.432"
+        assert format_lap_time(120000) == "2:00.000"
+        assert format_lap_time(95847) == "1:35.847"
+        assert format_lap_time(60000) == "1:00.000"
     
     def test_create_lap_embed(self):
         """Test Discord embed creation."""
@@ -108,8 +108,8 @@ class TestDiscordNotifier:
     async def test_post_lap_failure(self):
         """Test lap posting failure."""
         with patch('httpx.AsyncClient') as mock_client:
-            # Mock failed response
-            mock_client.return_value.__aenter__.return_value.post.side_effect = Exception("Network error")
+            # Mock failed response with RuntimeError (which is now caught)
+            mock_client.return_value.__aenter__.return_value.post.side_effect = RuntimeError("Network error")
             
             notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
             

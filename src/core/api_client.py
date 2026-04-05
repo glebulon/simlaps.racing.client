@@ -284,7 +284,7 @@ class APIClient:
                 error_data = {}
                 try:
                     error_data = response.json()
-                except Exception:
+                except (ValueError, KeyError, TypeError):
                     error_data = {"error": response.text}
                 
                 self._debug.log(f"[API] 4XX ERROR - Status {response.status_code}")
@@ -318,7 +318,7 @@ class APIClient:
                 status=SubmissionStatus.NETWORK_ERROR,
                 message="Request timed out",
             )
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             import traceback
             self._debug.log(f"[API] Exception: {e}")
             self._debug.log(f"[API] Traceback: {traceback.format_exc()}")
@@ -384,7 +384,7 @@ class APIClient:
             return False, f"Network error: {str(e)}"
         except httpx.TimeoutException:
             return False, "Connection timed out"
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError) as e:
             return False, f"Error: {str(e)}"
 
     async def test_secret(self) -> tuple[bool, str]:
@@ -442,7 +442,7 @@ class APIClient:
             else:
                 return False, f"Unexpected status {response.status_code}"
                 
-        except Exception as e:
+        except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             self._debug.log(f"[API] test_secret error: {e}")
             return False, f"Error testing secret: {str(e)}"
 
@@ -484,11 +484,14 @@ class APIClient:
                                 "version": latest_version,
                                 "min_version": data.get("minClientVersion"),
                             }
-                    except Exception:
+                    except (ValueError, IndexError):
                         pass
                         
             return {"available": False}
-        except Exception as e:
+        except httpx.NetworkError as e:
+            self._debug.log(f"[API] Update check failed: {e}")
+            return {"available": False}
+        except (RuntimeError, OSError, ConnectionError) as e:
             self._debug.log(f"[API] Update check failed: {e}")
             return {"available": False}
 
