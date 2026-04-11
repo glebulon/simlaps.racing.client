@@ -205,3 +205,402 @@ class TestVersionCheck:
         result = await client.check_for_updates()
         
         assert result["available"] is False
+
+
+class TestAPIClientAdvanced:
+    """Advanced API client tests for coverage."""
+
+    @pytest.fixture
+    def sample_session(self):
+        """Create a sample session for testing."""
+        return SessionData(
+            session_id="test-session-123",
+            game_version="1.0.0",
+            session_type="PRACTICE",
+            car="ks_porsche_992_gt3_cup",
+            track="spa_francorchamps",
+            player_id="76561198321627695",
+            player_name="TestUser",
+        )
+
+    @pytest.fixture
+    def sample_lap(self):
+        """Create a sample lap for testing."""
+        return LapData(
+            lap_number=1,
+            physics_lap_number=1,
+            lap_time_ms=138456,
+            lap_time_str="2:18.456",
+            sector1_ms=45000,
+            sector2_ms=48000,
+            sector3_ms=45456,
+            is_valid=True,
+            tyre_compound="SC",
+        )
+
+    def test_set_server_url(self):
+        """Test setting server URL."""
+        client = APIClient()
+        client.set_server_url("https://newserver.example.com")
+        
+        assert client.server_url == "https://newserver.example.com"
+
+    def test_normalize_track_id_basic(self):
+        """Test track ID normalization."""
+        client = APIClient()
+        
+        result = client._normalize_track_id("Spa Francorchamps")
+        assert result == "spa_francorchamps"
+
+    def test_normalize_track_id_with_suffix(self):
+        """Test track ID normalization with suffix removal."""
+        client = APIClient()
+        
+        result = client._normalize_track_id("Spa Francorchamps GP")
+        assert result == "spa_francorchamps"
+
+    def test_normalize_track_id_with_prefix(self):
+        """Test track ID normalization with prefix removal."""
+        client = APIClient()
+        
+        result = client._normalize_track_id("Circuit de Spa Francorchamps")
+        assert "spa" in result
+
+    @pytest.mark.asyncio
+    @patch('httpx.AsyncClient.get')
+    async def test_check_for_updates_with_new_version(self, mock_get):
+        """Test version check when update is available."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"latestClientVersion": "99.0.0"}  # Higher than current
+        mock_get.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.check_for_updates()
+        
+        assert result["available"] is True
+        assert result["version"] == "99.0.0"
+
+    @pytest.mark.asyncio
+    @patch('httpx.AsyncClient.get')
+    async def test_check_for_updates_invalid_version(self, mock_get):
+        """Test version check with invalid version format."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"latestClientVersion": "invalid"}
+        mock_get.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.check_for_updates()
+        
+        assert result["available"] is False
+
+    @pytest.mark.asyncio
+    async def test_close_client(self):
+        """Test closing the HTTP client."""
+        client = APIClient()
+        mock_client = MagicMock()
+        mock_client.aclose = AsyncMock()
+        client._client = mock_client
+        
+        await client.close()
+        
+        mock_client.aclose.assert_called_once()
+        assert client._client is None
+
+    @pytest.mark.asyncio
+    async def test_context_manager(self):
+        """Test async context manager."""
+        async with APIClient() as client:
+            assert isinstance(client, APIClient)
+
+
+class TestSubmitLapErrorResponses:
+    """Test lap submission with various error responses."""
+
+    @pytest.fixture
+    def sample_session(self):
+        """Create a sample session for testing."""
+        return SessionData(
+            session_id="test-session-123",
+            game_version="1.0.0",
+            session_type="PRACTICE",
+            car="ks_porsche_992_gt3_cup",
+            track="spa_francorchamps",
+            player_id="76561198321627695",
+            player_name="TestUser",
+        )
+
+    @pytest.fixture
+    def sample_lap(self):
+        """Create a sample lap for testing."""
+        return LapData(
+            lap_number=1,
+            physics_lap_number=1,
+            lap_time_ms=138456,
+            lap_time_str="2:18.456",
+            sector1_ms=45000,
+            sector2_ms=48000,
+            sector3_ms=45456,
+            is_valid=True,
+            tyre_compound="SC",
+        )
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_401_error(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test 401 signature error handling."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_response.content = b'{}'
+        mock_response.json.return_value = {}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.SIGNATURE_ERROR
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_429_rate_limited(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test 429 rate limit handling."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.RATE_LIMITED
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_500_error(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test 500 server error handling."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.ERROR
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_network_error(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test network error handling."""
+        import httpx
+        mock_game_running.return_value = True
+        mock_post.side_effect = httpx.NetworkError("Connection failed")
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.NETWORK_ERROR
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_timeout(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test timeout handling."""
+        import httpx
+        mock_game_running.return_value = True
+        mock_post.side_effect = httpx.TimeoutException("Request timed out")
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.NETWORK_ERROR
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    async def test_submit_lap_invalid_time(self, mock_game_running, sample_session, sample_lap):
+        """Test lap with invalid time (<= 0)."""
+        mock_game_running.return_value = True
+        sample_lap.lap_time_ms = 0
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.INVALID_LAP
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_with_fuel(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test lap submission with fuel data."""
+        mock_game_running.return_value = True
+        sample_lap.fuel_used = 2.5
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"id": "lap-123"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_with_setup_notes(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test lap submission with setup notes."""
+        mock_game_running.return_value = True
+        sample_session.setup_notes = "Test setup notes"
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"id": "lap-123"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_409_replay(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test 409 replay attack detection."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 409
+        mock_response.json.return_value = {"error": "Replay attack detected"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.REPLAY_REJECTED
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_409_duplicate(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test 409 duplicate lap."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 409
+        mock_response.json.return_value = {"error": "Duplicate lap"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.ERROR
+        assert "Duplicate" in result.message
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_422_plausibility(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test 422 plausibility check failure."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 422
+        mock_response.json.return_value = {"error": "Impossible lap time"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.PLAUSIBILITY_FAILED
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_400_validation(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test 400 validation error."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.json.return_value = {"error": "Invalid track ID"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.ERROR
+        assert "Validation" in result.message
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_403_generic(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test generic 4xx error."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 403
+        mock_response.json.return_value = {"error": "Forbidden"}
+        mock_response.headers = {}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.ERROR
+        assert "403" in result.message
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_with_invalid_fuel(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test lap with invalid fuel value."""
+        mock_game_running.return_value = True
+        sample_lap.fuel_used = "invalid"
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"id": "lap-123"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_with_zero_sectors(self, mock_post, mock_game_running, sample_session, sample_lap):
+        """Test lap with zero sector times (should be filtered)."""
+        mock_game_running.return_value = True
+        sample_lap.sector1_ms = 0
+        sample_lap.sector2_ms = -1
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"id": "lap-123"}
+        mock_post.return_value = mock_response
+        
+        client = APIClient()
+        result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.SUCCESS
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    async def test_submit_lap_runtime_error(self, mock_game_running, sample_session, sample_lap):
+        """Test runtime error handling."""
+        mock_game_running.return_value = True
+        
+        client = APIClient()
+        
+        # Mock _get_client to raise RuntimeError
+        with patch.object(client, '_get_client', side_effect=RuntimeError("Test error")):
+            result = await client.submit_lap(sample_session, sample_lap)
+        
+        assert result.status == SubmissionStatus.ERROR
+        assert "Unexpected error" in result.message

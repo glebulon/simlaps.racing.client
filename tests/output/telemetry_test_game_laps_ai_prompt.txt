@@ -1,0 +1,17 @@
+Telemetry coaching is running in DIAGNOSTIC mode.
+
+Track: Unknown Track
+Laps available: 2
+Analysis confidence: low
+Authoritative progress coverage: 0%
+Plausible physics coverage: 0%
+
+Detailed corner coaching has been suppressed because the lap alignment is not trustworthy enough.
+
+Reasons:
+- Authoritative graphics progress coverage too low (0%); detailed coaching disabled.
+- Physics frame plausibility coverage is only 0%; derived metrics are degraded.
+- Using game-reported lap boundaries without authoritative progress alignment.
+- No trustworthy canonical corners were available for comparison.
+
+Use the session only for diagnostics until graphics-based progress coverage is reliable.
