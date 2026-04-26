@@ -171,6 +171,40 @@ class TestProcessLineHandlers:
         
         assert parser._ip.split_end_confirmed is True
 
+    def test_handle_connect_accepts_new_player_count_format(self):
+        """Test connect lines with '(1)' still identify the player car."""
+        parser = LogParser()
+        parser.current_session = SessionData(track="brands_hatch", session_type="PRACTICE")
+
+        line = (
+            "[2026-04-21 19:51:05.936] [gameplay] [info] "
+            "76561197983218542 connected (1) on car ks_abarth_695_biposto, "
+            "with new carId 4e2c85191a9274ee-634e033ab0de17ae"
+        )
+
+        parser._handle_connect(line)
+
+        assert parser.context.player_id == "76561197983218542"
+        assert parser.context.current_car == "ks_abarth_695_biposto"
+        assert parser.context.car_uuid == "4e2c85191a9274ee-634e033ab0de17ae"
+        assert parser.current_session.car_uuid == "4e2c85191a9274ee-634e033ab0de17ae"
+
+    def test_handle_fuel_accepts_new_setup_with_format(self):
+        """Test fuel setup lines from the updated logs populate initial fuel."""
+        parser = LogParser()
+        parser.context.car_uuid = "4e2c85191a9274ee-634e033ab0de17ae"
+        parser.context.player_car_uuids.add("4e2c85191a9274ee-634e033ab0de17ae")
+        parser.current_session = SessionData(car_uuid="4e2c85191a9274ee-634e033ab0de17ae")
+
+        line = (
+            "[2026-04-21 19:51:40.441] [gameplay] [info] "
+            "FUEL car 4e2c85191a9274ee-634e033ab0de17ae setup with 30.0 L"
+        )
+
+        parser._handle_fuel(line)
+
+        assert parser.current_session.initial_fuel == 30.0
+
 
 class TestFlushPendingCompoundBatch:
     """Test _flush_pending_compound_batch method."""
@@ -234,6 +268,43 @@ class TestHandlePenalty:
         
         assert result is None
 
+    def test_handle_penalty_added_sets_flag(self):
+        """Real PENALTY_ADDED log line must set has_penalty."""
+        parser = LogParser()
+        parser.current_session = SessionData(track="spa", car="porsche")
+        line = (
+            "[2026-04-24 23:09:20.998] [gameface] [warning] "
+            "true {PENALTY_ADDED_KEY} #0 "
+        )
+        parser._handle_penalty(line)
+        assert parser._ip.has_penalty is True
+
+    def test_handle_penalty_cleared_does_not_set_flag(self):
+        """Penalty CLEARED notifications must NOT mark the lap invalid.
+
+        AC Evo emits the same `UINotificationType_SessionPenalty` notification
+        for both additions and clearances; only the trailing warning line
+        differentiates them. Previously the parser matched the generic
+        notification line, so every clearance flipped `has_penalty=True` and
+        invalidated clean racing laps.
+        """
+        parser = LogParser()
+        parser.current_session = SessionData(track="spa", car="porsche")
+        # All three lines that fire when a penalty is cleared:
+        cleared_triplet = [
+            "[2026-04-24 23:07:24.120] [gameface] [info] "
+            "UINotification UINotificationType_SessionPenalty ",
+            "[2026-04-24 23:07:24.120] [gameface] [info] "
+            "Adding notification UINotificationType_SessionPenalty ",
+            "[2026-04-24 23:07:24.121] [gameface] [warning] "
+            "false {PENALTY_CLEARED_KEY} #0 ",
+        ]
+        for line in cleared_triplet:
+            parser._handle_penalty(line)
+        assert parser._ip.has_penalty is False, (
+            "Penalty CLEARED notifications must not be treated as additions."
+        )
+
 
 class TestHandleOutlap:
     """Test outlap detection."""
@@ -259,6 +330,52 @@ class TestHandleOutlap:
         
         # Should reset in-progress
         assert result is None
+
+    def test_outplap_split_ignored_in_race(self):
+        """AC Evo emits one 'Outplap split' per car on the grid at race
+        countdown. These broadcasts must not flag the player's first lap as
+        an outlap — otherwise the first racing lap is silently dropped.
+        """
+        parser = LogParser()
+        parser.current_session = SessionData(
+            track="laguna", car="ks_dallara_exp", session_type="RACE"
+        )
+        line = "[2026-04-24 23:04:17.524] [gameplay] [info] Outplap split"
+
+        # Simulate all six grid broadcasts.
+        for _ in range(6):
+            parser._handle_outlap_signals(line)
+
+        assert parser._ip.is_outlap is False, (
+            "Outplap split in a RACE session must not set is_outlap — "
+            "the first lap is a real competitive lap."
+        )
+
+    def test_outplap_split_honored_in_practice(self):
+        """In practice-like sessions 'Outplap split' is the real player
+        outlap marker and must still be honored.
+        """
+        parser = LogParser()
+        parser.current_session = SessionData(
+            track="laguna", car="ks_dallara_exp", session_type="PRACTICE"
+        )
+        line = "[2026-04-24 23:04:17.524] [gameplay] [info] Outplap split"
+
+        parser._handle_outlap_signals(line)
+
+        assert parser._ip.is_outlap is True
+
+    def test_outplap_split_ignored_in_qualifying(self):
+        """Qualifying is RACE_LIKE: the first timed lap is a real lap."""
+        parser = LogParser()
+        parser.current_session = SessionData(
+            track="laguna", car="ks_dallara_exp", session_type="QUALIFYING"
+        )
+        line = "[2026-04-24 23:04:17.524] [gameplay] [info] Outplap split"
+
+        parser._handle_outlap_signals(line)
+
+        assert parser._ip.is_outlap is False
 
 
 class TestHandleFuelAndLapTracking:

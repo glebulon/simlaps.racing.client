@@ -1,7 +1,7 @@
 Telemetry coaching is running in DIAGNOSTIC mode.
 
 Track: Unknown Track
-Laps available: 2
+Laps available: 4
 Analysis confidence: medium
 Authoritative progress coverage: 100%
 Plausible physics coverage: 0%

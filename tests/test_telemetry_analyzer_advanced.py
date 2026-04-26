@@ -249,7 +249,7 @@ class TestCaptureMetadata:
             captured_at="2024-01-01T00:00:00Z",
             hz=10.0,
             regions_found=["physics"],
-            region_names={"physics": "acpmf_physics"},
+            region_names={"physics": "acevo_pmf_physics"},
             region_sizes={"physics": 1024}
         )
         

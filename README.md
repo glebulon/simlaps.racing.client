@@ -321,7 +321,7 @@ Version is managed in `src/version.py`. Update there to change the version numbe
 
 ## Version
 
-Current version: **1.2.0**
+Current version: **1.2.2**
 
 - Added telemetry capture and analysis
 - Added game-reported lap boundary support

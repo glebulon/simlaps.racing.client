@@ -24,6 +24,7 @@ class LapState(str, Enum):
     INVALID_PENALTY    = "INVALID_PENALTY"     # UI penalty notification
     INVALID_SPLIT      = "INVALID_SPLIT"       # Missing / out-of-order sectors
     INVALID_SECTORS    = "INVALID_SECTORS"     # S1+S2+S3 ≠ lap_time (desync)
+    INVALID_GAME       = "INVALID_GAME"        # Game's authoritative validity flag = false
     ABORTED            = "ABORTED"             # Lap in progress when session ends
 
 

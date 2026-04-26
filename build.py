@@ -47,7 +47,7 @@ from version import VERSION
 # Configuration
 APP_NAME = "SimLapsClient"
 APP_VERSION = VERSION
-ENTRY_POINT = "main.py"  # Moved to root level
+ENTRY_POINT = "src/main.py"  # Correct path to main script
 ICON_PATH = "assets/icon.ico"
 DIST_DIR = "dist"
 BUILD_DIR = "build"
@@ -242,7 +242,6 @@ def build_executable():
         "src.core.track_catalog",
         "src.core.track_catalog:select_track_profile",
         "src.core.track_catalog:build_track_profile",
-        "src.core.track_catalog:get_track_catalog",
         "src.core.telemetry_capture",
         "src.core.telemetry_capture:CaptureMetadata",
         "src.core.telemetry_capture:FrameData",

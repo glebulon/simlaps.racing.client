@@ -63,7 +63,7 @@ class TelemetryStatusIndicator(ft.Container):
         if status == TelemetryStatus.IDLE:
             self._status_icon = ft.Icons.RADIO_BUTTON_UNCHECKED
             self._status_color = "#666666"
-            self._status_text = "Telemetry disabled"
+            self._status_text = "Telemetry idle"
             self.bgcolor = "#1e1e2e"
         elif status == TelemetryStatus.CAPTURING:
             self._status_icon = ft.Icons.FIBER_MANUAL_RECORD
@@ -109,7 +109,8 @@ class TelemetryButton(ft.Container):
     """Button to open telemetry output location."""
 
     def __init__(self, on_click=None, output_path: str = None):
-        self.on_click = on_click
+        # Use _on_click_callback to avoid collision with parent Container.on_click
+        self._on_click_callback = on_click
         self.output_path = output_path
 
         self._button = ft.ElevatedButton(
@@ -135,8 +136,8 @@ class TelemetryButton(ft.Container):
         )
 
     def _handle_click(self, e):
-        if self.on_click:
-            self.on_click(e, self.output_path)
+        if self._on_click_callback:
+            self._on_click_callback(e, self.output_path)
 
     def update_path(self, output_path: str):
         """Update the output path."""

@@ -89,7 +89,21 @@ class DebugLogsViewer:
         logs = _log_capture.get_logs()
         status = "CAPTURE ACTIVE" if _log_capture.capture_enabled else "CAPTURE INACTIVE"
 
-        return f"{status}\n\n{logs}"
+        # Separate telemetry logs for better visibility
+        all_lines = logs.split('\n')
+        telemetry_lines = [line for line in all_lines if '[TELEMETRY]' in line or '[ANALYZER]' in line]
+        other_lines = [line for line in all_lines if '[TELEMETRY]' not in line and '[ANALYZER]' not in line]
+
+        result = f"{status}\n\n"
+        
+        if telemetry_lines:
+            result += "=== TELEMETRY EVENTS ===\n"
+            result += "\n".join(telemetry_lines[-20:]) + "\n\n"  # Show last 20 telemetry events
+            result += "=== OTHER LOGS ===\n"
+        
+        result += "\n".join(other_lines[-30:])  # Show last 30 other logs
+        
+        return result
 
     def _clear_logs(self, e=None):
         """Clear logs."""
@@ -99,69 +113,37 @@ class DebugLogsViewer:
 
     def _export_game_logs(self, e=None):
         """Export game logs to file."""
-        print("[DEBUG_LOGS] EXPORT METHOD CALLED!")
-        self.page.snack_bar = ft.SnackBar(
-            content=ft.Text("Export method called!"),
-            bgcolor="#51cf66"
-        )
-        self.page.snack_bar.open = True
-        self.page.update()
+        from ...utils.structured_logger import log_info, log_warning, log_error, log_exception, Component
         
-        print("[DEBUG_LOGS] Export button clicked!")
+        log_info(Component.DEBUG_LOGS, "Export game logs requested")
+        
         try:
             # Get the app instance from the page
             app_instance = getattr(self.page, '_app_instance', None)
-            print(f"[DEBUG_LOGS] App instance: {app_instance}")
             
             if not app_instance:
-                print("[DEBUG_LOGS] No app instance found")
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("App instance not available"),
-                    bgcolor="#ff6b6b"
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
+                log_warning(Component.DEBUG_LOGS, "No app instance found")
+                self._show_snackbar("App instance not available", "#ff6b6b")
                 return
             
             if not hasattr(app_instance, '_log_parser'):
-                print("[DEBUG_LOGS] App instance has no _log_parser attribute")
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Log parser not available"),
-                    bgcolor="#ff6b6b"
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
+                log_warning(Component.DEBUG_LOGS, "App instance has no log parser")
+                self._show_snackbar("Log parser not available", "#ff6b6b")
                 return
             
             log_parser = app_instance._log_parser
-            print(f"[DEBUG_LOGS] Log parser: {log_parser}")
             
             if not log_parser:
-                print("[DEBUG_LOGS] Log parser is None")
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Log parser not initialized"),
-                    bgcolor="#ff6b6b"
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
+                log_warning(Component.DEBUG_LOGS, "Log parser is None")
+                self._show_snackbar("Log parser not initialized", "#ff6b6b")
                 return
-            
-            # Get log buffer and export to file
-            import os
-            from datetime import datetime
             
             # Check if log buffer has content
             log_lines = log_parser.get_log_buffer()
-            print(f"[DEBUG_LOGS] Log buffer has {len(log_lines)} lines")
             
             if not log_lines:
-                print("[DEBUG_LOGS] Log buffer is empty")
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("No logs to export"),
-                    bgcolor="#ff6b6b"
-                )
-                self.page.snack_bar.open = True
-                self.page.update()
+                log_warning(Component.DEBUG_LOGS, "Log buffer is empty")
+                self._show_snackbar("No logs to export", "#ff6b6b")
                 return
             
             # Create filename with timestamp
@@ -170,36 +152,30 @@ class DebugLogsViewer:
             filename = f"game_logs_{timestamp}.txt"
             filepath = os.path.join(downloads_path, filename)
             
-            print(f"[DEBUG_LOGS] Exporting to: {filepath}")
+            log_info(Component.DEBUG_LOGS, "Exporting game logs", filepath=filepath, lines=len(log_lines))
             
             # Export logs
             success = log_parser.export_logs_to_file(filepath)
-            print(f"[DEBUG_LOGS] Export result: {success}")
             
             if success:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text(f"Game logs exported to {filename}"),
-                    bgcolor="#51cf66"
-                )
+                log_info(Component.DEBUG_LOGS, "Game logs exported successfully", filename=filename)
+                self._show_snackbar(f"Game logs exported to {filename}", "#51cf66")
             else:
-                self.page.snack_bar = ft.SnackBar(
-                    content=ft.Text("Failed to export game logs"),
-                    bgcolor="#ff6b6b"
-                )
-            
-            self.page.snack_bar.open = True
-            self.page.update()
+                log_error(Component.DEBUG_LOGS, "Failed to export game logs")
+                self._show_snackbar("Failed to export game logs", "#ff6b6b")
                 
         except Exception as ex:
-            print(f"[DEBUG_LOGS] Error exporting game logs: {ex}")
-            import traceback
-            traceback.print_exc()
-            self.page.snack_bar = ft.SnackBar(
-                content=ft.Text(f"Error: {str(ex)}"),
-                bgcolor="#ff6b6b"
-            )
-            self.page.snack_bar.open = True
-            self.page.update()
+            log_exception(Component.DEBUG_LOGS, "Error exporting game logs", ex)
+            self._show_snackbar(f"Error: {str(ex)}", "#ff6b6b")
+    
+    def _show_snackbar(self, message: str, bgcolor: str):
+        """Helper to show a snackbar message."""
+        self.page.snack_bar = ft.SnackBar(
+            content=ft.Text(message),
+            bgcolor=bgcolor
+        )
+        self.page.snack_bar.open = True
+        self.page.update()
 
     def _close_dialog(self, e=None):
         """Close the debug logs dialog."""

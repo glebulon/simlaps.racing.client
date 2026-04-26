@@ -421,16 +421,15 @@ class HomePage(ft.Column):
     
     def _handle_logs_click(self, e):
         """Handle Logs button click."""
-        print(f"[HOME] Logs button clicked!")
+        from ...utils.structured_logger import log_info, log_exception, Component
+        
+        log_info(Component.HOME, "Logs button clicked")
         try:
             from ..components.debug_logs import show_debug_logs
-            print(f"[HOME] Import successful, showing debug logs...")
             show_debug_logs(self.page)
-            print(f"[HOME] Debug logs dialog should be visible")
+            log_info(Component.HOME, "Debug logs dialog shown")
         except Exception as ex:
-            print(f"[HOME] Error showing debug logs: {ex}")
-            import traceback
-            traceback.print_exc()
+            log_exception(Component.HOME, "Error showing debug logs", ex)
     
     def update_config(self, config: AppConfig):
         """Update with new config and refresh UI."""
@@ -531,12 +530,23 @@ class HomePage(ft.Column):
     
     def set_telemetry_button(self, button, output_path: str):
         """Set the telemetry button and update its path."""
+        print(f"[HOME] set_telemetry_button called: button={button}, output_path={output_path}")
+        if button is not None:
+            print(f"[HOME] Button on_click before setting: {button.on_click}")
+        
         self._telemetry_button = button
-        self._telemetry_button.update_path(output_path)
-        self._telemetry_button_container.content = ft.Container(
-            content=button,
-            padding=ft.padding.only(left=20, right=20, bottom=8),
-            bgcolor="#0f0f1a",
-        )
-        if self.page:
-            self._telemetry_button_container.update()
+        if button is None:
+            self._telemetry_button_container.content = None
+        else:
+            self._telemetry_button.update_path(output_path)
+            print(f"[HOME] Button on_click after update_path: {button.on_click}")
+            self._telemetry_button_container.content = ft.Container(
+                content=button,
+                padding=ft.padding.only(left=20, right=20, bottom=8),
+                bgcolor="#0f0f1a",
+            )
+        try:
+            if self.page:
+                self._telemetry_button_container.update()
+        except RuntimeError:
+            pass

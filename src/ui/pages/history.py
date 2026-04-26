@@ -97,9 +97,10 @@ class HistoryPage(ft.Container):
         valid = sum(1 for e in self._entries if e.was_valid)
         
         # Debug logging
-        print(f"[DEBUG] History stats - Total: {total}, Submitted: {submitted}, Valid: {valid}")
+        from ...utils.structured_logger import log_debug, Component
+        log_debug(Component.HISTORY, "History stats", total=total, submitted=submitted, valid=valid)
         for i, entry in enumerate(self._entries):
-            print(f"[DEBUG] Entry {i}: submitted={entry.was_submitted}, valid={entry.was_valid}")
+            log_debug(Component.HISTORY, f"Entry {i}", submitted=entry.was_submitted, valid=entry.was_valid)
         
         return ft.Container(
             content=ft.Row(

@@ -141,6 +141,119 @@ class TestHandleLapCompleteWithData:
         # Should detect and fix S1 corruption
         assert True
 
+    def test_handle_lap_complete_first_race_lap_grid_start_valid(self):
+        """Regression: Spa grid-start lap 1 must be marked valid.
+
+        On a grid start the game logs an inflated S1 (cumulative time
+        from race start until the player first crosses the start/finish
+        line) that can be *smaller* than lap_time but still causes
+        S1+S2+S3 to overshoot lap_time. The previous corruption guard
+        only fired when `s1 > lap_time`, so this case slipped through
+        and the lap was wrongly marked INVALID_SECTORS.
+
+        With deferred emit, the lap is buffered on "New lap carId" and
+        flushed when the game's authoritative "Relevant onSplit" line
+        arrives milliseconds later.
+
+        Reference: telemetry/gamelogs/log.txt line 2646-2648
+            New lap carId 48734ba531b55222-50fea70206fd60a7: 02:26.939
+            Relevant onSplit for Combo 6@2: laptime 146939, valid true, ...
+        """
+        parser = LogParser()
+        parser.current_session = SessionData(
+            track="spa",
+            car="dallara_exp",
+            player_id="76561198321627695",
+            session_type="RACE",
+        )
+        parser.context.player_id = "76561198321627695"
+        parser.context.car_uuid = "48734ba531b55222-50fea70206fd60a7"
+        parser.context.tyre.set_all("S")
+
+        parser._ip.physics_lap_num = 1
+        parser._ip.splits = {0: 110411, 1: 64650, 2: 38082}  # raw, S1 inflated
+        parser._ip.split_end_confirmed = True
+
+        # 1) Lap completes — buffered, nothing emitted yet
+        line_new_lap = (
+            "[2026-04-26 00:08:16.599] [gameplay] [info] "
+            "New lap carId 48734ba531b55222-50fea70206fd60a7: 02:26.939"
+        )
+        result = parser._handle_lap_complete(line_new_lap)
+        assert result is None  # deferred emit
+        assert parser._pending_lap is not None
+        assert parser._pending_lap.lap_time_ms == 146939
+        # Heuristic state before authoritative flag arrives:
+        # S1 was back-calculated, so sectors are consistent, but if the
+        # old narrow guard had missed it, this would be INVALID_SECTORS.
+        # With the broadened guard it is already PUSH; the validity line
+        # will confirm it.
+        assert parser._pending_lap.lap_state == LapState.PUSH
+
+        # 2) Authoritative validity line arrives ~13 ms later
+        line_validity = (
+            "[2026-04-26 00:08:16.612] [network] [info] "
+            "Relevant onSplit for Combo 6@2: laptime 146939, valid true, flags 2, lap 1 (prev 0)"
+        )
+        result = parser._handle_lap_validity(line_validity)
+
+        assert result is not None
+        assert result.lap_time_ms == 146939
+        assert result.sector1_ms == 146939 - 64650 - 38082  # 44207
+        assert result.sector2_ms == 64650
+        assert result.sector3_ms == 38082
+        assert result.sectors_consistent is True
+        assert result.lap_state == LapState.PUSH
+        assert result.is_valid is True
+        assert parser._pending_lap is None  # flushed
+
+    def test_handle_lap_validity_game_says_invalid_overrides_push(self):
+        """Test that game's invalid flag demotes a heuristically-valid lap.
+
+        If our sector/split checks say PUSH (valid) but the game says the
+        lap is invalid, we trust the game and mark it INVALID_GAME.
+        """
+        parser = LogParser()
+        parser.current_session = SessionData(
+            track="spa",
+            car="porsche",
+            player_id="76561198321627695",
+            session_type="RACE",
+        )
+        parser.context.player_id = "76561198321627695"
+        parser.context.car_uuid = "abc123-def456"
+        parser.context.tyre.set_all("S")
+
+        # Clean lap by our heuristics (consistent sectors, no penalties, etc.)
+        parser._ip.physics_lap_num = 2
+        parser._ip.splits = {0: 42000, 1: 45000, 2: 38000}  # sum = 125000
+        parser._ip.split_end_confirmed = True
+
+        # 1) Lap completes — buffered
+        line_new_lap = (
+            "[2026-04-26 00:10:41.450] [gameplay] [info] "
+            "New lap carId abc123-def456: 02:05.000"
+        )
+        result = parser._handle_lap_complete(line_new_lap)
+        assert result is None  # deferred emit
+        assert parser._pending_lap is not None
+        assert parser._pending_lap.lap_state == LapState.PUSH
+        assert parser._pending_lap.is_valid is True
+
+        # 2) Game says invalid (e.g., track cut the UI didn't show)
+        line_validity = (
+            "[2026-04-26 00:10:41.462] [network] [info] "
+            "Relevant onSplit for Combo 6@2: laptime 125000, valid false, flags 2, lap 2 (prev 1)"
+        )
+        result = parser._handle_lap_validity(line_validity)
+
+        assert result is not None
+        assert result.lap_time_ms == 125000
+        assert result.lap_state == LapState.INVALID_GAME
+        assert result.is_valid is False
+        assert result.lap_type == "INVALID_GAME"
+        assert parser._pending_lap is None  # flushed
+
     def test_handle_lap_complete_missing_sectors(self):
         """Test handles missing sector data."""
         parser = LogParser()

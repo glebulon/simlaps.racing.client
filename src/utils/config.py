@@ -12,7 +12,7 @@ from typing import Optional
 
 
 # Default configuration values
-DEFAULT_LOG_PATH = str(Path.home() / "Saved Games" / "ACE" / "log.txt")
+DEFAULT_LOG_PATH = str(Path.home() / "Saved Games" / "ACE" / "Logs")
 DEFAULT_SERVER_URL = "https://simlaps.racing"
 APP_NAME = "SimLapsClient"
 
@@ -74,6 +74,12 @@ class AppConfig:
     # Telemetry
     telemetry_enabled: bool = False
     telemetry_output_path: str = field(default_factory=lambda: str(Path.home() / "Documents" / "SimLaps" / "Telemetry"))
+    # When False (default), suppress on-disk debug artefacts produced by the
+    # telemetry capture: ``telemetry_diagnostics_*.log``, ``capture_*.jsonl``,
+    # and ``raw_dump_*.jsonl``. The summary HTML / AI prompt / analyzer
+    # outputs are unaffected. Toggle this on only when reverse-engineering
+    # SHM layouts or chasing a capture-loop bug.
+    telemetry_debug_logs: bool = False
     
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
@@ -133,6 +139,12 @@ class ConfigManager:
                 self._config = AppConfig()
         else:
             self._config = AppConfig()
+        
+        # Migrate old ACE log path (log.txt → Logs directory)
+        old_log_path = str(Path.home() / "Saved Games" / "ACE" / "log.txt")
+        if self._config.log_path == old_log_path:
+            self._config.log_path = DEFAULT_LOG_PATH
+            self.save()
         
         self._loaded = True
         return self._config

@@ -22,12 +22,13 @@ from .components.telemetry_status import TelemetryStatus, TelemetryButton
 from src.core.log_parser import LogParser
 from src.models import SessionData, LapData
 from src.core.api_client import APIClient, SubmissionStatus
-from src.core.security import get_steam_user
+from src.core.security import get_steam_user, is_game_running
 from src.core.discord_notifier import DiscordNotifier, LapData as DiscordLapData
 from src.core.pb_cache import get_pb_cache
 from src.core.telemetry_capture import TelemetryCapture
-from src.core.track_catalog import get_track_catalog
+from src.core.track_catalog import TRACK_CATALOG
 from src.core.telemetry_analyzer import TelemetryAnalyzer
+from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
 from src.utils.config import ConfigManager, AppConfig, get_config_manager
 
 
@@ -48,30 +49,31 @@ class SimLapsApp:
     
     def __init__(self, page: ft.Page):
         self.page = page
-        print("[APP] Initializing SimLapsApp...")
+        log_info(Component.APP, "Initializing SimLapsApp")
         self._setup_page()
         
         # Store app instance reference for components
         page._app_instance = self
         
         # Core services
-        print("[APP] Loading configuration...")
+        log_info(Component.APP, "Loading configuration")
         self._config_manager = get_config_manager()
         self._config = self._config_manager.load()
-        print(f"[APP] Configuration loaded: server={self._config.server_url}")
+        log_info(Component.APP, "Configuration loaded", server=self._config.server_url)
         
         self._api_client: Optional[APIClient] = None
         self._log_parser: Optional[LogParser] = None
         
         # Discord and PB services
-        print("[APP] Initializing Discord and PB services...")
+        log_info(Component.APP, "Initializing Discord and PB services")
         self._discord_notifier: Optional[DiscordNotifier] = None
         self._pb_cache = get_pb_cache(self._config.server_url)
-        print(f"[APP] PB cache initialized: {self._pb_cache is not None}")
+        log_info(Component.APP, "PB cache initialized", initialized=self._pb_cache is not None)
         
         # Parser task
-        print("[APP] Initializing parser task...")
+        log_info(Component.APP, "Initializing parser task")
         self._parser_task: Optional[asyncio.Task] = None
+        self._game_monitor_task: Optional[asyncio.Task] = None
         
         # Telemetry services
         self._telemetry_capture: Optional[TelemetryCapture] = None
@@ -94,6 +96,7 @@ class SimLapsApp:
         print("[APP] Starting initialization...")
         self._init_services()
         self._init_pages()
+        self._attach_telemetry_ui()
         self._show_page(AppPage.HOME)
         print("[APP] Initialization complete!")
     
@@ -185,6 +188,8 @@ class SimLapsApp:
             on_game_status_change=self._on_game_status_change,
             on_user_detected=self._on_user_detected,
             on_game_version=self._on_game_version,
+            on_session_end=self._on_car_removed,
+            on_session_restart=self._on_session_restart,
         )
         
         # Initialize telemetry if enabled
@@ -197,41 +202,104 @@ class SimLapsApp:
             return
         
         try:
-            self._telemetry_capture = TelemetryCapture(hz=20.0)
+            self._telemetry_capture = TelemetryCapture(
+                hz=10.0,
+                output_dir=self._config.telemetry_output_path,
+                debug_logs=self._config.telemetry_debug_logs,
+            )
+            # Set up auto-stop callback to trigger analysis
+            self._telemetry_capture.set_on_stop_callback(self._on_telemetry_auto_stop)
             self._telemetry_analyzer = TelemetryAnalyzer(
                 output_dir=self._config.telemetry_output_path,
-                track_catalog=get_track_catalog(),
+                track_catalog=TRACK_CATALOG,
             )
             
             # Create telemetry button
+            print(f"[APP] Creating TelemetryButton with on_click={self._open_telemetry_location}")
             self._telemetry_button = TelemetryButton(
                 on_click=self._open_telemetry_location,
                 output_path=self._config.telemetry_output_path,
             )
+            print(f"[APP] TelemetryButton created, on_click={self._telemetry_button.on_click}")
             
             # Set button on home page
             if self._home_page:
+                print(f"[APP] Home page exists, calling set_telemetry_button directly from _init_telemetry_services")
                 self._home_page.set_telemetry_button(
                     self._telemetry_button,
                     self._config.telemetry_output_path,
                 )
+            else:
+                print(f"[APP] Home page doesn't exist yet, will attach later")
             
             print(f"[APP] Telemetry services initialized: output={self._config.telemetry_output_path}")
         except Exception as e:
             print(f"[APP] Failed to initialize telemetry: {e}")
             self._telemetry_capture = None
             self._telemetry_analyzer = None
-    
+
+    def _attach_telemetry_ui(self):
+        """Attach telemetry UI controls after the home page exists."""
+        print(f"[APP] _attach_telemetry_ui called: home_page={self._home_page is not None}, button={self._telemetry_button is not None}")
+        if self._telemetry_button:
+            print(f"[APP] Telemetry button on_click: {self._telemetry_button.on_click}")
+        if self._home_page and self._telemetry_button:
+            print(f"[APP] Calling set_telemetry_button...")
+            self._home_page.set_telemetry_button(
+                self._telemetry_button,
+                self._config.telemetry_output_path,
+            )
+        else:
+            print(f"[APP] NOT calling set_telemetry_button - missing home_page or button")
+
     def _open_telemetry_location(self, e, output_path):
         """Open the telemetry output folder in file explorer."""
         import subprocess
+        import os
+        
+        print(f"[APP] _open_telemetry_location called with output_path={output_path}")
+        
         try:
+            if not output_path:
+                print("[APP] No telemetry output path configured")
+                if self.page:
+                    self.page.snack_bar = ft.SnackBar(
+                        content=ft.Text("Telemetry output path not configured"),
+                        bgcolor="#dc2626",
+                    )
+                    self.page.snack_bar.open = True
+                    self.page.update()
+                return
+            
+            # Create directory if it doesn't exist
+            os.makedirs(output_path, exist_ok=True)
+            
+            # Verify directory exists
+            if not os.path.exists(output_path):
+                raise FileNotFoundError(f"Directory does not exist: {output_path}")
+            
+            print(f"[APP] Opening telemetry location: {output_path}")
+            print(f"[APP] Directory exists: {os.path.exists(output_path)}")
+            print(f"[APP] Is directory: {os.path.isdir(output_path)}")
+            
             if sys.platform == "win32":
-                subprocess.Popen(f'explorer "{output_path}"', shell=True)
+                # Use os.startfile which is more reliable for opening folders on Windows
+                os.startfile(output_path)
+                print(f"[APP] Called os.startfile successfully")
             else:
                 subprocess.Popen(["open", output_path])
+                print(f"[APP] Called subprocess.Popen successfully")
         except Exception as ex:
+            import traceback
             print(f"[APP] Failed to open telemetry location: {ex}")
+            traceback.print_exc()
+            if self.page:
+                self.page.snack_bar = ft.SnackBar(
+                    content=ft.Text(f"Failed to open folder: {ex}"),
+                    bgcolor="#dc2626",
+                )
+                self.page.snack_bar.open = True
+                self.page.update()
     
     def _init_pages(self):
         """Initialize page components."""
@@ -281,6 +349,27 @@ class SimLapsApp:
             # Update current track name for telemetry
             if session.track and session.track != "Unknown":
                 self._current_track_name = session.track
+
+            # Record lap boundary in telemetry capture and get fuel consumption
+            if self._telemetry_capture and self._telemetry_capture.is_capturing():
+                fuel_used = self._telemetry_capture.record_lap_boundary(lap.lap_time_ms)
+                
+                # Update lap data with telemetry-calculated fuel if available
+                if fuel_used is not None:
+                    lap.fuel_used = fuel_used
+                    lap.fuel_reliable = True
+                    print(f"[APP] Telemetry fuel: {fuel_used:.3f}L")
+
+            # Fallback: if parser missed a game-status transition (e.g. app
+            # attached mid-session), a lap-complete event proves we're in an
+            # active session. Start telemetry capture now.
+            if (
+                self._config.telemetry_enabled
+                and self._telemetry_capture
+                and not self._telemetry_capture.is_capturing()
+            ):
+                print("[APP] Triggering telemetry capture start (lap-complete fallback)")
+                await self._start_telemetry_capture()
             
             # Determine if we should submit this lap
             should_submit = self._config.auto_submit and (lap.is_valid or self._config.submit_invalid_laps)
@@ -500,6 +589,29 @@ class SimLapsApp:
         if self._home_page:
             self._home_page.set_status(status)
     
+    async def _on_car_removed(self):
+        """Handle player car removal — authoritative session-end signal from game log."""
+        log_info(Component.APP, "Car removed from session — stopping telemetry capture")
+        if self._telemetry_capture and self._telemetry_capture.is_capturing():
+            await asyncio.sleep(1.0)  # Brief pause to capture any final frames
+            await self._stop_telemetry_capture("car_removed")
+
+    async def _on_session_restart(self):
+        """Handle pause-menu Restart Session.
+
+        AC Evo restarts the same session in place without emitting a fresh
+        ``Game Started!`` line, so any telemetry buffer accumulated during
+        the aborted run would otherwise contaminate the restarted run's
+        analysis (and pollute fuel-per-lap deltas). Drop the buffer and
+        immediately spin up a fresh capture so the first lap of the
+        restarted session is fully recorded.
+        """
+        log_info(Component.APP, "Session restart — discarding telemetry buffer and restarting")
+        print("[APP] Session restart detected — restarting telemetry capture")
+        if self._telemetry_capture and self._telemetry_capture.is_capturing():
+            await self._stop_telemetry_capture("session_restart", discard=True)
+        await self._start_telemetry_capture()
+
     async def _on_game_status_change(self, is_running: bool):
         """Handle game running status change."""
         if self._home_page:
@@ -511,6 +623,7 @@ class SimLapsApp:
                     "Session active - recording laps",
                 )
                 # Start telemetry capture
+                print("[APP] Triggering telemetry capture start (session active)")
                 await self._start_telemetry_capture()
             else:
                 # Still connected/monitoring, just no active session
@@ -519,46 +632,129 @@ class SimLapsApp:
                     "Monitoring - waiting for session...",
                 )
                 # Stop telemetry capture and analyze
-                await self._stop_telemetry_capture()
+                # Add a small delay to allow final frames to be captured
+                if self._telemetry_capture and self._telemetry_capture.is_capturing():
+                    await asyncio.sleep(2.0)
+                await self._stop_telemetry_capture("session_end")
     
     async def _start_telemetry_capture(self):
         """Start telemetry capture when game session begins."""
+        log_debug(Component.APP, "Telemetry start requested", 
+                  enabled=self._config.telemetry_enabled, 
+                  capture_exists=self._telemetry_capture is not None)
+        
         if not self._telemetry_capture or not self._config.telemetry_enabled:
+            log_info(Component.APP, "Telemetry start skipped: disabled or unavailable")
+            return
+        if self._telemetry_capture.is_capturing():
+            log_info(Component.APP, "Telemetry start skipped: already capturing")
             return
         
         try:
-            print("[APP] Starting telemetry capture...")
-            self._home_page.set_telemetry_status(TelemetryStatus.CAPTURING, 0)
+            log_info(Component.APP, "Starting telemetry capture from UI")
+            if self._home_page:
+                self._home_page.set_telemetry_status(TelemetryStatus.CAPTURING, 0)
+            
+            # Start capture synchronously
             success = await self._telemetry_capture.start_capture()
             if not success:
-                print("[APP] Telemetry capture failed to start")
-                self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
+                log_error(Component.APP, "Telemetry capture failed to start")
+                if self._home_page:
+                    self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
+            
         except Exception as e:
-            print(f"[APP] Error starting telemetry: {e}")
-            self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
+            log_exception(Component.APP, "Telemetry start error", e)
+            if self._home_page:
+                self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
     
-    async def _stop_telemetry_capture(self):
-        """Stop telemetry capture and generate analysis when game session ends."""
+    async def _on_telemetry_auto_stop(self, reason: str):
+        """Handle automatic stop of telemetry capture (game crash/quit detected)."""
+        log_info(Component.APP, "Telemetry auto-stop", reason=reason)
+        
+        # Update UI to show stopped status
+        if self._home_page:
+            self._home_page.set_connection_status(
+                ConnectionStatus.CONNECTED,
+                f"Session ended ({reason})",
+            )
+        
+        # Run analysis on captured frames
+        if self._telemetry_capture and self._telemetry_analyzer:
+            frames = self._telemetry_capture.get_frames()
+            frame_count = len(frames)
+            
+            if frame_count > 0:
+                log_info(Component.APP, "Starting analysis", frames=frame_count)
+                try:
+                    self._home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
+                    
+                    metadata = self._telemetry_capture.get_metadata()
+                    lap_boundaries = self._telemetry_capture.get_lap_boundaries()
+                    result = await self._telemetry_analyzer.analyze(
+                        frames,
+                        hz=10.0,
+                        metadata=metadata,
+                        track_name=self._current_track_name,
+                        output_prefix=self._telemetry_capture.get_output_prefix(),
+                        game_lap_boundaries=lap_boundaries,
+                    )
+                    
+                    log_info(Component.APP, "Analysis complete", 
+                            laps=result.laps_detected, 
+                            best_lap_time=f"{result.best_lap_time:.1f}s")
+                    self._home_page.set_telemetry_status(
+                        TelemetryStatus.COMPLETE,
+                        frame_count,
+                        result.html_path,
+                    )
+                except Exception as e:
+                    log_exception(Component.APP, "Analysis error", e)
+                    self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
+            else:
+                self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
+    
+    async def _stop_telemetry_capture(self, reason: str = "session_end", discard: bool = False):
+        """Stop telemetry capture and generate analysis when game session ends.
+        
+        Args:
+            reason: Reason for stopping (session_end, manual, heartbeat_timeout, etc.)
+            discard: If True, drop captured frames without running analysis.
+                Used when the buffer is known to be contaminated (e.g. session
+                restart while a previous run was still being recorded).
+        """
         if not self._telemetry_capture or not self._telemetry_analyzer:
             return
+        if not self._telemetry_capture.is_capturing():
+            stop_reason = self._telemetry_capture.get_stop_reason()
+            if stop_reason is not None:
+                print(f"[APP] Telemetry already stopped (reason: {stop_reason}), skipping duplicate stop")
+                return
         
         try:
-            print("[APP] Stopping telemetry capture...")
-            frames = await self._telemetry_capture.stop_capture()
+            print(f"[APP] Stopping telemetry capture (reason: {reason})...")
+            frames = await self._telemetry_capture.stop_capture(reason)
             frame_count = len(frames)
             print(f"[APP] Captured {frame_count} telemetry frames")
-            
+
+            if discard:
+                print(f"[APP] Discarding {frame_count} frames (no analysis on contaminated buffer)")
+                self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
+                return
+
             if frame_count > 0:
                 # Show analyzing status
                 self._home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
                 
                 # Run analysis with track name
                 metadata = self._telemetry_capture.get_metadata()
+                lap_boundaries = self._telemetry_capture.get_lap_boundaries()
                 result = await self._telemetry_analyzer.analyze(
                     frames, 
                     hz=10.0,
                     metadata=metadata,
                     track_name=self._current_track_name,
+                    output_prefix=self._telemetry_capture.get_output_prefix(),
+                    game_lap_boundaries=lap_boundaries,
                 )
                 
                 print(f"[APP] Analysis complete: {result.laps_detected} laps, best: {result.best_lap_time:.2f}s")
@@ -625,7 +821,25 @@ class SimLapsApp:
         
         # Use page.run_task() for proper Flet background task handling
         self._parser_task = self.page.run_task(self._run_parser)
+        self._game_monitor_task = self.page.run_task(self._run_game_monitor)
     
+    async def _run_game_monitor(self):
+        """Poll is_game_running() and stop telemetry if the process disappears."""
+        POLL_INTERVAL = 5.0
+        try:
+            while True:
+                await asyncio.sleep(POLL_INTERVAL)
+                if (
+                    self._telemetry_capture
+                    and self._telemetry_capture.is_capturing()
+                    and not is_game_running()
+                ):
+                    log_info(Component.APP, "Game process gone (monitor) — stopping telemetry")
+                    await self._on_game_status_change(False)
+                    break
+        except asyncio.CancelledError:
+            pass
+
     async def _run_parser(self):
         """Run the log parser in background."""
         try:
@@ -646,6 +860,10 @@ class SimLapsApp:
         if self._parser_task:
             self._parser_task.cancel()
             self._parser_task = None
+        
+        if self._game_monitor_task:
+            self._game_monitor_task.cancel()
+            self._game_monitor_task = None
         
         self._home_page.set_connection_status(
             ConnectionStatus.DISCONNECTED,
@@ -673,6 +891,23 @@ class SimLapsApp:
         # Update services with new settings
         self._api_client.set_server_url(config.server_url)
         
+        # Re-initialize telemetry if settings changed
+        if config.telemetry_enabled and not self._telemetry_capture:
+            print("[APP] Telemetry enabled - initializing services...")
+            self._init_telemetry_services()
+            self._attach_telemetry_ui()
+            self._start_telemetry_on_startup()
+        elif not config.telemetry_enabled and self._telemetry_capture:
+            print("[APP] Telemetry disabled - stopping services...")
+            if self._telemetry_capture.is_capturing():
+                self.page.run_task(self._telemetry_capture.stop_capture, "disabled")
+            self._telemetry_capture = None
+            self._telemetry_analyzer = None
+            # Remove button from home page
+            if self._home_page:
+                self._home_page.set_telemetry_button(None, "")
+            self._telemetry_button = None
+        
         # Restart parser if log path changed
         was_running = self._log_parser.is_running if self._log_parser else False
         
@@ -686,6 +921,8 @@ class SimLapsApp:
             on_game_status_change=self._on_game_status_change,
             on_user_detected=self._on_user_detected,
             on_game_version=self._on_game_version,
+            on_session_end=self._on_car_removed,
+            on_session_restart=self._on_session_restart,
         )
         
         if was_running:
@@ -747,6 +984,13 @@ class SimLapsApp:
     
     def _cleanup(self):
         """Cleanup resources before exit."""
+        # Stop telemetry capture first if running
+        if self._telemetry_capture and self._telemetry_capture.is_capturing():
+            print("[APP] Cleanup: stopping active telemetry capture...")
+            # Use run_task to properly await async stop
+            if self.page:
+                self.page.run_task(self._telemetry_capture.stop_capture, "app_close")
+        
         self.stop_monitoring()
         
         if self._api_client:

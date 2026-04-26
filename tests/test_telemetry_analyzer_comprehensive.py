@@ -26,6 +26,8 @@ def create_mock_frame(frame_num: int, speed: float = 100.0, position: float = 0.
         physics={
             "speed_kmh": speed,
             "normalized_car_position": position,
+            "normalized_position_source": "physics_tyre_z",
+            "has_authoritative_progress": True,
             "gear": 3,
             "rpm": 5000,
         },
@@ -82,7 +84,7 @@ class TestDetectLaps:
                 frames.append(create_mock_frame(len(frames), speed=100.0, position=position))
         
         track = build_track(frames, hz=10.0)
-        lap_bounds = detect_laps(track, hz=10.0, min_lap_time_s=5.0)
+        lap_bounds = detect_laps(track, hz=10.0)
         
         # Should detect approximately 3 laps
         assert len(lap_bounds) >= 1  # At least start
@@ -92,7 +94,7 @@ class TestDetectLaps:
         frames = [create_mock_frame(i, position=i * 0.01) for i in range(200)]
         track = build_track(frames, hz=10.0)
         
-        lap_bounds = detect_laps(track, hz=10.0, min_lap_time_s=5.0)
+        lap_bounds = detect_laps(track, hz=10.0)
         
         # Linear position won't detect laps, but function should run
         assert len(lap_bounds) >= 1  # At least end boundary
@@ -103,7 +105,7 @@ class TestDetectLaps:
         frames = [create_mock_frame(i, position=i * 0.01) for i in range(50)]
         track = build_track(frames, hz=10.0)
         
-        lap_bounds = detect_laps(track, hz=10.0, min_lap_time_s=80.0)
+        lap_bounds = detect_laps(track, hz=10.0)
         
         # Should filter out very short laps
         assert len(lap_bounds) <= 2  # At most start and end
@@ -133,7 +135,7 @@ class TestDetectLaps:
         frames = [create_mock_frame(i, position=i * 0.01) for i in range(100)]
         track = build_track(frames, hz=10.0)
         
-        lap_bounds = detect_laps(track, hz=10.0, min_lap_time_s=5.0)
+        lap_bounds = detect_laps(track, hz=10.0)
         
         # Should detect at least one lap
         assert len(lap_bounds) >= 1
@@ -700,6 +702,176 @@ class TestAnalyzeGripUtilization:
         assert result is None
 
 
+class TestAnalysisModeGate:
+    """Quality gate that decides full-coaching vs diagnostic output.
+
+    Regression test for the evening of 2026-04-25: live AC Evo captures
+    currently have 0% authoritative graphics progress (the decoder isn't
+    written yet) but 100% plausible physics coverage. Prior to this gate
+    relaxation the analyzer suppressed the AI prompt in this state, so the
+    user saw an empty coaching file despite three clean laps on track.
+    """
+
+    def test_authoritative_alone_unlocks_full_mode(self):
+        from src.core.telemetry_analyzer import _decide_analysis_mode
+
+        mode, auth, plausible = _decide_analysis_mode(0.85, 0.40)
+
+        assert mode == "full"
+        assert auth is True
+        assert plausible is False
+
+    def test_high_plausible_unlocks_full_even_without_authoritative(self):
+        """This is the user-facing regression: 0% graphics, 100% physics."""
+        from src.core.telemetry_analyzer import _decide_analysis_mode
+
+        mode, auth, plausible = _decide_analysis_mode(0.0, 1.00)
+
+        assert mode == "full"
+        assert auth is False
+        assert plausible is True
+
+    def test_just_over_plausible_fallback_threshold_unlocks_full(self):
+        """Gate fires at exactly 95% plausible coverage."""
+        from src.core.telemetry_analyzer import _decide_analysis_mode
+
+        assert _decide_analysis_mode(0.0, 0.95)[0] == "full"
+        assert _decide_analysis_mode(0.0, 0.9499)[0] == "diagnostic"
+
+    def test_authoritative_threshold_boundary(self):
+        """Authoritative gate fires at exactly 60% coverage."""
+        from src.core.telemetry_analyzer import _decide_analysis_mode
+
+        assert _decide_analysis_mode(0.60, 0.0)[0] == "full"
+        assert _decide_analysis_mode(0.59, 0.0)[0] == "diagnostic"
+
+    def test_neither_signal_falls_back_to_diagnostic(self):
+        from src.core.telemetry_analyzer import _decide_analysis_mode
+
+        mode, auth, plausible = _decide_analysis_mode(0.20, 0.40)
+
+        assert mode == "diagnostic"
+        assert auth is False
+        assert plausible is False
+
+
+class TestTyreGripDegradation:
+    """Test stint-level tyre grip degradation detection."""
+
+    @staticmethod
+    def _make_lap(lap_num, *, lat_g_peak, core_temp, slip_deg, end_wear, dirty=0.0):
+        """Build a synthetic lap with one cornering frame and one straight frame.
+
+        Both frames carry the same per-wheel tyre data so the analyzer's
+        whole-lap aggregations are deterministic.
+        """
+        import math
+
+        slip_rad = math.radians(slip_deg)
+        wear_per_wheel = end_wear / 100.0  # tyre_wear is 0..1, the analyzer scales by 100
+
+        common_tyre = {
+            "tyre_temp_fl": core_temp, "tyre_temp_fr": core_temp,
+            "tyre_temp_rl": core_temp, "tyre_temp_rr": core_temp,
+            "tyre_wear_fl": wear_per_wheel, "tyre_wear_fr": wear_per_wheel,
+            "tyre_wear_rl": wear_per_wheel, "tyre_wear_rr": wear_per_wheel,
+            "tyre_dirty_fl": dirty, "tyre_dirty_fr": dirty,
+            "tyre_dirty_rl": dirty, "tyre_dirty_rr": dirty,
+            "slip_angle_fl": slip_rad, "slip_angle_fr": slip_rad,
+            "slip_angle_rl": slip_rad, "slip_angle_rr": slip_rad,
+        }
+        cornering = {**common_tyre, "acc_g_x": lat_g_peak}
+        straight = {**common_tyre, "acc_g_x": 0.0}
+        return {
+            "lap_num": lap_num,
+            "track": [cornering, straight],
+        }
+
+    def test_analyze_lap_tyre_state_basic(self):
+        """analyze_lap_tyre_state returns expected per-lap aggregates."""
+        from src.core.telemetry_analyzer import analyze_lap_tyre_state
+
+        lap = self._make_lap(
+            1, lat_g_peak=2.1, core_temp=85.0, slip_deg=4.0, end_wear=0.5
+        )
+        state = analyze_lap_tyre_state(lap["track"])
+
+        assert state is not None
+        assert state["avg_core_temp_c"] == 85.0
+        assert state["peak_core_temp_c"] == 85.0
+        assert state["peak_lat_g"] == 2.1
+        assert state["peak_slip_angle_deg"] == 4.0
+        assert state["end_wear_pct"] == 0.5
+        assert state["corner_frames"] == 1
+
+    def test_analyze_lap_tyre_state_empty(self):
+        """Empty track returns None."""
+        from src.core.telemetry_analyzer import analyze_lap_tyre_state
+
+        assert analyze_lap_tyre_state([]) is None
+
+    def test_falling_lat_g_flagged_as_grip_loss(self):
+        """Monotonically falling cornering lat-G across 3+ laps fires the
+        primary grip-degradation flag — the user-reported scenario where
+        'lap 3 had less grip on the track'.
+        """
+        from src.core.telemetry_analyzer import analyze_tyre_grip_degradation
+
+        laps = [
+            self._make_lap(1, lat_g_peak=2.20, core_temp=80.0, slip_deg=3.0, end_wear=0.10),
+            self._make_lap(2, lat_g_peak=2.10, core_temp=82.0, slip_deg=3.5, end_wear=0.30),
+            self._make_lap(3, lat_g_peak=2.00, core_temp=84.0, slip_deg=4.0, end_wear=0.55),
+        ]
+        result = analyze_tyre_grip_degradation(laps)
+
+        assert result["trends"]["peak_lat_g"] == "FALLING"
+        # The grip-falloff narrative must reach the AI as a flag string.
+        assert any("less grip" in flag for flag in result["flags"]), (
+            f"Expected grip-falloff flag, got {result['flags']!r}"
+        )
+
+    def test_rising_core_temp_flagged_as_overheating(self):
+        from src.core.telemetry_analyzer import analyze_tyre_grip_degradation
+
+        laps = [
+            self._make_lap(1, lat_g_peak=2.10, core_temp=80.0, slip_deg=3.0, end_wear=0.10),
+            self._make_lap(2, lat_g_peak=2.10, core_temp=85.0, slip_deg=3.0, end_wear=0.20),
+            self._make_lap(3, lat_g_peak=2.10, core_temp=92.0, slip_deg=3.0, end_wear=0.30),
+        ]
+        result = analyze_tyre_grip_degradation(laps)
+
+        assert result["trends"]["core_temp"] == "RISING"
+        assert any("overheating" in flag.lower() for flag in result["flags"])
+
+    def test_short_stint_yields_no_trends(self):
+        """A 2-lap sample is below the 3-lap threshold for trend detection."""
+        from src.core.telemetry_analyzer import analyze_tyre_grip_degradation
+
+        laps = [
+            self._make_lap(1, lat_g_peak=2.20, core_temp=80.0, slip_deg=3.0, end_wear=0.10),
+            self._make_lap(2, lat_g_peak=2.00, core_temp=85.0, slip_deg=4.0, end_wear=0.30),
+        ]
+        result = analyze_tyre_grip_degradation(laps)
+
+        assert len(result["per_lap"]) == 2
+        assert result["trends"] == {}
+        assert result["flags"] == []
+
+    def test_stable_stint_yields_flat_trends(self):
+        """No noise-level changes across 3 laps → all trends FLAT, no flags."""
+        from src.core.telemetry_analyzer import analyze_tyre_grip_degradation
+
+        laps = [
+            self._make_lap(i, lat_g_peak=2.10, core_temp=82.0, slip_deg=3.0, end_wear=0.20 * i)
+            for i in (1, 2, 3)
+        ]
+        result = analyze_tyre_grip_degradation(laps)
+
+        assert result["trends"]["peak_lat_g"] == "FLAT"
+        assert result["trends"]["core_temp"] == "FLAT"
+        assert not result["flags"]
+
+
 class TestTelemetryAnalyzer:
     """Test TelemetryAnalyzer class."""
 
@@ -780,3 +952,31 @@ class TestTelemetryAnalyzer:
         )
         
         assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_analyze_with_game_lap_markers_uses_log_lap_times(self):
+        """Tuple game boundaries are lap-end markers with authoritative log lap times."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+
+        frames = [create_mock_frame(i, speed=100.0, position=i * 0.01) for i in range(220)]
+        analyzer = TelemetryAnalyzer(output_dir="tests/output")
+
+        # (frame_idx, lap_time_ms) from game logs
+        game_markers = [
+            (50, 153396),
+            (100, 153309),
+            (150, 152460),
+            (200, 152001),
+        ]
+
+        result = await analyzer.analyze(
+            frames,
+            hz=10.0,
+            game_lap_boundaries=game_markers,
+            output_prefix="test_game_markers",
+        )
+
+        assert result is not None
+        assert result.laps_detected == 4
+        # Best lap should come from game-provided times, not frame-distance math.
+        assert abs(result.best_lap_time - 152.001) < 0.001

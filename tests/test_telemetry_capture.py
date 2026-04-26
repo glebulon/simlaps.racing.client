@@ -187,7 +187,7 @@ class TestTelemetryCapture:
         
         capture = TelemetryCapture(hz=10.0)
         capture._readers = {"physics": mock_reader}
-        capture._region_paths = {"physics": "Local\\acpmf_physics"}
+        capture._region_paths = {"physics": "Local\\acevo_pmf_physics"}
         capture._session_start_time = datetime.now(timezone.utc)
         
         meta = capture._build_compat_meta_record()
@@ -237,7 +237,7 @@ class TestTelemetryCapture:
             captured_at="2024-01-01T00:00:00Z",
             hz=10.0,
             regions_found=["physics"],
-            region_names={"physics": "acpmf_physics"},
+            region_names={"physics": "acevo_pmf_physics"},
             region_sizes={"physics": 1024}
         )
         capture._metadata = meta
@@ -335,9 +335,17 @@ class TestCaptureIntegration:
         assert capture._on_stop_callback == callback
 
     def test_regions_config(self):
-        """Test REGIONS configuration."""
-        assert "physics" in REGIONS
-        assert REGIONS["physics"] == ("acpmf_physics", 1024)
+        """All three AC Evo SHM regions are wired up for capture.
+
+        Physics has a typed decoder; graphics and static are captured as raw
+        bytes for offline reverse-engineering. Names follow the AC Evo
+        ``acevo_pmf_*`` convention from SharedFileOut.h.
+        """
+        assert REGIONS["physics"] == ("acevo_pmf_physics", 1024)
+        assert REGIONS["graphics"][0] == "acevo_pmf_graphics"
+        assert REGIONS["graphics"][1] >= 2048, "graphics buffer must fit SPageFileGraphicEvo"
+        assert REGIONS["static"][0] == "acevo_pmf_static"
+        assert REGIONS["static"][1] >= 1024
 
 
 class TestFrameData:
@@ -380,7 +388,7 @@ class TestCaptureMetadata:
             captured_at="2024-01-01T00:00:00Z",
             hz=10.0,
             regions_found=["physics"],
-            region_names={"physics": "acpmf_physics"},
+            region_names={"physics": "acevo_pmf_physics"},
             region_sizes={"physics": 1024}
         )
         
@@ -394,7 +402,7 @@ class TestCaptureMetadata:
             captured_at="2024-01-01T00:00:00Z",
             hz=10.0,
             regions_found=["physics"],
-            region_names={"physics": "acpmf_physics"},
+            region_names={"physics": "acevo_pmf_physics"},
             region_sizes={"physics": 1024}
         )
         
@@ -619,17 +627,26 @@ class TestTelemetryCaptureEdgeCases:
 
     @patch('src.core.telemetry_capture.RegionReader')
     def test_reconnect_missing_skips_existing(self, mock_reader_class):
-        """Test _reconnect_missing skips already connected regions."""
+        """Test _reconnect_missing skips regions already connected.
+
+        All three SHM regions (physics, graphics, static) must be already
+        present in ``existing_readers`` for this assertion to hold — the
+        method's job is to fill in only the missing ones.
+        """
         mock_reader = MagicMock()
         mock_reader.open.return_value = True
         mock_reader_class.return_value = mock_reader
-        
+
         capture = TelemetryCapture(hz=10.0)
-        existing_readers = {"physics": MagicMock()}
-        
+        existing_readers = {
+            "physics": MagicMock(),
+            "graphics": MagicMock(),
+            "static": MagicMock(),
+        }
+
         capture._reconnect_missing(existing_readers)
-        
-        # Should not add physics since it already exists
+
+        # All regions already present → no new RegionReader instances
         mock_reader_class.assert_not_called()
 
     @patch('src.core.telemetry_capture.kernel32')

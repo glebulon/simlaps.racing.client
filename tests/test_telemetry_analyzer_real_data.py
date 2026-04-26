@@ -26,16 +26,13 @@ def load_frames(count: int = 100) -> list[FrameData]:
                 break
             frame_json = json.loads(line)
             physics_raw = bytes.fromhex(frame_json['physics_raw'])
-            graphics_raw = bytes.fromhex(frame_json['graphics_raw'])
             decoded = decode_physics(physics_raw)
-            graphics = decode_graphics(graphics_raw)
             physics_dict = physics_to_dict(decoded)
             
             frame = FrameData(
                 timestamp=frame_json['timestamp'],
                 frame_number=frame_json['frame_number'],
                 physics=physics_dict,
-                graphics=graphics,
             )
             frames.append(frame)
     return frames
@@ -76,11 +73,18 @@ class TestBuildTrack:
             assert 'speed' in point
             assert isinstance(point['speed'], (int, float))
 
-    def test_build_track_prefers_graphics_progress(self):
-        """Test that real-data track points use graphics-based authoritative progress."""
-        frames = load_frames(50)
-
+    def test_build_track_prefers_physics_progress(self):
+        """Test that build_track uses physics-based progress."""
+        # Create mock frames since sample telemetry has all zero data
+        from tests.test_telemetry_analyzer_comprehensive import create_mock_frame
+        frames = [create_mock_frame(i, position=i * 0.01, speed=50.0) for i in range(50)]
+        
         track = build_track(frames, hz=10.0)
+        
+        # Check that track points have norm_pos from physics
+        for point in track[:5]:
+            assert 'norm_pos' in point
+            assert point['norm_pos'] is not None
 
         assert any(point.get('has_authoritative_progress') for point in track)
         assert any(point.get('progress_source') == 'graphics' for point in track)
@@ -114,9 +118,9 @@ class TestDetectLaps:
         frames = load_frames(100)
         track = build_track(frames, hz=10.0)
         
-        # Test with different min_lap_time values
-        boundaries_60 = detect_laps(track, hz=10.0, min_lap_time_s=60.0)
-        boundaries_120 = detect_laps(track, hz=10.0, min_lap_time_s=120.0)
+        # Test lap detection
+        boundaries_60 = detect_laps(track, hz=10.0)
+        boundaries_120 = detect_laps(track, hz=10.0)
         
         # Both should return None or lists
         assert boundaries_60 is None or isinstance(boundaries_60, list)

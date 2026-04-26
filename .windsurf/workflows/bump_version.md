@@ -55,7 +55,7 @@ VERSION_PATCH = 0  # Changed from 9
 
 **version.ts:**
 ```typescript
-export const LATEST_CLIENT_VERSION = '1.2.0'
+export const LATEST_CLIENT_VERSION = '1.2.2'
 ```
 
 **footer.tsx & header.tsx:**

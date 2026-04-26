@@ -127,15 +127,31 @@ class TestStaticDecoding:
         assert len(frame['static_raw']) > 0
 
     def test_decode_static_known_frame(self):
+        """``decode_static`` now routes to the AC Evo decoder by default.
+
+        The previous assertion expected the pattern-detection fallback
+        because no typed static decoder existed. With
+        ``decode_static_evo`` in place, a populated static frame must
+        decode to a real ``ac_evo_static`` payload containing at least
+        the track identity fields that consumers (analyzer, AI prompt,
+        HTML report) will rely on.
+        """
         frame = load_frame_by_number(2102)
         static_raw = raw_bytes(frame, 'static_raw')
 
         result = decode_static(static_raw)
 
-        assert result['_decoder'] == 'fallback'
-        assert result['size'] == len(static_raw)
-        assert 'bytes' in result
-        assert 'ascii' in result
+        # ``decode_static`` now tries the AC Evo decoder first and falls
+        # back to the legacy ACC decoder. This fixture predates AC Evo,
+        # so it decodes via the ACC path; either typed decoder is
+        # acceptable here as long as the fallback is not used.
+        assert result['_decoder'] in {'ac_evo_static', 'acc_static_structure'}
+        assert result['_decoder'] != 'fallback'
+        assert result['buffer_size'] == len(static_raw)
+        # Core track-identity fields are always surfaced when the region
+        # is populated, regardless of which typed decoder ran.
+        assert 'track' in result
+        assert 'sm_version' in result
 
 
 

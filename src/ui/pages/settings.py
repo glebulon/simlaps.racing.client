@@ -95,6 +95,11 @@ class SettingsPage(ft.Container):
             color="#ffffff",
             label_style=ft.TextStyle(color="#888888"),
         )
+
+        self._telemetry_debug_logs_switch = ft.Switch(
+            value=config.telemetry_debug_logs,
+            active_color="#7c3aed",
+        )
         
         self._connection_status = ft.Text(
             "",
@@ -205,6 +210,11 @@ class SettingsPage(ft.Container):
                     self._telemetry_enabled_switch,
                 ),
                 self._telemetry_output_path_field,
+                self._build_switch_row(
+                    "Save Debug Logs",
+                    "Write raw SHM dump, capture JSONL, and diagnostics log to disk (only needed for troubleshooting)",
+                    self._telemetry_debug_logs_switch,
+                ),
             ],
         )
         
@@ -370,6 +380,7 @@ class SettingsPage(ft.Container):
         # Telemetry settings
         self.config.telemetry_enabled = self._telemetry_enabled_switch.value
         self.config.telemetry_output_path = self._telemetry_output_path_field.value or ""
+        self.config.telemetry_debug_logs = self._telemetry_debug_logs_switch.value
         
         if self.on_save:
             self.on_save(self.config)
@@ -396,6 +407,7 @@ class SettingsPage(ft.Container):
         # Reset Telemetry fields
         self._telemetry_enabled_switch.value = False
         self._telemetry_output_path_field.value = str(Path.home() / "Documents" / "SimLaps" / "Telemetry")
+        self._telemetry_debug_logs_switch.value = False
         
         self._server_url_field.update()
         self._submit_invalid_switch.update()
@@ -405,6 +417,7 @@ class SettingsPage(ft.Container):
         self._discord_test_status.update()
         self._telemetry_enabled_switch.update()
         self._telemetry_output_path_field.update()
+        self._telemetry_debug_logs_switch.update()
     
     def update_config(self, config: AppConfig):
         """Update form with new config."""
@@ -420,5 +433,6 @@ class SettingsPage(ft.Container):
         # Update Telemetry fields
         self._telemetry_enabled_switch.value = config.telemetry_enabled
         self._telemetry_output_path_field.value = config.telemetry_output_path
+        self._telemetry_debug_logs_switch.value = config.telemetry_debug_logs
         
         self.update()

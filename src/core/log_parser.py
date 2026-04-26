@@ -48,6 +48,8 @@ StatusCallback       = Callable[[str], Awaitable[None]]
 GameStatusCallback   = Callable[[bool], Awaitable[None]]
 UserDetectedCallback = Callable[[str, Optional[str]], Awaitable[None]]
 GameVersionCallback  = Callable[[str], Awaitable[None]]
+SessionEndCallback   = Callable[[], Awaitable[None]]
+SessionRestartCallback = Callable[[], Awaitable[None]]
 
 
 # ─── Main parser ──────────────────────────────────────────────────────────────
@@ -58,7 +60,19 @@ class LogParser:
     Supports one-shot (`parse_file`) and live-tail (`follow`) modes.
     """
 
-    DEFAULT_LOG_PATH = Path.home() / "Saved Games" / "ACE" / "log.txt"
+    DEFAULT_LOG_DIR = Path.home() / "Saved Games" / "ACE" / "Logs"
+    DEFAULT_LOG_PATH = DEFAULT_LOG_DIR
+
+    @staticmethod
+    def _find_latest_log(log_dir: Path) -> Optional[Path]:
+        """Return the most recently modified .txt file in log_dir, or None."""
+        try:
+            files = list(log_dir.glob("*.txt"))
+        except OSError:
+            return None
+        if not files:
+            return None
+        return max(files, key=lambda p: p.stat().st_mtime)
 
     def __init__(
         self,
@@ -68,13 +82,24 @@ class LogParser:
         on_game_status_change: Optional[GameStatusCallback] = None,
         on_user_detected: Optional[UserDetectedCallback] = None,
         on_game_version: Optional[GameVersionCallback] = None,
+        on_session_end: Optional[SessionEndCallback] = None,
+        on_session_restart: Optional[SessionRestartCallback] = None,
     ) -> None:
-        self.log_path = Path(log_path) if log_path else self.DEFAULT_LOG_PATH
+        _path = Path(log_path) if log_path else self.DEFAULT_LOG_DIR
+        if _path.is_dir() or (not _path.suffix and not _path.is_file()):
+            self._log_dir: Optional[Path] = _path
+            _latest = self._find_latest_log(_path)
+            self.log_path = _latest if _latest is not None else _path / "log.txt"
+        else:
+            self._log_dir = None
+            self.log_path = _path
         self.on_lap_complete = on_lap_complete
         self.on_status_change = on_status_change
         self.on_game_status_change = on_game_status_change
         self.on_user_detected = on_user_detected
         self.on_game_version = on_game_version
+        self.on_session_end = on_session_end
+        self.on_session_restart = on_session_restart
 
         self.sessions: list[SessionData] = []
         self.current_session: Optional[SessionData] = None
@@ -82,6 +107,16 @@ class LogParser:
 
         # In-progress lap accumulator
         self._ip = InProgressLap()
+
+        # Most recently completed lap, buffered until either:
+        #   a) the game's authoritative `Relevant onSplit ... valid` line
+        #      arrives (typically ~ms later) and we apply it, or
+        #   b) the next lap completes / the session ends, in which case the
+        #      heuristic state stands.
+        # Buffering by exactly one lap lets the authoritative game flag
+        # override our local sector-sum / split heuristics before the lap is
+        # emitted to listeners.
+        self._pending_lap: Optional[LapData] = None
 
         # Stint tracking
         self._current_stint: Optional[StintData] = None
@@ -117,7 +152,7 @@ class LogParser:
             "driver_line": re.compile(r"\tDriver (.+) on car ([\w_]+)"),
 
             "connect": re.compile(
-                r"(\d+) connected on car ([\w_]+), with new carId ([a-f0-9\-]+)"
+                r"(\d+) connected(?: \(\d+\))? on car ([\w_]+), with new carId ([a-f0-9\-]+)"
             ),
             "connecting_gamecar": re.compile(
                 r"connecting gamecar ([a-f0-9\-]+) \((.+)\)"
@@ -142,7 +177,7 @@ class LogParser:
             "tyre_compound_summary": re.compile(r"TYRE COMPOUND: (.+)"),
 
             "fuel_filled": re.compile(
-                r"FUEL car ([a-f0-9\-]+) filled with ([\d.]+) L"
+                r"FUEL car ([a-f0-9\-]+) (?:filled|setup) with ([\d.]+) L"
             ),
 
             # Energy source: fires exactly once per completed lap
@@ -178,15 +213,37 @@ class LogParser:
                 r"\[physics\] \[info\] Lap test evOnLapCompleted (\d+) completed"
             ),
 
+            # Car removed: fires when the player's car is removed at session end
+            "remove_car": re.compile(
+                r"onSetPlayerCurrentCarCommand: remove car ([a-f0-9\-]+)"
+            ),
+
             # New lap: timestamp | car_uuid | lap_time_str
             "lap_finish": re.compile(
                 r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)\]"
                 r" \[gameplay\] \[info\] New lap carId ([a-f0-9\-]+): ([\d:.]+)"
             ),
 
-            "penalty": re.compile(
-                r"UINotificationType_SessionPenalty|\{PENALTY_ADDED_KEY\}"
+            # Game's authoritative per-lap validity flag.  Emitted on the
+            # [network] channel ~ms after `New lap carId`, e.g.:
+            #   Relevant onSplit for Combo 6@2: laptime 146939, valid true,
+            #   flags 2, lap 1 (prev 0)
+            # Captures: laptime_ms, valid_str ("true"|"false"), lap_num.
+            "lap_validity": re.compile(
+                r"\[network\] \[info\] Relevant onSplit for Combo "
+                r"\d+@\d+: laptime (\d+), valid (true|false), "
+                r"flags \d+, lap (\d+)"
             ),
+
+            # AC Evo emits the same `UINotificationType_SessionPenalty`
+            # notification line for BOTH penalty additions and clearances.
+            # Each event is followed by a discriminating warning line:
+            #   added:   `[warning] true {PENALTY_ADDED_KEY} #0`
+            #   cleared: `[warning] false {PENALTY_CLEARED_KEY} #0`
+            # We must only match the addition discriminator — matching the
+            # generic notification line caused every penalty *clear* to flip
+            # `has_penalty=True`, invalidating clean racing laps.
+            "penalty": re.compile(r"\{PENALTY_ADDED_KEY\}"),
             "setup_group": re.compile(
                 r"KS-SETUP-GROUP\s+(.+)$"
             ),
@@ -289,6 +346,34 @@ class LogParser:
             except (RuntimeError, asyncio.CancelledError) as exc:
                 _debug.log(f"[ERROR] on_game_status_change: {exc}")
 
+    async def _emit_session_end(self) -> None:
+        _debug.log("[SESSION_END] car removed from session")
+        if self.on_session_end:
+            try:
+                await self.on_session_end()
+            except (RuntimeError, asyncio.CancelledError) as exc:
+                _debug.log(f"[ERROR] on_session_end: {exc}")
+
+    async def _emit_session_restart(self) -> None:
+        """Player clicked Restart Session in the pause menu.
+
+        AC Evo restarts the same session in place — no new ``Game Started!``
+        line follows — so downstream consumers (e.g. telemetry capture) must
+        be told explicitly to clear any in-flight buffer and start fresh.
+        """
+        _debug.log("[SESSION_RESTART] user requested restart")
+        # Reset parser-side per-session state so stale flags from the old run
+        # (penalty, track-limit, sector splits, physics_lap_num, etc.) don't
+        # leak into the first lap of the restarted session.
+        self._reset_in_progress()
+        if self.current_session:
+            self._finalise_current_session()
+        if self.on_session_restart:
+            try:
+                await self.on_session_restart()
+            except (RuntimeError, asyncio.CancelledError) as exc:
+                _debug.log(f"[ERROR] on_session_restart: {exc}")
+
     async def _emit_user_detected(
         self, steam_id: str, player_name: Optional[str]
     ) -> None:
@@ -363,7 +448,7 @@ class LogParser:
                 self.current_session.track = m.group(1)
 
     def _handle_connect(self, line: str) -> None:
-        if "connected on car" not in line:
+        if "connected" not in line or "on car" not in line or "with new carId" not in line:
             return
         m = self._pats["connect"].search(line)
         if not m:
@@ -695,7 +780,10 @@ class LogParser:
 
     def _handle_fuel(self, line: str) -> None:
         # ── Fuel fill on pit exit / session start ─────────────────────────────
-        if "FUEL car" in line and "filled with" in line and "from setup" in line:
+        if "FUEL car" in line and (
+            ("filled with" in line and "from setup" in line)
+            or "setup with" in line
+        ):
             m = self._pats["fuel_filled"].search(line)
             if m and self.current_session and self._is_player_car(m.group(1)):
                 self.current_session.initial_fuel = float(m.group(2))
@@ -851,14 +939,30 @@ class LogParser:
             self._ip.split_end_confirmed = True
 
     def _handle_outlap_signals(self, line: str) -> None:
-        """'Outplap split' is the authoritative outlap marker.
+        """'Outplap split' is the authoritative outlap marker for practice-like
+        modes. It is NOT reliable in race-like modes: AC Evo emits one
+        "Outplap split" per car on the grid at race countdown (seen 6×
+        back-to-back in a 6-car race log), with no car identifier, so accepting
+        it in a race would falsely flag the player's first competitive lap as
+        an outlap and silently drop it from submission. The first lap of a
+        race/qualifying session is always a real timed lap, so we only honor
+        this signal in PRACTICE_LIKE sessions.
 
         'Couldn't create lap from opensplits' means the game also rejected the
         lap; we reset in-progress state so stale flags don't infect the next lap.
         """
         if "Outplap split" in line:
-            self._ip.is_outlap = True
-            _debug.log("[OUTLAP] Outplap split detected")
+            if (
+                self.current_session
+                and self.current_session.session_type in PRACTICE_LIKE
+            ):
+                self._ip.is_outlap = True
+                _debug.log("[OUTLAP] Outplap split detected")
+            else:
+                _debug.log(
+                    "[OUTLAP] Outplap split ignored in race-like session "
+                    "(grid-countdown broadcast, not a player outlap marker)"
+                )
         elif "Couldn't create lap from opensplits" in line:
             _debug.log("[OUTLAP] Couldn't create lap — resetting in-progress")
             self._reset_in_progress()
@@ -1006,20 +1110,33 @@ class LogParser:
         s2: Optional[int] = ip.splits.get(1)
         s3: Optional[int] = ip.splits.get(2)
 
-        # S1 corruption check — race grid start produces a cumulative time in
-        # slot 0 rather than the actual sector duration.  Detect by checking
-        # if the raw value exceeds the total lap time (which it must, as a
-        # cumulative reading from race start will be far larger).
+        # S1 corruption check — race grid start produces an inflated time in
+        # slot 0 (cumulative time before the player crosses the start/finish
+        # line for the first time) rather than the actual sector duration.
+        # The corrupted value may exceed lap_time outright, or it may be
+        # smaller than lap_time but still cause S1+S2+S3 to overshoot
+        # lap_time by more than tolerance (e.g. Spa grid start:
+        # raw S1=110411, S2=64650, S3=38082, lap=146939 → real S1=44207).
         if s1 is not None and s2 is not None and s3 is not None:
-            if s1 > lap_time_ms:
+            sector_sum = s1 + s2 + s3
+            overshoot = sector_sum - lap_time_ms
+            if overshoot > SECTOR_SUM_TOLERANCE_MS:
                 s1_calc = lap_time_ms - s2 - s3
-                _debug.log(
-                    f"[SECTORS] S1 corrupted ({s1} ms > lap {lap_time_ms} ms)"
-                    f" → back-calculated: {s1_calc} ms"
-                )
-                s1 = s1_calc if s1_calc > 0 else None
-                if split_keys and split_keys[0] == 0 and s1 is not None:
-                    split_times[0] = s1
+                if s1_calc > 0:
+                    _debug.log(
+                        f"[SECTORS] S1 corrupted (raw={s1} ms, "
+                        f"sum={sector_sum} > lap={lap_time_ms} by {overshoot} ms)"
+                        f" → back-calculated: {s1_calc} ms"
+                    )
+                    s1 = s1_calc
+                    if split_keys and split_keys[0] == 0:
+                        split_times[0] = s1
+                else:
+                    _debug.log(
+                        f"[SECTORS] S1 overshoot detected (raw={s1}, "
+                        f"sum={sector_sum} > lap={lap_time_ms}) but "
+                        f"back-calc non-positive ({s1_calc}); leaving as-is"
+                    )
 
         session_type = self.current_session.session_type
 
@@ -1046,8 +1163,7 @@ class LogParser:
         compound = self.context.tyre.compound_name
         self.current_session.tyre_compound = compound
 
-        # physics_lap_num is the most authoritative lap numbering source.
-        # Fall back to len(laps)+1 if not available (e.g., late-start parsing).
+        # Physics lap number is the only source available in log parser (graphics data not available)
         physics_lap_number = ip.physics_lap_num
         lap_number = physics_lap_number or (len(self.current_session.laps) + 1)
 
@@ -1080,16 +1196,116 @@ class LogParser:
             distance_hundredm=ip.distance_hundredm,
         )
 
-        self.current_session.laps.append(completed_lap)
         _debug.log(
             f"[LAP] #{lap_number} phys={physics_lap_number} "
             f"{time_str}  state={lap_state.value}  "
             f"compound={compound}  fuel={fuel_used}  "
-            f"consistent={sectors_consistent}"
+            f"consistent={sectors_consistent}  (buffered)"
         )
 
         self._reset_in_progress()
-        return completed_lap
+
+        # Buffer this lap until the game's authoritative validity arrives.
+        # If a previous lap is still pending, that means its validity line
+        # never showed up — flush it now with its heuristic state.
+        prior_pending = self._pending_lap
+        self._pending_lap = completed_lap
+        if prior_pending is not None:
+            self.current_session.laps.append(prior_pending)
+            _debug.log(
+                f"[LAP] flushed pending #{prior_pending.lap_number} via "
+                f"heuristic (no authoritative validity seen)"
+            )
+            return prior_pending
+        return None
+
+    # ── Authoritative validity (from network broadcast) ──────────────────────
+
+    def _handle_lap_validity(self, line: str) -> Optional[LapData]:
+        """Apply the game's authoritative per-lap validity flag.
+
+        AC Evo emits a `[network] [info] Relevant onSplit for Combo …:
+        laptime N, valid true|false, …` line ~ms after each `New lap carId`.
+        It is the ground truth for whether the lap counts.
+
+        When this matches the currently-pending (just-completed) lap by
+        ``laptime``, we override the heuristic state if it disagrees:
+
+        * Heuristic INVALID_SECTORS / INVALID_SPLIT but game says valid →
+          upgrade to PUSH (e.g. Spa grid-start S1 inflation).
+        * Heuristic PUSH but game says invalid → demote to INVALID_GAME.
+        * Other invalid heuristics (track limit, penalty, outlap) are
+          retained — they encode the *reason* and remain truthful even when
+          the game's binary flag would round to the same boolean.
+
+        Returns the now-finalised lap so the caller can emit it; otherwise
+        returns None.
+        """
+        if "Relevant onSplit for Combo" not in line:
+            return None
+        m = self._pats["lap_validity"].search(line)
+        if not m:
+            return None
+        if not self.current_session:
+            return None
+        pending = self._pending_lap
+        if pending is None:
+            return None
+
+        laptime_ms = int(m.group(1))
+        if laptime_ms != pending.lap_time_ms:
+            # Mismatch — likely a stale broadcast for a different car.
+            return None
+
+        game_valid = m.group(2) == "true"
+        prev_state = pending.lap_state
+        prev_valid = pending.is_valid
+
+        if game_valid and not prev_valid and prev_state in (
+            LapState.INVALID_SECTORS,
+            LapState.INVALID_SPLIT,
+        ):
+            pending.lap_state = LapState.PUSH
+            pending.lap_type = LapState.PUSH.value
+            pending.is_valid = True
+            _debug.log(
+                f"[VALIDITY] Game says valid — upgrading "
+                f"#{pending.lap_number} {prev_state.value} → PUSH"
+            )
+        elif (not game_valid) and prev_valid:
+            pending.lap_state = LapState.INVALID_GAME
+            pending.lap_type = LapState.INVALID_GAME.value
+            pending.is_valid = False
+            _debug.log(
+                f"[VALIDITY] Game says invalid — demoting "
+                f"#{pending.lap_number} PUSH → INVALID_GAME"
+            )
+
+        self.current_session.laps.append(pending)
+        self._pending_lap = None
+        _debug.log(
+            f"[LAP] flushed pending #{pending.lap_number} via authoritative "
+            f"flag (game_valid={game_valid})"
+        )
+        return pending
+
+    def _flush_pending_lap(self) -> Optional[LapData]:
+        """Append any buffered lap to the session with its heuristic state.
+
+        Used at session end / file EOF where no further authoritative
+        validity line will arrive. Returns the flushed lap so callers can
+        emit it.
+        """
+        pending = self._pending_lap
+        if pending is None or not self.current_session:
+            return None
+        self._pending_lap = None
+        self.current_session.laps.append(pending)
+        _debug.log(
+            f"[LAP] flushed pending #{pending.lap_number} on session/EOF "
+            f"(heuristic state)"
+        )
+        return pending
 
     # ── Aborted lap emission ──────────────────────────────────────────────────
 
@@ -1112,7 +1328,7 @@ class LogParser:
         self._flush_pending_compound_batch()
 
         compound = self.context.tyre.compound_name
-        lap_number = (ip.physics_lap_num or len(self.current_session.laps) + 1)
+        lap_number = ip.physics_lap_num or (len(self.current_session.laps) + 1)
 
         aborted = LapData(
             lap_number=lap_number,
@@ -1168,6 +1384,11 @@ class LogParser:
         # Session-end metadata should reflect the latest known tyre state even
         # if no lap was completed after the final pit/setup change.
         self.current_session.tyre_compound = self.context.tyre.compound_name
+        # Flush any buffered lap whose authoritative validity never arrived
+        # (e.g. game quit immediately after lap completion). Emission is
+        # handled by callers that have an event loop; here we only ensure
+        # the lap is recorded in `session.laps`.
+        self._flush_pending_lap()
         # Emit aborted lap if the session ends mid-lap
         self._maybe_emit_aborted_lap()
         self._finalise_stints()
@@ -1231,7 +1452,17 @@ class LogParser:
         self._handle_unexpected_split(line)
 
         # ── Lap completion ────────────────────────────────────────────────────
-        return self._handle_lap_complete(line)
+        # Two paths can produce an emittable lap on a single line:
+        #   * `_handle_lap_complete` builds a fresh lap and may flush a
+        #     previously-buffered lap (when no authoritative validity arrived).
+        #   * `_handle_lap_validity` finalises the buffered lap with the
+        #     game's authoritative valid/invalid flag.
+        # At most one fires per line, so returning whichever is non-None is
+        # sufficient.
+        completed = self._handle_lap_complete(line)
+        if completed is not None:
+            return completed
+        return self._handle_lap_validity(line)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -1263,112 +1494,164 @@ class LogParser:
         _debug.log(f"follow() starting — log path: {self.log_path}")
         self._running = True
 
-        while self._running and not self.log_path.exists():
-            await self._emit_status(f"Waiting for log file: {self.log_path}")
-            await asyncio.sleep(poll_interval)
+        while self._running:
+            if self._log_dir is not None:
+                _latest = self._find_latest_log(self._log_dir)
+                if _latest is not None and _latest != self.log_path:
+                    self.log_path = _latest
+                    await self._emit_status(f"Switched to latest log: {self.log_path}")
 
-        if not self._running:
-            return
+            while self._running and not self.log_path.exists():
+                await self._emit_status(f"Waiting for log file: {self.log_path}")
+                if self._log_dir is not None:
+                    _latest = self._find_latest_log(self._log_dir)
+                    if _latest is not None and _latest != self.log_path:
+                        self.log_path = _latest
+                        await self._emit_status(f"Switched to latest log: {self.log_path}")
+                await asyncio.sleep(poll_interval)
 
-        await self._emit_status("Reading existing log …")
+            if not self._running:
+                break
 
-        with open(self.log_path, "r", encoding="utf-8", errors="ignore") as fh:
+            await self._emit_status("Reading existing log …")
+            _restart = False
 
-            # ── Historical pass ────────────────────────────────────────────────
-            historical_laps = 0
-            for line in fh:
-                try:
-                    lap = self._process_line(line)
-                    if lap:
-                        historical_laps += 1
-                except (RuntimeError, ValueError, TypeError) as exc:
-                    _debug.log(f"[ERROR] Historical parse: {exc}")
+            with open(self.log_path, "r", encoding="utf-8", errors="ignore") as fh:
 
-            _debug.log(
-                f"Historical pass: {historical_laps} lap(s). "
-                f"Session: {self.current_session is not None}"
-            )
+                # ── Historical pass ────────────────────────────────────────────────
+                historical_laps = 0
+                for line in fh:
+                    try:
+                        lap = self._process_line(line)
+                        if lap:
+                            historical_laps += 1
+                    except (RuntimeError, ValueError, TypeError) as exc:
+                        _debug.log(f"[ERROR] Historical parse: {exc}")
 
-            # Discard historical laps — only new ones are emitted
-            if self.current_session:
-                self.current_session.laps.clear()
-                self.current_session.stints.clear()
-                self._finalise_stints()
                 _debug.log(
-                    f"Context: track={self.current_session.track} "
-                    f"car={self.current_session.car}"
+                    f"Historical pass: {historical_laps} lap(s). "
+                    f"Session: {self.current_session is not None}"
                 )
 
-            self._emit_callbacks = True
-
-            if self.current_session:
-                await self._emit_status("Monitoring for new laps …")
-                if self.current_session.player_id:
-                    await self._emit_user_detected(
-                        self.current_session.player_id,
-                        self.current_session.player_name,
+                # Discard historical laps — only new ones are emitted
+                if self.current_session:
+                    self.current_session.laps.clear()
+                    self.current_session.stints.clear()
+                    self._finalise_stints()
+                    _debug.log(
+                        f"Context: track={self.current_session.track} "
+                        f"car={self.current_session.car}"
                     )
-            else:
-                await self._emit_status("Ready — waiting for session …")
 
-            if self.context.game_version != "Unknown" and self.on_game_version:
-                try:
-                    await self.on_game_version(self.context.game_version)
-                except (RuntimeError, asyncio.CancelledError) as exc:
-                    _debug.log(f"[ERROR] on_game_version: {exc}")
+                self._emit_callbacks = True
 
-            # ── Live tail ──────────────────────────────────────────────────────
-            _debug.log("Entering live tail loop …")
-            while self._running:
-                line_start_pos = fh.tell()
-                line = fh.readline()
+                if self.current_session:
+                    await self._emit_status("Monitoring for new laps …")
+                    if self.current_session.player_id:
+                        await self._emit_user_detected(
+                            self.current_session.player_id,
+                            self.current_session.player_name,
+                        )
+                else:
+                    await self._emit_status("Ready — waiting for session …")
 
-                # Guard against processing partially written lines in live-tail.
-                # If a trailing newline is missing, rewind and retry on next poll.
-                if line and not line.endswith("\n"):
-                    fh.seek(line_start_pos)
-                    await asyncio.sleep(poll_interval)
-                    continue
-
-                if line:
-                    if "Game Started!" in line:
-                        await self._emit_game_status(True)
-                    if "END_SESSION car" in line:
-                        if self.context.car_uuid and self.context.car_uuid in line:
-                            await self._emit_game_status(False)
-
+                if self.context.game_version != "Unknown" and self.on_game_version:
                     try:
-                        completed = self._process_line(line)
-                    except (RuntimeError, ValueError, TypeError) as exc:
-                        _debug.log(f"[ERROR] Live process_line: {exc}")
+                        await self.on_game_version(self.context.game_version)
+                    except (RuntimeError, asyncio.CancelledError) as exc:
+                        _debug.log(f"[ERROR] on_game_version: {exc}")
+
+                # ── Live tail ──────────────────────────────────────────────────────
+                _debug.log("Entering live tail loop …")
+                while self._running:
+                    line_start_pos = fh.tell()
+                    line = fh.readline()
+
+                    # Guard against processing partially written lines in live-tail.
+                    # If a trailing newline is missing, rewind and retry on next poll.
+                    if line and not line.endswith("\n"):
+                        fh.seek(line_start_pos)
+                        await asyncio.sleep(poll_interval)
                         continue
 
-                    if completed:
-                        session = self.current_session or SessionData(
-                            track="Unknown", car="Unknown"
-                        )
+                    if line:
+                        if "Game Started!" in line:
+                            await self._emit_game_status(True)
+                        if "has started the race!" in line:
+                            if self.context.car_uuid and self.context.car_uuid in line:
+                                await self._emit_game_status(True)
+                        # AC Evo: pause-menu "Restart Session" emits this line
+                        # but does NOT emit a fresh "Game Started!", so we
+                        # have to drive the buffer reset ourselves.
+                        if "request made GameModeRequestRestartSession" in line:
+                            await self._emit_session_restart()
+                        # AC Evo: pause-menu "Exit to Menu" — different from
+                        # restart, the user is leaving the session entirely.
+                        elif "request made GameModeRequestExit" in line:
+                            await self._emit_game_status(False)
+                        if "END_SESSION car" in line:
+                            if self.context.car_uuid and self.context.car_uuid in line:
+                                await self._emit_game_status(False)
+                            elif self.current_session is not None:
+                                # Fallback: on some attach/resume paths the player car UUID
+                                # may not match exactly at session end. If we have an active
+                                # session context, treat END_SESSION as session stop.
+                                await self._emit_game_status(False)
+                        if "onSetPlayerCurrentCarCommand: remove car" in line:
+                            m = self._pats["remove_car"].search(line)
+                            if m and self._is_player_car(m.group(1)):
+                                _debug.log(f"[SESSION_END] remove car detected: {m.group(1)}")
+                                await self._emit_session_end()
+
                         try:
-                            await self._emit_lap(session, completed)
-                        except (RuntimeError, asyncio.CancelledError) as exc:
-                            _debug.log(f"[ERROR] emit_lap: {exc}")
-                    continue
+                            completed = self._process_line(line)
+                        except (RuntimeError, ValueError, TypeError) as exc:
+                            _debug.log(f"[ERROR] Live process_line: {exc}")
+                            continue
 
-                # No new data — check for log truncation (game restart)
-                try:
-                    current_size = os.path.getsize(self.log_path)
-                except OSError:
-                    current_size = None
+                        if completed:
+                            session = self.current_session or SessionData(
+                                track="Unknown", car="Unknown"
+                            )
+                            try:
+                                await self._emit_lap(session, completed)
+                            except (RuntimeError, asyncio.CancelledError) as exc:
+                                _debug.log(f"[ERROR] emit_lap: {exc}")
+                        continue
 
-                if current_size is not None and current_size < fh.tell():
-                    self._flush_pending_compound_batch()
-                    _debug.log("[TRUNCATE] Log file reset — restarting context")
-                    self.context = LogContext()
-                    self.current_session = None
-                    self._emit_callbacks = True
-                    await self._emit_status("Log file reset — restarting …")
-                    fh.seek(0)
+                    # No new data — check for a newer log file (new game session)
+                    if self._log_dir is not None:
+                        _latest = self._find_latest_log(self._log_dir)
+                        if _latest is not None and _latest != self.log_path:
+                            self._flush_pending_compound_batch()
+                            _debug.log(f"[NEW_LOG] Switching to {_latest.name}")
+                            self.context = LogContext()
+                            self.current_session = None
+                            self._emit_callbacks = True
+                            await self._emit_status("New game session log detected …")
+                            self.log_path = _latest
+                            _restart = True
+                            break
 
-                await asyncio.sleep(poll_interval)
+                    # Check for log truncation (game restart on same file)
+                    try:
+                        current_size = os.path.getsize(self.log_path)
+                    except OSError:
+                        current_size = None
+
+                    if current_size is not None and current_size < fh.tell():
+                        self._flush_pending_compound_batch()
+                        _debug.log("[TRUNCATE] Log file reset — restarting context")
+                        self.context = LogContext()
+                        self.current_session = None
+                        self._emit_callbacks = True
+                        await self._emit_status("Log file reset — restarting …")
+                        fh.seek(0)
+
+                    await asyncio.sleep(poll_interval)
+
+            if not _restart:
+                break
 
         _debug.log("follow() exiting")
         _debug.close()

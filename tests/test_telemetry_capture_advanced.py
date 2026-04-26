@@ -161,7 +161,7 @@ class TestMetadataBuilding:
         """Test building metadata with all regions."""
         capture = TelemetryCapture(hz=10.0)
         capture._region_paths = {
-            "physics": "Local\\acpmf_physics",
+            "physics": "Local\\acevo_pmf_physics",
         }
         capture._session_start_time = datetime.now(timezone.utc)
         
