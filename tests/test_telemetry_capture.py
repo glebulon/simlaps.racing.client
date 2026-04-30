@@ -13,6 +13,7 @@ from src.core.telemetry_capture import (
     FrameData,
     CaptureMetadata,
 )
+from src.models import SharedSessionManager
 from datetime import datetime, timezone
 
 
@@ -156,6 +157,78 @@ class TestTelemetryCapture:
         assert frame.frame_number == 0
         assert frame.physics is not None or frame.physics == {}
 
+    @patch('src.core.telemetry_decoder.decode_static')
+    @patch('src.core.telemetry_decoder.decode_graphics')
+    @patch('src.core.telemetry_decoder.decode_physics')
+    def test_capture_frame_updates_shared_session_manager(
+        self,
+        mock_decode_physics,
+        mock_decode_graphics,
+        mock_decode_static,
+    ):
+        """Decoded SHM frame data is forwarded into the shared session manager."""
+        mock_decode_physics.return_value = {"speed_kmh": 255.0}
+        mock_decode_graphics.return_value = {
+            "session_current_lap": 4,
+            "current_lap_time_ms": 70000,
+            "last_laptime_ms": 121111,
+            "best_laptime_ms": 120000,
+            "ideal_laptime_ms": 119900,
+            "delta_time_ms": -50,
+            "is_invalid": True,
+            "fuel_liter_current_quantity": 18.5,
+            "fuel_liter_per_km": 2.2,
+            "km_per_fuel_liter": 0.45,
+            "total_lap_count": 10,
+            "session_phase": "RACE",
+            "session_time_left_ms": 300000,
+            "current_pos": 2,
+            "total_drivers": 18,
+        }
+        mock_decode_static.return_value = {
+            "ac_evo_version": "0.9.3",
+            "session": 2,
+            "track": "spa_francorchamps",
+            "is_online": True,
+        }
+
+        manager = SharedSessionManager()
+        capture = TelemetryCapture(hz=10.0, session_manager=manager)
+
+        physics_reader = MagicMock()
+        physics_reader.size = 1024
+        physics_reader.read_raw.return_value = b"\x00" * 1024
+        graphics_reader = MagicMock()
+        graphics_reader.size = 4096
+        graphics_reader.read_raw.return_value = b"\x00" * 4096
+        static_reader = MagicMock()
+        static_reader.size = 2048
+        static_reader.read_raw.return_value = b"\x00" * 2048
+
+        capture._readers = {
+            "physics": physics_reader,
+            "graphics": graphics_reader,
+            "static": static_reader,
+        }
+
+        frame = capture._capture_frame(1)
+        assert frame is not None
+
+        validity = manager.get_lap_validity_data(4)
+        assert validity is not None
+        assert validity.is_valid is False
+
+        timing = manager.get_lap_timing_data(4)
+        assert timing is not None
+        assert timing.last_lap_time_ms == 121111
+
+        fuel = manager.get_fuel_data()
+        assert fuel.current_fuel == 18.5
+
+        metadata = manager.get_session_metadata_data()
+        assert metadata.game_version == "0.9.3"
+        assert metadata.track == "spa_francorchamps"
+
     def test_capture_lap_boundary_recording(self):
         """Test recording lap boundaries."""
         capture = TelemetryCapture(hz=10.0)
@@ -166,19 +239,20 @@ class TestTelemetryCapture:
             for i in range(10)
         ]
         
-        capture.record_lap_boundary()
+        capture.record_lap_boundary(123456, 7)
         
         assert len(capture.get_lap_boundaries()) == 1
         assert capture.get_lap_boundaries()[0][0] == 9  # Last frame index
+        assert capture.get_lap_boundaries()[0][1:] == (123456, 7)
 
     def test_capture_get_lap_boundaries(self):
         """Test getting lap boundaries."""
         capture = TelemetryCapture(hz=10.0)
-        capture._lap_boundaries = [(10, None), (20, None), (30, None)]
+        capture._lap_boundaries = [(10, None, None), (20, None, None), (30, None, None)]
         
         boundaries = capture.get_lap_boundaries()
         
-        assert boundaries == [(10, None), (20, None), (30, None)]
+        assert boundaries == [(10, None, None), (20, None, None), (30, None, None)]
 
     def test_capture_metadata_creation(self):
         """Test capture metadata creation."""

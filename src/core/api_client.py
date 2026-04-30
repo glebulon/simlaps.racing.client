@@ -6,11 +6,11 @@ No API key required - uses embedded app secret for signing.
 """
 
 import httpx
-from typing import Optional
+from typing import Any, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
 
-from ..models import SessionData, LapData
+from ..models import SessionData, LapData, SharedSessionManager
 from ..utils.debug_logger import DebugLogger
 from .security import sign_payload, is_game_running
 from ..version import VERSION, USER_AGENT
@@ -52,6 +52,7 @@ class APIClient:
     def __init__(
         self,
         server_url: Optional[str] = None,
+        session_manager: Optional[SharedSessionManager] = None,
     ):
         """
         Initialize API client.
@@ -62,6 +63,7 @@ class APIClient:
         self.server_url = (server_url or self.DEFAULT_SERVER_URL).rstrip("/")
         self._client: Optional[httpx.AsyncClient] = None
         self._debug = DebugLogger()
+        self._session_manager = session_manager or SharedSessionManager()
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -116,8 +118,14 @@ class APIClient:
         """
         self._debug.log(f"[API] submit_lap called")
         self._debug.log(f"  lap_time: {lap.lap_time_str} ({lap.lap_time_ms}ms)")
-        self._debug.log(f"  is_valid: {lap.is_valid}")
+        self._debug.log(f"  is_valid (lap): {lap.is_valid}")
         self._debug.log(f"  submit_invalid setting: {submit_invalid}")
+
+        shared_lap_validity = self._session_manager.get_lap_validity_data(lap.lap_number)
+        effective_is_valid = (
+            shared_lap_validity.is_valid if shared_lap_validity is not None else lap.is_valid
+        )
+        self._debug.log(f"  is_valid (effective): {effective_is_valid}")
         
         # Anti-cheat: Verify game is running before submission
         game_running = is_game_running()
@@ -130,7 +138,7 @@ class APIClient:
             )
 
         # Don't submit invalid laps unless explicitly requested
-        if not lap.is_valid and not submit_invalid:
+        if not effective_is_valid and not submit_invalid:
             self._debug.log(f"[API] Rejected: Invalid lap and submit_invalid=False")
             return SubmissionResult(
                 status=SubmissionStatus.INVALID_LAP,
@@ -138,9 +146,11 @@ class APIClient:
             )
 
         # Validate we have a user ID
-        final_user_id = user_id or session.player_id
+        shared_player_identification = self._session_manager.get_player_identification()
+        final_user_id = user_id or session.player_id or shared_player_identification.steam_id
         self._debug.log(f"  user_id param: {user_id}")
         self._debug.log(f"  session.player_id: {session.player_id}")
+        self._debug.log(f"  shared steam_id: {shared_player_identification.steam_id}")
         self._debug.log(f"  final_user_id: {final_user_id}")
         if not final_user_id:
             self._debug.log(f"[API] Rejected: No user ID")
@@ -148,15 +158,38 @@ class APIClient:
                 status=SubmissionStatus.ERROR,
                 message="No Steam ID detected - please start a session in game",
             )
+        shared_lap_timing = self._session_manager.get_lap_timing_data(lap.lap_number)
+        shared_sector_splits = self._session_manager.get_sector_split_data(lap.lap_number)
+        shared_fuel_data = self._session_manager.get_fuel_data()
+
+        session_metadata = self._session_manager.get_session_metadata_data()
+        effective_track = session.track if session.track and session.track != "Unknown" else session_metadata.track
+        effective_car = session.car if session.car and session.car != "Unknown" else (shared_player_identification.car_model or session.car)
+        effective_session_id = session.session_id or session_metadata.session_id
+        effective_session_type = (
+            session.session_type if session.session_type and session.session_type != "Unknown" else session_metadata.session_type
+        )
+        effective_game_version = (
+            session.game_version if session.game_version and session.game_version != "Unknown" else session_metadata.game_version
+        )
 
         # Build submission payload
-        track_id = self._normalize_track_id(session.track)
-        self._debug.log(f"  track: {session.track} -> {track_id}")
-        self._debug.log(f"  car: {session.car}")
-        self._debug.log(f"  lap_time_ms: {lap.lap_time_ms}")
-        
+        track_id = self._normalize_track_id(effective_track)
+        self._debug.log(f"  track: {effective_track} -> {track_id}")
+        self._debug.log(f"  car: {effective_car}")
+        self._debug.log(f"  lap_time_ms (lap): {lap.lap_time_ms}")
+        self._debug.log(
+            f"  lap_time_ms (shared): {getattr(shared_lap_timing, 'last_lap_time_ms', None)}"
+        )
+
         # Ensure time is int and positive
-        final_time = int(lap.lap_time_ms)
+        final_time_candidate = None
+        if shared_lap_timing is not None:
+            final_time_candidate = shared_lap_timing.last_lap_time_ms
+        if not isinstance(final_time_candidate, (int, float)) or int(final_time_candidate) <= 0:
+            final_time_candidate = lap.lap_time_ms
+
+        final_time = int(final_time_candidate)
         if final_time <= 0:
              self._debug.log(f"[API] Rejected: Invalid lap time {final_time}")
              return SubmissionResult(
@@ -167,27 +200,45 @@ class APIClient:
         payload = {
             "userId": final_user_id,
             "trackId": track_id,
-            "carId": session.car,
+            "carId": effective_car,
             "time": final_time,
-            "sessionId": session.session_id,  # Links laps from the same session
-            "sessionType": session.session_type,  # practice, qualifying, race, etc.
-            "gameVersion": session.game_version,
+            "sessionId": effective_session_id,  # Links laps from the same session
+            "sessionType": effective_session_type,  # practice, qualifying, race, etc.
+            "gameVersion": effective_game_version,
             "tires": lap.tyre_compound,
-            "valid": lap.is_valid,  # False if lap had penalties/off-track
+            "valid": effective_is_valid,  # False if lap had penalties/off-track
         }
 
         # Add sector times if available and positive (server rejects 0)
-        if lap.sector1_ms is not None and int(lap.sector1_ms) > 0:
-            payload["sector1"] = int(lap.sector1_ms)
-        if lap.sector2_ms is not None and int(lap.sector2_ms) > 0:
-            payload["sector2"] = int(lap.sector2_ms)
-        if lap.sector3_ms is not None and int(lap.sector3_ms) > 0:
-            payload["sector3"] = int(lap.sector3_ms)
+        sector_payload: Dict[str, Any] = {
+            "sector1": lap.sector1_ms,
+            "sector2": lap.sector2_ms,
+            "sector3": lap.sector3_ms,
+        }
+        if shared_sector_splits is not None:
+            if not isinstance(sector_payload["sector1"], (int, float)) or int(sector_payload["sector1"]) <= 0:
+                sector_payload["sector1"] = shared_sector_splits.sector1_ms
+            if not isinstance(sector_payload["sector2"], (int, float)) or int(sector_payload["sector2"]) <= 0:
+                sector_payload["sector2"] = shared_sector_splits.sector2_ms
+            if not isinstance(sector_payload["sector3"], (int, float)) or int(sector_payload["sector3"]) <= 0:
+                sector_payload["sector3"] = shared_sector_splits.sector3_ms
+
+        if sector_payload["sector1"] is not None and int(sector_payload["sector1"]) > 0:
+            payload["sector1"] = int(sector_payload["sector1"])
+        if sector_payload["sector2"] is not None and int(sector_payload["sector2"]) > 0:
+            payload["sector2"] = int(sector_payload["sector2"])
+        if sector_payload["sector3"] is not None and int(sector_payload["sector3"]) > 0:
+            payload["sector3"] = int(sector_payload["sector3"])
 
         # Add fuel if available and valid
-        if lap.fuel_used is not None:
+        # NOTE: fuel_consumption_rate is L/km (a rate), not L/lap — never use it as fuelUsed.
+        fuel_used_value = lap.fuel_used
+        if fuel_used_value is None:
+            fuel_used_value = shared_fuel_data.fuel_consumed_lap
+
+        if fuel_used_value is not None:
             try:
-                fuel_value = float(lap.fuel_used)
+                fuel_value = float(fuel_used_value)
                 if fuel_value >= 0:  # Ensure non-negative fuel values
                     payload["fuelUsed"] = fuel_value
             except (ValueError, TypeError):

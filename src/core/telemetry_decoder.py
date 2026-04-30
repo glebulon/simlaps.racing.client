@@ -652,7 +652,19 @@ _GE_INSTANTANEOUS_FUEL_LITER_PER_KM = 1476
 _GE_INSTANTANEOUS_KM_PER_FUEL_LITER = 1480
 _GE_GEAR_RPM_WINDOW = 1484
 # instrumentation × 3 (128 B each) at 1488..1872
-# electronics × 4 (128 B each) at 1872..2384
+# SMEvoElectronics × 4 (128 B each) at 1872..2384
+# Only the first copy (current settings) is decoded; min-limit/max-limit/modifiable copies are skipped.
+_GE_ELECTRONICS = 1872
+_EL_TC_LEVEL = 0        # int8_t — traction-control level (0 = off)
+_EL_ABS_LEVEL = 2       # int8_t — ABS intervention level (0 = off)
+# 3-byte pad to 4-byte boundary before float
+_EL_BRAKE_BIAS = 8      # float  — front brake-bias ratio (e.g. 0.56 = 56 % front)
+_EL_ENGINE_MAP = 12     # int8_t — engine map / power mode index
+# 3-byte pad, then float turbo_level at 16, int8 ers_deploy at 20, pad, float ers_recharge at 24
+_EL_DIFF_POWER = 31     # int8_t — differential lock level under power
+_EL_DIFF_COAST = 32     # int8_t — differential lock level on coast
+_EL_PITLIMITER_ON = 38  # bool   — pit-speed limiter active
+_EL_PERF_MODE = 39      # int8_t — active performance / power mode index
 _GE_TOTAL_LAP_COUNT = 2384
 _GE_CURRENT_POS = 2388
 _GE_TOTAL_DRIVERS = 2392
@@ -818,6 +830,27 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
 
         focused_car_id = struct.unpack_from("<Q", data, _GE_FOCUSED_CAR_ID_A)[0]
         player_car_id = struct.unpack_from("<Q", data, _GE_PLAYER_CAR_ID_A)[0]
+
+        # ── Electronics / aids (SMEvoElectronics — first copy at _GE_ELECTRONICS)
+        # Guard against captures where the buffer didn't grow to include this region.
+        if len(data) >= _GE_ELECTRONICS + 128:
+            electronics_tc_level = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_TC_LEVEL)[0])
+            electronics_abs_level = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_ABS_LEVEL)[0])
+            electronics_brake_bias = struct.unpack_from("<f", data, _GE_ELECTRONICS + _EL_BRAKE_BIAS)[0]
+            electronics_engine_map = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_ENGINE_MAP)[0])
+            electronics_diff_power = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_DIFF_POWER)[0])
+            electronics_diff_coast = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_DIFF_COAST)[0])
+            electronics_pitlimiter = bool(data[_GE_ELECTRONICS + _EL_PITLIMITER_ON])
+            electronics_perf_mode = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_PERF_MODE)[0])
+        else:
+            electronics_tc_level = None
+            electronics_abs_level = None
+            electronics_brake_bias = None
+            electronics_engine_map = None
+            electronics_diff_power = None
+            electronics_diff_coast = None
+            electronics_pitlimiter = None
+            electronics_perf_mode = None
     except (struct.error, IndexError):
         return None
 
@@ -890,6 +923,7 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         "timing_ideal_laptime": timing_ideal_laptime,
         "timing_total_time": timing_total_time,
         "timing_is_invalid": timing_is_invalid,
+        "is_invalid": timing_is_invalid,
         # ── Race state
         "current_pos": current_pos,
         "position": current_pos,                     # legacy-compat alias
@@ -909,6 +943,15 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         "fuel_liter_per_lap": fuel_liter_per_lap,
         "laps_possible_with_fuel": laps_possible_with_fuel,
         "battery_voltage": battery_voltage,
+        # ── Electronics / aids (SMEvoElectronics — None when buffer too small)
+        "electronics_tc_level": electronics_tc_level,
+        "electronics_abs_level": electronics_abs_level,
+        "electronics_brake_bias": electronics_brake_bias,
+        "electronics_engine_map": electronics_engine_map,
+        "electronics_diff_power": electronics_diff_power,
+        "electronics_diff_coast": electronics_diff_coast,
+        "electronics_pitlimiter_on": electronics_pitlimiter,
+        "electronics_perf_mode": electronics_perf_mode,
         # ── Setup / performance hints
         "diff_coast_raw_value": diff_coast_raw_value,
         "diff_power_raw_value": diff_power_raw_value,

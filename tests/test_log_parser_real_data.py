@@ -88,6 +88,22 @@ class TestSessionEndDetection:
         # Should recognize the END_SESSION pattern
         assert "END_SESSION" in line
 
+    def test_end_session_player_match_normalizes_hyphens(self):
+        """Player-car matching should tolerate hyphenated and compact UUID forms."""
+        parser = make_parser()
+
+        line = "[2026-04-09 00:09:27.547] [gameplay] [info] END_SESSION car 4b05a6b8adf75c93e269e13549aa93a5 has ended"
+
+        assert parser._line_mentions_player_car(line)
+
+    def test_end_session_other_car_does_not_match_player(self):
+        """Other cars must not stop the player's live telemetry capture."""
+        parser = make_parser()
+
+        line = "[2026-04-09 00:09:27.547] [gameplay] [info] END_SESSION car 438d1278c599fe53-5adcc88e24f19d9d has ended"
+
+        assert not parser._line_mentions_player_car(line)
+
 
 class TestLapCompletion:
     """Test lap completion parsing from real log lines."""

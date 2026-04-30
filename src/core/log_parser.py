@@ -21,6 +21,7 @@ from ..models import (
     StintData,
     LapData,
     SessionData,
+    SharedSessionManager,
     TyreState,
     LogContext,
     # Constants
@@ -84,6 +85,7 @@ class LogParser:
         on_game_version: Optional[GameVersionCallback] = None,
         on_session_end: Optional[SessionEndCallback] = None,
         on_session_restart: Optional[SessionRestartCallback] = None,
+        session_manager: Optional[SharedSessionManager] = None,
     ) -> None:
         _path = Path(log_path) if log_path else self.DEFAULT_LOG_DIR
         if _path.is_dir() or (not _path.suffix and not _path.is_file()):
@@ -100,6 +102,11 @@ class LogParser:
         self.on_game_version = on_game_version
         self.on_session_end = on_session_end
         self.on_session_restart = on_session_restart
+        self._session_manager = session_manager or SharedSessionManager()
+        
+        # Track last emitted game status to prevent duplicate events
+        self._last_emitted_game_status: Optional[bool] = None
+        self._session_active_from_logs: bool = False
 
         self.sessions: list[SessionData] = []
         self.current_session: Optional[SessionData] = None
@@ -269,11 +276,49 @@ class LogParser:
             return None
         return line[1:end]
 
+    @staticmethod
+    def _normalize_car_uuid(car_uuid: Optional[str]) -> str:
+        return (car_uuid or "").replace("-", "").lower()
+
     def _is_player_car(self, car_uuid: str) -> bool:
+        normalized = self._normalize_car_uuid(car_uuid)
         return (
-            car_uuid == self.context.car_uuid
-            or car_uuid in self.context.player_car_uuids
+            normalized == self._normalize_car_uuid(self.context.car_uuid)
+            or normalized in {
+                self._normalize_car_uuid(uuid)
+                for uuid in self.context.player_car_uuids
+            }
         )
+
+    def _line_mentions_player_car(self, line: str) -> bool:
+        if not self.context.car_uuid and not self.context.player_car_uuids:
+            return False
+        normalized_line = self._normalize_car_uuid(line)
+        if self.context.car_uuid and self._normalize_car_uuid(self.context.car_uuid) in normalized_line:
+            return True
+        return any(
+            self._normalize_car_uuid(uuid) in normalized_line
+            for uuid in self.context.player_car_uuids
+        )
+
+    def _update_session_activity_from_line(self, line: str) -> None:
+        """Track whether the latest parsed log state still looks drivable."""
+        if "Game Started!" in line or "has started the race!" in line:
+            self._session_active_from_logs = True
+            return
+
+        if "request made GameModeRequestExit" in line:
+            self._session_active_from_logs = False
+            return
+
+        if "END_SESSION car" in line and self._line_mentions_player_car(line):
+            self._session_active_from_logs = False
+            return
+
+        if "onSetPlayerCurrentCarCommand: remove car" in line:
+            m = self._pats["remove_car"].search(line)
+            if m and self._is_player_car(m.group(1)):
+                self._session_active_from_logs = False
 
     def _is_steam_id(self, pid: str) -> bool:
         return len(pid) == 17 and pid.startswith("7656")
@@ -328,6 +373,7 @@ class LogParser:
                 _debug.log(f"[ERROR] on_status_change: {exc}")
 
     async def _emit_lap(self, session: SessionData, lap: LapData) -> None:
+        self._session_manager.update_lap_from_logs(lap, session_data=session)
         _debug.log(
             f"[EMIT_LAP] #{lap.lap_number} {lap.lap_time_str} "
             f"state={lap.lap_state.value}"
@@ -338,8 +384,42 @@ class LogParser:
             except (RuntimeError, asyncio.CancelledError) as exc:
                 _debug.log(f"[ERROR] on_lap_complete: {exc}")
 
-    async def _emit_game_status(self, is_running: bool) -> None:
-        _debug.log(f"[GAME_STATUS] is_running={is_running}")
+    def _sync_shared_session(self, session: Optional[SessionData]) -> None:
+        if session is None:
+            return
+        self._session_manager.update_from_logs(
+            SessionData(
+                session_id=session.session_id,
+                game_version=session.game_version,
+                session_type=session.session_type,
+                car=session.car,
+                track=session.track,
+                weather=session.weather,
+                player_name=session.player_name,
+                player_id=session.player_id,
+                car_uuid=session.car_uuid,
+                tyre_compound=session.tyre_compound,
+                initial_fuel=session.initial_fuel,
+                fuel_used_session=session.fuel_used_session,
+                fuel_reliable=session.fuel_reliable,
+                setup_notes=session.setup_notes,
+                start_time=session.start_time,
+                laps=[],
+                stints=[],
+            )
+        )
+
+    async def _emit_game_status(self, is_running: bool, trigger: str = "unknown") -> None:
+        """Emit game status change, logging if duplicate or state change."""
+        if self._last_emitted_game_status == is_running:
+            _debug.log(f"[GAME_STATUS] DUPLICATE EVENT (ignored): is_running={is_running}, trigger={trigger}, last={self._last_emitted_game_status}")
+            print(f"[LOG_PARSER] Duplicate game status {is_running} from {trigger}, ignoring")
+            return
+        
+        _debug.log(f"[GAME_STATUS] STATE CHANGE: is_running={is_running}, trigger={trigger}, last={self._last_emitted_game_status}")
+        print(f"[LOG_PARSER] Game status change: {is_running} (trigger: {trigger}, was: {self._last_emitted_game_status})")
+        self._last_emitted_game_status = is_running
+        
         if self.on_game_status_change:
             try:
                 await self.on_game_status_change(is_running)
@@ -365,6 +445,9 @@ class LogParser:
         # Reset parser-side per-session state so stale flags from the old run
         # (penalty, track-limit, sector splits, physics_lap_num, etc.) don't
         # leak into the first lap of the restarted session.
+        # Also reset the dedup guard so the upcoming game-status True event is
+        # not silently dropped (restart does not emit a fresh "Game Started!").
+        self._last_emitted_game_status = None
         self._reset_in_progress()
         if self.current_session:
             self._finalise_current_session()
@@ -731,6 +814,7 @@ class LogParser:
 
         if self.current_session:
             self._finalise_current_session()
+        self._session_active_from_logs = True
 
         raw_type, raw_track_desc, raw_car, raw_weather = (
             m.group(1), m.group(2), m.group(3).strip(), m.group(4).strip()
@@ -771,6 +855,8 @@ class LogParser:
         
         self._reset_in_progress()
         self._finalise_stints()
+
+        self._sync_shared_session(self.current_session)
 
         _debug.log(
             f"[SESSION] New: type={session_type} track={track} "
@@ -1375,6 +1461,7 @@ class LogParser:
         )
         self._reset_in_progress()
         self._finalise_stints()
+        self._sync_shared_session(self.current_session)
         _debug.log(f"[SESSION] Fallback session created: type={session_type}")
 
     def _finalise_current_session(self) -> None:
@@ -1392,9 +1479,11 @@ class LogParser:
         # Emit aborted lap if the session ends mid-lap
         self._maybe_emit_aborted_lap()
         self._finalise_stints()
+        self._session_manager.update_from_logs(self.current_session)
         if self.current_session.laps:
             self.sessions.append(self.current_session)
         self.current_session = None
+        self._session_active_from_logs = False
         self._reset_in_progress()
 
     # ── Master line processor ─────────────────────────────────────────────────
@@ -1415,6 +1504,7 @@ class LogParser:
 
         self._add_to_log_buffer(line)
         self._last_activity_ts = time.time()
+        self._update_session_activity_from_line(line)
 
         # ── Metadata (order-independent, always evaluated) ────────────────────
         self._handle_version(line)
@@ -1552,6 +1642,8 @@ class LogParser:
                             self.current_session.player_id,
                             self.current_session.player_name,
                         )
+                    if self._session_active_from_logs:
+                        await self._emit_game_status(True, trigger="historical active session")
                 else:
                     await self._emit_status("Ready — waiting for session …")
 
@@ -1576,10 +1668,10 @@ class LogParser:
 
                     if line:
                         if "Game Started!" in line:
-                            await self._emit_game_status(True)
+                            await self._emit_game_status(True, trigger="Game Started!")
                         if "has started the race!" in line:
-                            if self.context.car_uuid and self.context.car_uuid in line:
-                                await self._emit_game_status(True)
+                            if self._line_mentions_player_car(line):
+                                await self._emit_game_status(True, trigger="has started the race!")
                         # AC Evo: pause-menu "Restart Session" emits this line
                         # but does NOT emit a fresh "Game Started!", so we
                         # have to drive the buffer reset ourselves.
@@ -1588,15 +1680,12 @@ class LogParser:
                         # AC Evo: pause-menu "Exit to Menu" — different from
                         # restart, the user is leaving the session entirely.
                         elif "request made GameModeRequestExit" in line:
-                            await self._emit_game_status(False)
+                            await self._emit_game_status(False, trigger="GameModeRequestExit")
                         if "END_SESSION car" in line:
-                            if self.context.car_uuid and self.context.car_uuid in line:
-                                await self._emit_game_status(False)
-                            elif self.current_session is not None:
-                                # Fallback: on some attach/resume paths the player car UUID
-                                # may not match exactly at session end. If we have an active
-                                # session context, treat END_SESSION as session stop.
-                                await self._emit_game_status(False)
+                            if self._line_mentions_player_car(line):
+                                await self._emit_game_status(False, trigger="END_SESSION matched")
+                            else:
+                                _debug.log("[SESSION_END] ignoring END_SESSION for non-player car")
                         if "onSetPlayerCurrentCarCommand: remove car" in line:
                             m = self._pats["remove_car"].search(line)
                             if m and self._is_player_car(m.group(1)):

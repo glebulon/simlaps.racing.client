@@ -5,6 +5,7 @@ Tests lap detection, corner detection, and track building with various scenarios
 """
 
 import pytest
+from unittest.mock import patch
 from src.core.telemetry_analyzer import (
     build_track,
     detect_laps,
@@ -15,6 +16,7 @@ from src.core.telemetry_analyzer import (
     _sanitize_slip,
 )
 from src.core.telemetry_capture import FrameData
+from src.models import SharedSessionManager
 from datetime import datetime, timezone
 
 
@@ -980,3 +982,74 @@ class TestTelemetryAnalyzer:
         assert result.laps_detected == 4
         # Best lap should come from game-provided times, not frame-distance math.
         assert abs(result.best_lap_time - 152.001) < 0.001
+
+    @pytest.mark.asyncio
+    async def test_analyze_prefers_shared_session_lap_data(self):
+        """Analyzer should use shared-session lap timing/validity when available."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+
+        frames = [create_mock_frame(i, speed=90.0 + (i % 40), position=i * 0.01) for i in range(220)]
+        manager = SharedSessionManager()
+        manager.update_lap_timing_from_graphics_shm(1, {"last_laptime_ms": 200000})
+        manager.update_lap_timing_from_graphics_shm(2, {"last_laptime_ms": 190000})
+        manager.update_lap_timing_from_graphics_shm(3, {"last_laptime_ms": 180000})
+        manager.update_lap_timing_from_graphics_shm(4, {"last_laptime_ms": 170000})
+        manager.update_lap_validity_from_graphics_shm(2, True)
+
+        analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=manager)
+        game_markers = [
+            (50, 153396),
+            (100, 153309),
+            (150, 152460),
+            (200, 152001),
+        ]
+
+        with patch.object(manager, "update_from_telemetry", wraps=manager.update_from_telemetry) as update_spy:
+            result = await analyzer.analyze(
+                frames,
+                hz=10.0,
+                game_lap_boundaries=game_markers,
+                output_prefix="test_shared_session_laps",
+            )
+
+        assert result is not None
+        assert result.laps_detected == 4
+        assert abs(result.best_lap_time - 170.0) < 0.001
+        update_spy.assert_called_once()
+        telemetry_summary = update_spy.call_args.args[0]
+        assert telemetry_summary["max_speed"] >= 90.0
+
+    @pytest.mark.asyncio
+    async def test_analyze_uses_explicit_game_lap_numbers_for_mid_session_capture(self):
+        """Mid-session captures should keep real game lap numbers and diagnose missing final laps."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+
+        frames = [create_mock_frame(i, speed=95.0 + (i % 30), position=i * 0.01) for i in range(180)]
+        manager = SharedSessionManager()
+        manager.update_lap_timing_from_graphics_shm(1, {"last_laptime_ms": 999000})
+        manager.update_lap_timing_from_graphics_shm(2, {"last_laptime_ms": 150000})
+        manager.update_lap_timing_from_graphics_shm(3, {"last_laptime_ms": 140000})
+        manager.update_lap_timing_from_graphics_shm(4, {"last_laptime_ms": 130000})
+        manager.update_lap_timing_from_graphics_shm(5, {"last_laptime_ms": 129000})
+
+        analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=manager)
+        game_markers = [
+            (50, 135069, 2),
+            (100, 136392, 3),
+            (150, 133194, 4),
+        ]
+
+        result = await analyzer.analyze(
+            frames,
+            hz=10.0,
+            game_lap_boundaries=game_markers,
+            output_prefix="test_mid_session_lap_numbers",
+        )
+
+        assert result is not None
+        assert result.laps_detected == 3
+        assert abs(result.best_lap_time - 130.0) < 0.001
+        with open(result.ai_prompt_path, "r", encoding="utf-8") as fh:
+            prompt = fh.read()
+        assert "Telemetry coaching is running in DIAGNOSTIC mode." in prompt
+        assert "Log/shared session reaches lap 5, but telemetry only reaches lap 4" in prompt

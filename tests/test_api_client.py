@@ -14,7 +14,7 @@ import os
 os.environ["APP_SECRET"] = "31cdbbaf05e962038c9221bdc22845b7639f4a1e914b4596db6b8608a5ea5e18"
 
 from src.core.api_client import APIClient, SubmissionStatus, SubmissionResult
-from src.models import SessionData, LapData, LapState
+from src.models import SessionData, LapData, LapState, SharedSessionManager
 
 
 class TestAPIClientInit:
@@ -106,6 +106,99 @@ class TestSubmitLap:
         
         assert result.status == SubmissionStatus.SUCCESS
         assert result.lap_id == "lap-123"
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_uses_shared_session_payload_data(
+        self,
+        mock_post,
+        mock_game_running,
+        sample_session,
+        sample_lap,
+    ):
+        """Shared session values should fill payload fields when lap/session data is missing."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"id": "lap-456", "status": "ok"}
+        mock_post.return_value = mock_response
+
+        sample_session.track = "Unknown"
+        sample_session.car = "Unknown"
+        sample_session.game_version = "Unknown"
+        sample_session.session_type = "Unknown"
+        sample_session.player_id = None
+        sample_lap.sector1_ms = 0
+        sample_lap.sector2_ms = None
+        sample_lap.sector3_ms = -1
+        sample_lap.fuel_used = None
+
+        manager = SharedSessionManager()
+        manager.update_player_identification_from_logs(
+            {
+                "steam_id": "76561198000000001",
+                "car_model": "ferrari_296_gt3",
+            }
+        )
+        manager.update_session_metadata_from_static_shm(
+            {
+                "track": "monza",
+                "session": "RACE",
+                "ac_evo_version": "1.2.3",
+            }
+        )
+        manager.update_lap_timing_from_graphics_shm(sample_lap.lap_number, {"last_laptime_ms": 123456})
+        manager.update_sector_splits_from_logs(
+            sample_lap.lap_number,
+            {
+                "sector1_ms": 40000,
+                "sector2_ms": 41000,
+                "sector3_ms": 42456,
+            },
+        )
+        # fuel_consumed_lap is the correct per-lap fuel field; fuel_liter_per_km is a
+        # rate (L/km) and must never be submitted as fuelUsed.
+        manager._session_data.fuel_data.fuel_consumed_lap = 2.7
+        manager.update_fuel_from_graphics_shm({"fuel_liter_per_km": 0.04})  # rate only
+
+        client = APIClient(session_manager=manager)
+        result = await client.submit_lap(sample_session, sample_lap)
+
+        assert result.status == SubmissionStatus.SUCCESS
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["userId"] == "76561198000000001"
+        assert payload["trackId"] == "monza"
+        assert payload["carId"] == "ferrari_296_gt3"
+        assert payload["time"] == 123456
+        assert payload["sessionType"] == "RACE"
+        assert payload["gameVersion"] == "1.2.3"
+        assert payload["sector1"] == 40000
+        assert payload["sector2"] == 41000
+        assert payload["sector3"] == 42456
+        # fuel_consumed_lap should be submitted
+        assert payload["fuelUsed"] == 2.7
+        # The per-km rate must NOT appear as fuelUsed
+        assert payload.get("fuelUsed") != 0.04
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    async def test_submit_lap_respects_shared_session_lap_validity(
+        self,
+        mock_game_running,
+        sample_session,
+        sample_lap,
+    ):
+        """Shared lap validity should block submission when marked invalid."""
+        mock_game_running.return_value = True
+
+        manager = SharedSessionManager()
+        manager.update_lap_validity_from_graphics_shm(sample_lap.lap_number, True)
+
+        client = APIClient(session_manager=manager)
+        result = await client.submit_lap(sample_session, sample_lap, submit_invalid=False)
+
+        assert result.status == SubmissionStatus.INVALID_LAP
     
     @pytest.mark.asyncio
     @patch('src.core.api_client.is_game_running')

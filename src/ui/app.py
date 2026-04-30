@@ -20,7 +20,7 @@ from .components.lap_card import LapCardStatus
 from .components.status_bar import ConnectionStatus
 from .components.telemetry_status import TelemetryStatus, TelemetryButton
 from src.core.log_parser import LogParser
-from src.models import SessionData, LapData
+from src.models import SessionData, LapData, SharedSessionManager
 from src.core.api_client import APIClient, SubmissionStatus
 from src.core.security import get_steam_user, is_game_running
 from src.core.discord_notifier import DiscordNotifier, LapData as DiscordLapData
@@ -63,6 +63,7 @@ class SimLapsApp:
         
         self._api_client: Optional[APIClient] = None
         self._log_parser: Optional[LogParser] = None
+        self._session_manager = SharedSessionManager()
         
         # Discord and PB services
         log_info(Component.APP, "Initializing Discord and PB services")
@@ -80,6 +81,7 @@ class SimLapsApp:
         self._telemetry_analyzer: Optional[TelemetryAnalyzer] = None
         self._telemetry_button: Optional[TelemetryButton] = None
         self._current_track_name: Optional[str] = None
+        self._telemetry_session_incomplete: bool = False
         
         # Pages
         print("[APP] Initializing UI pages...")
@@ -178,6 +180,7 @@ class SimLapsApp:
         # API client (no API key needed - uses signed payloads)
         self._api_client = APIClient(
             server_url=self._config.server_url,
+            session_manager=self._session_manager,
         )
         
         # Log parser with callbacks
@@ -190,6 +193,7 @@ class SimLapsApp:
             on_game_version=self._on_game_version,
             on_session_end=self._on_car_removed,
             on_session_restart=self._on_session_restart,
+            session_manager=self._session_manager,
         )
         
         # Initialize telemetry if enabled
@@ -206,12 +210,14 @@ class SimLapsApp:
                 hz=10.0,
                 output_dir=self._config.telemetry_output_path,
                 debug_logs=self._config.telemetry_debug_logs,
+                session_manager=self._session_manager,
             )
             # Set up auto-stop callback to trigger analysis
             self._telemetry_capture.set_on_stop_callback(self._on_telemetry_auto_stop)
             self._telemetry_analyzer = TelemetryAnalyzer(
                 output_dir=self._config.telemetry_output_path,
                 track_catalog=TRACK_CATALOG,
+                session_manager=self._session_manager,
             )
             
             # Create telemetry button
@@ -350,30 +356,35 @@ class SimLapsApp:
             if session.track and session.track != "Unknown":
                 self._current_track_name = session.track
 
-            # Record lap boundary in telemetry capture and get fuel consumption
+            # Record lap boundary so the analyzer can use authoritative lap splits.
+            # Fuel per lap is owned entirely by the log parser (Physics SHM + spike
+            # detection) and is already set on lap.fuel_used before this point.
             if self._telemetry_capture and self._telemetry_capture.is_capturing():
-                fuel_used = self._telemetry_capture.record_lap_boundary(lap.lap_time_ms)
-                
-                # Update lap data with telemetry-calculated fuel if available
-                if fuel_used is not None:
-                    lap.fuel_used = fuel_used
-                    lap.fuel_reliable = True
-                    print(f"[APP] Telemetry fuel: {fuel_used:.3f}L")
+                self._telemetry_capture.record_lap_boundary(
+                    lap.lap_time_ms,
+                    lap.lap_number,
+                )
 
-            # Fallback: if parser missed a game-status transition (e.g. app
-            # attached mid-session), a lap-complete event proves we're in an
-            # active session. Start telemetry capture now.
-            if (
-                self._config.telemetry_enabled
-                and self._telemetry_capture
-                and not self._telemetry_capture.is_capturing()
-            ):
-                print("[APP] Triggering telemetry capture start (lap-complete fallback)")
-                await self._start_telemetry_capture()
+            elif self._config.telemetry_enabled and self._telemetry_capture:
+                # A lap-complete event is too late to begin a useful capture
+                # for that lap and can fire during post-session shutdown.
+                self._telemetry_session_incomplete = True
+                print("[APP] Telemetry missed lap boundary; not starting capture from lap-complete")
             
-            # Determine if we should submit this lap
-            should_submit = self._config.auto_submit and (lap.is_valid or self._config.submit_invalid_laps)
-            print(f"[APP] should_submit={should_submit}, is_valid={lap.is_valid}")
+            # Determine if we should submit this lap (prefer authoritative shared validity)
+            shared_lap_validity = self._session_manager.get_lap_validity_data(lap.lap_number)
+            effective_is_valid = (
+                shared_lap_validity.is_valid
+                if shared_lap_validity is not None
+                else lap.is_valid
+            )
+            should_submit = self._config.auto_submit and (
+                effective_is_valid or self._config.submit_invalid_laps
+            )
+            print(
+                f"[APP] should_submit={should_submit}, "
+                f"is_valid={lap.is_valid}, effective_is_valid={effective_is_valid}"
+            )
             print(
                 "[APP] lap diagnostics: "
                 f"state={getattr(lap, 'lap_state', 'UNKNOWN')} "
@@ -382,26 +393,27 @@ class SimLapsApp:
                 f"sectors=({lap.sector1_ms},{lap.sector2_ms},{lap.sector3_ms}) "
                 f"consistent={getattr(lap, 'sectors_consistent', None)}"
             )
-            if not lap.is_valid:
+            if not effective_is_valid:
                 print(
                     "[APP] invalid reason: "
                     f"state={getattr(lap, 'lap_state', 'UNKNOWN')}"
                 )
 
             # Update local PB cache for every valid lap (independent of Discord posting)
-            if lap.is_valid and lap.lap_time_ms > 0:
+            pb_was_new: Optional[bool] = None
+            if effective_is_valid and lap.lap_time_ms > 0:
                 if session.track and session.track != "Unknown" and session.car and session.car != "Unknown":
-                    is_pb = self._pb_cache.check_and_update_pb(
+                    pb_was_new = self._pb_cache.check_and_update_pb(
                         session.track,
                         session.car,
                         lap.lap_time_ms,
                     )
-                    print(f"[APP] PB cache update (valid lap): {is_pb}")
+                    print(f"[APP] PB cache update (valid lap): {pb_was_new}")
                 else:
                     print("[APP] Skipping PB cache update: missing track/car")
             
             # Determine initial status
-            if not lap.is_valid and not self._config.submit_invalid_laps:
+            if not effective_is_valid and not self._config.submit_invalid_laps:
                 status = LapCardStatus.INVALID
             else:
                 status = LapCardStatus.SUBMITTING if should_submit else LapCardStatus.PENDING
@@ -441,7 +453,7 @@ class SimLapsApp:
             # Auto-submit if enabled
             if should_submit:
                 print(f"[APP] Auto-submitting lap...")
-                await self._submit_lap(card, session, lap, history_entry)
+                await self._submit_lap(card, session, lap, history_entry, pb_was_new=pb_was_new)
                 print(f"[APP] Auto-submit complete")
         except Exception as e:
             print(f"[ERROR] _on_lap_complete failed: {e}")
@@ -454,6 +466,7 @@ class SimLapsApp:
         session: SessionData,
         lap: LapData,
         history_entry: HistoryEntry,
+        pb_was_new: Optional[bool] = None,
     ):
         """Submit a lap to the server."""
         print(f"[SUBMIT] Starting lap submission: {lap.lap_time_str} on {session.track}")
@@ -487,7 +500,13 @@ class SimLapsApp:
             
             # Post to Discord if configured
             print(f"[SUBMIT] Checking Discord posting...")
-            await self._post_to_discord(session, lap, steam_id=session.player_id, steam_name=session.player_name)
+            await self._post_to_discord(
+                session,
+                lap,
+                steam_id=session.player_id,
+                steam_name=session.player_name,
+                pb_was_new=pb_was_new,
+            )
         elif result.status == SubmissionStatus.INVALID_LAP:
             print(f"[SUBMIT] ❌ Lap rejected as invalid: {result.message}")
             card.update_status(LapCardStatus.INVALID, result.message)
@@ -513,6 +532,7 @@ class SimLapsApp:
         lap: LapData,
         steam_id: str,
         steam_name: Optional[str] = None,
+        pb_was_new: Optional[bool] = None,
     ):
         """Post lap to Discord if configured and meets criteria."""
         try:
@@ -539,14 +559,18 @@ class SimLapsApp:
             is_pb = False
             print(f"[DISCORD] PB-only mode: {self._config.discord_pb_only}")
             if self._config.discord_pb_only:
-                is_pb = self._pb_cache.check_and_update_pb(session.track, session.car, lap.lap_time_ms)
+                # pb_was_new is pre-computed in _on_lap_complete before submission.
+                # Do NOT call check_and_update_pb again here — it was already called
+                # and would always return False on a second call for the same lap.
+                is_pb = bool(pb_was_new)
                 print(f"[DISCORD] PB check result: {is_pb}")
                 if not is_pb:
                     print(f"[DISCORD] ❌ Skipping Discord post: not a personal best")
                     return  # Not a personal best, skip posting
             else:
-                # Not PB-only mode, post all valid laps (or invalid if enabled)
-                is_pb = self._pb_cache.check_and_update_pb(session.track, session.car, lap.lap_time_ms)
+                # Not PB-only mode, post all valid laps.
+                # Still update the cache so the PB flag is accurate for display.
+                is_pb = bool(pb_was_new)
                 print(f"[DISCORD] PB check result (non-PB-only mode): {is_pb}")
             
             print(f"[DISCORD] ✅ Creating Discord lap data...")
@@ -608,6 +632,7 @@ class SimLapsApp:
         """
         log_info(Component.APP, "Session restart — discarding telemetry buffer and restarting")
         print("[APP] Session restart detected — restarting telemetry capture")
+        self._session_manager.reset()
         if self._telemetry_capture and self._telemetry_capture.is_capturing():
             await self._stop_telemetry_capture("session_restart", discard=True)
         await self._start_telemetry_capture()
@@ -622,6 +647,8 @@ class SimLapsApp:
                     ConnectionStatus.CONNECTED,
                     "Session active - recording laps",
                 )
+                # Clear stale lap validity / timing data from the previous session.
+                self._session_manager.reset()
                 # Start telemetry capture
                 print("[APP] Triggering telemetry capture start (session active)")
                 await self._start_telemetry_capture()
@@ -639,19 +666,26 @@ class SimLapsApp:
     
     async def _start_telemetry_capture(self):
         """Start telemetry capture when game session begins."""
+        output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
         log_debug(Component.APP, "Telemetry start requested", 
                   enabled=self._config.telemetry_enabled, 
-                  capture_exists=self._telemetry_capture is not None)
+                  capture_exists=self._telemetry_capture is not None,
+                  output_prefix=output_prefix)
+        print(f"[TELEMETRY_START] Requested - enabled={self._config.telemetry_enabled}, capture_exists={self._telemetry_capture is not None}, prefix={output_prefix}")
         
         if not self._telemetry_capture or not self._config.telemetry_enabled:
             log_info(Component.APP, "Telemetry start skipped: disabled or unavailable")
+            print(f"[TELEMETRY_START] SKIPPED - disabled or unavailable")
             return
         if self._telemetry_capture.is_capturing():
             log_info(Component.APP, "Telemetry start skipped: already capturing")
+            print(f"[TELEMETRY_START] SKIPPED - already capturing (prefix={self._telemetry_capture.get_output_prefix()})")
             return
         
         try:
-            log_info(Component.APP, "Starting telemetry capture from UI")
+            new_prefix = self._telemetry_capture._make_output_prefix()
+            log_info(Component.APP, "Starting telemetry capture from UI", prefix=new_prefix)
+            print(f"[TELEMETRY_START] STARTING with prefix={new_prefix}")
             if self._home_page:
                 self._home_page.set_telemetry_status(TelemetryStatus.CAPTURING, 0)
             
@@ -659,17 +693,25 @@ class SimLapsApp:
             success = await self._telemetry_capture.start_capture()
             if not success:
                 log_error(Component.APP, "Telemetry capture failed to start")
+                print(f"[TELEMETRY_START] FAILED to start")
                 if self._home_page:
                     self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
+            else:
+                self._telemetry_session_incomplete = False
+                print(f"[TELEMETRY_START] SUCCESS - capturing with prefix={self._telemetry_capture.get_output_prefix()}")
             
         except Exception as e:
             log_exception(Component.APP, "Telemetry start error", e)
+            print(f"[TELEMETRY_START] EXCEPTION: {e}")
             if self._home_page:
                 self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
     
     async def _on_telemetry_auto_stop(self, reason: str):
         """Handle automatic stop of telemetry capture (game crash/quit detected)."""
-        log_info(Component.APP, "Telemetry auto-stop", reason=reason)
+        output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
+        frame_count = len(self._telemetry_capture.get_frames()) if self._telemetry_capture else 0
+        log_info(Component.APP, "Telemetry auto-stop", reason=reason, prefix=output_prefix, frames=frame_count)
+        print(f"[TELEMETRY_AUTO_STOP] reason={reason}, prefix={output_prefix}, frames={frame_count}")
         
         # Update UI to show stopped status
         if self._home_page:
@@ -722,22 +764,29 @@ class SimLapsApp:
                 Used when the buffer is known to be contaminated (e.g. session
                 restart while a previous run was still being recorded).
         """
+        output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
+        is_capturing = self._telemetry_capture.is_capturing() if self._telemetry_capture else False
+        log_info(Component.APP, "Telemetry stop requested", reason=reason, prefix=output_prefix, capturing=is_capturing)
+        print(f"[TELEMETRY_STOP] Requested - reason={reason}, prefix={output_prefix}, capturing={is_capturing}")
+        
         if not self._telemetry_capture or not self._telemetry_analyzer:
+            print(f"[TELEMETRY_STOP] SKIPPED - capture or analyzer missing")
             return
         if not self._telemetry_capture.is_capturing():
             stop_reason = self._telemetry_capture.get_stop_reason()
             if stop_reason is not None:
-                print(f"[APP] Telemetry already stopped (reason: {stop_reason}), skipping duplicate stop")
+                print(f"[TELEMETRY_STOP] SKIPPED - already stopped (reason: {stop_reason})")
                 return
+            print(f"[TELEMETRY_STOP] PROCEEDING - not capturing but no stop reason set")
         
         try:
-            print(f"[APP] Stopping telemetry capture (reason: {reason})...")
+            print(f"[TELEMETRY_STOP] STOPPING capture with prefix={self._telemetry_capture.get_output_prefix()}")
             frames = await self._telemetry_capture.stop_capture(reason)
             frame_count = len(frames)
-            print(f"[APP] Captured {frame_count} telemetry frames")
+            print(f"[TELEMETRY_STOP] STOPPED - captured {frame_count} frames, prefix was={output_prefix}")
 
             if discard:
-                print(f"[APP] Discarding {frame_count} frames (no analysis on contaminated buffer)")
+                print(f"[TELEMETRY_STOP] DISCARDING {frame_count} frames (contaminated buffer)")
                 self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
                 return
 
@@ -746,6 +795,7 @@ class SimLapsApp:
                 self._home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
                 
                 # Run analysis with track name
+                print(f"[TELEMETRY_ANALYSIS] Starting analysis: frames={frame_count}, prefix={output_prefix}")
                 metadata = self._telemetry_capture.get_metadata()
                 lap_boundaries = self._telemetry_capture.get_lap_boundaries()
                 result = await self._telemetry_analyzer.analyze(
@@ -753,21 +803,23 @@ class SimLapsApp:
                     hz=10.0,
                     metadata=metadata,
                     track_name=self._current_track_name,
-                    output_prefix=self._telemetry_capture.get_output_prefix(),
+                    output_prefix=output_prefix,
                     game_lap_boundaries=lap_boundaries,
                 )
                 
-                print(f"[APP] Analysis complete: {result.laps_detected} laps, best: {result.best_lap_time:.2f}s")
+                print(f"[TELEMETRY_ANALYSIS] COMPLETE: laps={result.laps_detected}, best={result.best_lap_time:.2f}s, html={result.html_path}, ai_prompt={result.ai_prompt_path}")
                 self._home_page.set_telemetry_status(
                     TelemetryStatus.COMPLETE,
                     frame_count,
                     result.html_path,
                 )
             else:
+                print(f"[TELEMETRY_STOP] No frames captured, skipping analysis")
                 self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
                 
         except Exception as e:
-            print(f"[APP] Error during telemetry analysis: {e}")
+            print(f"[TELEMETRY_STOP] ERROR: {e}")
+            log_exception(Component.APP, "Telemetry stop/analysis error", e)
             self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
     
     async def _on_user_detected(self, steam_id: str, player_name: Optional[str]):
@@ -886,7 +938,10 @@ class SimLapsApp:
             self._pb_cache = get_pb_cache(config.server_url)
         
         # Update API client
-        self._api_client = APIClient(server_url=config.server_url)
+        self._api_client = APIClient(
+            server_url=config.server_url,
+            session_manager=self._session_manager,
+        )
         
         # Update services with new settings
         self._api_client.set_server_url(config.server_url)
@@ -923,6 +978,7 @@ class SimLapsApp:
             on_game_version=self._on_game_version,
             on_session_end=self._on_car_removed,
             on_session_restart=self._on_session_restart,
+            session_manager=self._session_manager,
         )
         
         if was_running:

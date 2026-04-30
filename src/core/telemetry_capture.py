@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 
 from src.core.security import is_game_running
+from src.models import SharedSessionManager
 from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, Tuple, TextIO
@@ -127,7 +128,13 @@ class RegionReader:
         # Get current Windows session ID for diagnostics
         try:
             import subprocess
-            session_result = subprocess.run(['query', 'session'], capture_output=True, text=True, timeout=1)
+            session_result = subprocess.run(
+                ['query', 'session'],
+                capture_output=True,
+                text=True,
+                timeout=1,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
             current_session = session_result.stdout
             self._log(f"[TELEMETRY] Current Windows sessions:\n{current_session}")
         except Exception as e:
@@ -234,6 +241,7 @@ class TelemetryCapture:
         hz: float = 20.0,
         output_dir: Optional[str] = None,
         debug_logs: bool = False,
+        session_manager: Optional[SharedSessionManager] = None,
     ):
         # ``debug_logs`` gates three on-disk artefacts that are only useful
         # for reverse-engineering / capture-loop debugging:
@@ -260,9 +268,9 @@ class TelemetryCapture:
         self._all_disconnected_since: Optional[float] = None
         self._output_prefix: Optional[str] = None
         self._idle_since: Optional[float] = None
-        self._lap_boundaries: List[Tuple[int, Optional[float]]] = []  # (frame_idx, lap_time_ms)
-        self._lap_fuel_used: List[Optional[float]] = []  # Fuel consumed per lap (same index as boundaries)
+        self._lap_boundaries: List[Tuple[int, Optional[float], Optional[int]]] = []  # (frame_idx, lap_time_ms, lap_number)
         self._diag_file: Optional[TextIO] = None
+        self._session_manager = session_manager or SharedSessionManager()
 
     def is_capturing(self) -> bool:
         """Check if currently capturing."""
@@ -288,48 +296,30 @@ class TelemetryCapture:
         """Get number of captured frames."""
         return len(self._frames)
 
-    def record_lap_boundary(self, lap_time_ms: Optional[float] = None) -> Optional[float]:
-        """Record the current frame index as a lap boundary and calculate fuel used.
+    def record_lap_boundary(
+        self,
+        lap_time_ms: Optional[float] = None,
+        lap_number: Optional[int] = None,
+    ) -> None:
+        """Record the current frame index as a lap boundary.
 
         Called by the app when the game reports a lap completion so the
         analyzer can use authoritative lap boundaries instead of guessing
-        from normalizedCarPosition.
+        from normalizedCarPosition.  Fuel is owned exclusively by the log
+        parser (which has spike detection); telemetry capture does not
+        duplicate that calculation.
 
         Args:
             lap_time_ms: The lap time in milliseconds from the game log
-            
-        Returns:
-            Fuel consumed during this lap (liters), or None if unavailable
+            lap_number: The game-reported completed lap number
         """
         frame_idx = max(0, len(self._frames) - 1)
-        
-        # Calculate fuel consumption for this lap
-        fuel_used = None
-        if len(self._frames) > 0 and len(self._lap_boundaries) > 0:
-            # Get previous lap boundary frame index
-            prev_frame_idx = self._lap_boundaries[-1][0]
-            
-            # Get fuel at start and end of lap
-            if prev_frame_idx < len(self._frames) and frame_idx < len(self._frames):
-                start_frame = self._frames[prev_frame_idx]
-                end_frame = self._frames[frame_idx]
-                
-                fuel_start = start_frame.physics.get("fuel") if start_frame.physics else None
-                fuel_end = end_frame.physics.get("fuel") if end_frame.physics else None
-                
-                if fuel_start is not None and fuel_end is not None and fuel_start > fuel_end:
-                    fuel_used = round(fuel_start - fuel_end, 3)
-        
-        self._lap_boundaries.append((frame_idx, lap_time_ms))
-        self._lap_fuel_used.append(fuel_used)
-        
-        log_info(Component.TELEMETRY, "Lap boundary recorded", 
-                frame=frame_idx, lap_time_ms=lap_time_ms, fuel_used=fuel_used)
-        
-        return fuel_used
+        self._lap_boundaries.append((frame_idx, lap_time_ms, lap_number))
+        log_info(Component.TELEMETRY, "Lap boundary recorded",
+                 frame=frame_idx, lap_time_ms=lap_time_ms, lap_number=lap_number)
 
-    def get_lap_boundaries(self) -> List[Tuple[int, Optional[float]]]:
-        """Return the list of game-reported lap boundary (frame_idx, lap_time_ms)."""
+    def get_lap_boundaries(self) -> List[Tuple[int, Optional[float], Optional[int]]]:
+        """Return game-reported lap boundaries (frame_idx, lap_time_ms, lap_number)."""
         return self._lap_boundaries.copy()
 
     def save_raw_dump(self, output_path: str) -> bool:
@@ -539,6 +529,18 @@ class TelemetryCapture:
             data = frame.get("physics", {})
             if data and not data.get("error"):
                 print(f"[TELEMETRY] First frame data: physics region valid")
+
+        graphics_data = frame.get("graphics") or {}
+        if isinstance(graphics_data, dict) and not graphics_data.get("error"):
+            self._session_manager.update_from_graphics_shm(graphics_data)
+
+        static_data = frame.get("static") or {}
+        if isinstance(static_data, dict) and not static_data.get("error"):
+            self._session_manager.update_from_static_shm(static_data)
+
+        physics_data = frame.get("physics") or {}
+        if isinstance(physics_data, dict) and not physics_data.get("error"):
+            self._session_manager.update_from_physics_shm(physics_data)
         
         return FrameData(**frame)
 
@@ -578,7 +580,6 @@ class TelemetryCapture:
         self._running = True
         self._frames = []
         self._lap_boundaries = []
-        self._lap_fuel_used = []
         self._metadata = None
         self._session_start_time = datetime.now(timezone.utc)
         self._output_prefix = self._make_output_prefix()

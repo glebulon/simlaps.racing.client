@@ -76,6 +76,17 @@ class TestSelectTrackProfile:
         assert track_key is None
         assert profile is None
 
+    def test_monza_v04_windows_match_ac_evo_progress_clusters(self):
+        """Monza profile should align first chicane and Curva Grande to decoded progress."""
+        track_key, profile = select_track_profile(track_name="monza")
+
+        assert track_key == "monza"
+        corners = {corner["id"]: corner for corner in profile["corners"]}
+        assert corners[1]["start"] == pytest.approx(0.145)
+        assert corners[2]["end"] == pytest.approx(0.195)
+        assert corners[3]["start"] >= 0.220
+        assert corners[11]["start"] == pytest.approx(0.875)
+
 
 class TestFindTrackByName:
     """Test find_track_by_name function."""

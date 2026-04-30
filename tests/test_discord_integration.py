@@ -11,6 +11,9 @@ from datetime import datetime
 
 from src.core.discord_notifier import DiscordNotifier, LapData, create_discord_notifier
 from src.core.pb_cache import PBCache, PersonalBest
+from src.models import LapData as SessionLapData, SessionData
+from src.ui.app import SimLapsApp
+from src.utils.config import AppConfig
 
 
 class TestDiscordNotifier:
@@ -376,6 +379,74 @@ class TestIntegration:
             assert is_pb3 is False
             
             # Should not post for non-PB in PB-only mode
+
+
+class TestAppDiscordPosting:
+    """Regression tests around app-level Discord PB filtering."""
+
+    @pytest.mark.asyncio
+    async def test_post_to_discord_pb_only_uses_precomputed_pb_flag(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app._config = AppConfig(
+            discord_enabled=True,
+            discord_pb_only=True,
+            discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+        )
+        app._pb_cache = MagicMock()
+        app._discord_notifier = MagicMock()
+        app._discord_notifier.post_lap = AsyncMock(return_value=True)
+
+        session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3", player_id="steam123")
+        lap = SessionLapData(
+            lap_number=7,
+            physics_lap_number=7,
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=True,
+            timestamp="2026-04-29T00:21:00",
+        )
+
+        await app._post_to_discord(
+            session,
+            lap,
+            steam_id="steam123",
+            steam_name="Driver",
+            pb_was_new=True,
+        )
+
+        app._discord_notifier.post_lap.assert_awaited_once()
+        app._pb_cache.check_and_update_pb.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_lap_complete_auto_submits_when_shared_validity_overrides_parser_invalid(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app._config = AppConfig(auto_submit=True, submit_invalid_laps=False, telemetry_enabled=False)
+        app._session_manager = MagicMock()
+        app._session_manager.get_lap_validity_data.return_value = MagicMock(is_valid=True)
+        app._pb_cache = MagicMock()
+        app._pb_cache.check_and_update_pb.return_value = True
+        app._telemetry_capture = None
+        app._history_entries = []
+        app._submit_lap = AsyncMock()
+
+        card = MagicMock()
+        app._home_page = MagicMock()
+        app._home_page.add_lap.return_value = card
+        app._home_page._lap_count = 1
+
+        session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+        lap = SessionLapData(
+            lap_number=7,
+            physics_lap_number=7,
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=False,
+            timestamp="2026-04-29T00:21:00",
+        )
+
+        await app._on_lap_complete(session, lap)
+
+        app._submit_lap.assert_awaited_once()
 
 
 if __name__ == "__main__":
