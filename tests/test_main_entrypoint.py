@@ -10,9 +10,7 @@ import src.main as main_mod
 @patch("src.main.run_app")
 @patch("src.main.asyncio.set_event_loop")
 @patch("src.main.asyncio.new_event_loop")
-@patch("src.main.asyncio.set_event_loop_policy")
 def test_main_runs_app_successfully(
-    mock_set_policy,
     mock_new_loop,
     mock_set_loop,
     mock_run_app,
@@ -22,7 +20,6 @@ def test_main_runs_app_successfully(
 
     main_mod.main()
 
-    mock_set_policy.assert_called_once()
     mock_new_loop.assert_called_once()
     mock_set_loop.assert_called_once_with(loop)
     loop.set_exception_handler.assert_called_once()

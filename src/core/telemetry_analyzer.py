@@ -1986,7 +1986,8 @@ class TelemetryAnalyzer:
   .lap-btn:hover { background: #2a2d3a; }
   canvas { max-width: 100%; }
   .track-wrap { position: relative; }
-  #track-canvas { border-radius: 6px; }
+  #track-canvas { border-radius: 6px; cursor: crosshair; }
+  #map-tooltip { position: absolute; background: rgba(13,15,20,0.95); border: 1px solid #3a3d4a; color: #e0e2ea; padding: 4px 10px; border-radius: 5px; font-size: 12px; font-weight: 600; pointer-events: none; display: none; white-space: nowrap; z-index: 10; }
   .corner-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .corner-table th { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
   .corner-table td { padding: 6px 10px; border-bottom: 1px solid #1e2028; }
@@ -2027,6 +2028,7 @@ class TelemetryAnalyzer:
       </div>
       <div class="track-wrap">
         <canvas id="track-canvas"></canvas>
+        <div id="map-tooltip"></div>
       </div>
       <div style="margin-top:8px; display:flex; gap:6px; align-items:center; font-size:11px; color:var(--muted)">
         <span>Low</span>
@@ -2189,11 +2191,14 @@ function drawTrackMap() {
     ctx.strokeStyle = mode === 'speed' ? speedColor(frac) : mode === 'brake' ? brakeColor(vals[i]) : gasColor(vals[i]);
     ctx.moveTo(cx(p0.x), cz(p0.z)); ctx.lineTo(cx(p1.x), cz(p1.z)); ctx.stroke();
   }
-  lap.corners.forEach(c => {
+  window._cornerHits = [];
+  lap.corners.forEach((c, idx) => {
     const p = pts.find(pt => pt.frame === c.apex_frame) || pts[0];
-    ctx.beginPath(); ctx.arc(cx(p.x), cz(p.z), 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+    const px = cx(p.x), pz = cz(p.z);
+    ctx.beginPath(); ctx.arc(px, pz, 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
     ctx.fillStyle = '#000'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(c.id, cx(p.x), cz(p.z));
+    ctx.fillText(idx + 1, px, pz);
+    window._cornerHits.push({ px, pz, num: idx + 1, name: c.name || null });
   });
   const start = pts[0];
   ctx.beginPath(); ctx.arc(cx(start.x), cz(start.z), 8, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
@@ -2378,6 +2383,24 @@ window.addEventListener('DOMContentLoaded', () => {
   makeLapFilters('inputs-lap-filters', rebuildAll);
   makeLapFilters('dynamics-lap-filters', rebuildAll);
   drawTrackMap(); buildSpeedChart(); buildCornerChart(); buildCornerTable(); buildInputsChart(); buildDynamicsChart();
+  const mapCanvas = document.getElementById('track-canvas');
+  const mapTip = document.getElementById('map-tooltip');
+  mapCanvas.addEventListener('mousemove', e => {
+    const rect = mapCanvas.getBoundingClientRect();
+    const scaleX = mapCanvas.width / rect.width, scaleY = mapCanvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX, my = (e.clientY - rect.top) * scaleY;
+    const hits = window._cornerHits || [];
+    let found = null;
+    for (const h of hits) { if (Math.hypot(mx - h.px, my - h.pz) < 10) { found = h; break; } }
+    if (found) {
+      mapTip.textContent = found.name ? `C${found.num}: ${found.name}` : `Corner ${found.num}`;
+      const wrapRect = mapCanvas.parentElement.getBoundingClientRect();
+      mapTip.style.left = (e.clientX - wrapRect.left + 14) + 'px';
+      mapTip.style.top  = (e.clientY - wrapRect.top  - 10) + 'px';
+      mapTip.style.display = 'block';
+    } else { mapTip.style.display = 'none'; }
+  });
+  mapCanvas.addEventListener('mouseleave', () => { mapTip.style.display = 'none'; });
 });
 </script>
 </body>
@@ -2438,10 +2461,37 @@ window.addEventListener('DOMContentLoaded', () => {
                 f.write("\n".join(lines) + "\n")
             return ai_prompt_path
 
+        # ── Car name from session metadata (may be None for older captures)
+        meta = data.get("meta") or {}
+        car_model: str = (
+            meta.get("car_model")
+            or meta.get("car_name")
+            or meta.get("car")
+            or "Unknown Car"
+        )
+
         # ── Preamble / persona
-        lines.append(f"Expert race engineer: Analyze {track_label} Assetto Corsa Evo telemetry.")
-        lines.append("Provide concise, actionable coaching + setup recommendations based on the data.")
-        lines.append("Focus on: tire pressures, alignment, ARBs/springs, dampers, brake bias, aero.")
+        lines.append(
+            f"You are an expert Assetto Corsa Evo race engineer. "
+            f"Analyse telemetry for the {car_model} at {track_label}."
+        )
+        lines.append("Before giving any setup advice you MUST do both of the following searches:")
+        lines.append(
+            f"  1. Search: \"{car_model} Assetto Corsa Evo setup\" — identify every setup "
+            f"parameter that is actually exposed for this car in the game (suspension, aero, "
+            f"differential, tyre pressures, brake bias, etc.). "
+            f"Only recommend changes to parameters that exist for this specific car."
+        )
+        lines.append(
+            f"  2. Search: \"{track_label} setup guide Assetto Corsa Evo\" and "
+            f"\"{track_label} racing line key corners\" — incorporate track-specific knowledge: "
+            f"typical brake points, high-speed sections, kerb usage, traction-limited exits."
+        )
+        lines.append(
+            "Your entire response must be CONCISE. "
+            "Use bullet points. No padding, no repetition. "
+            "Every claim must reference a specific number from the telemetry data below."
+        )
         lines.append("")
 
         # ── Session context
@@ -2456,6 +2506,22 @@ window.addEventListener('DOMContentLoaded', () => {
             lines.append("ANALYSIS NOTES:")
             for note in analysis_notes:
                 lines.append(f"- {note}")
+        lines.append("")
+
+        # ── Search context hints for the LLM
+        lines.append("SEARCH CONTEXT (perform before responding):")
+        lines.append(f"  Car:   {car_model}")
+        lines.append(f"  Track: {track_label}")
+        lines.append(
+            f"  Required searches:"
+            f" (a) \"{car_model} Assetto Corsa Evo setup parameters\""
+            f" (b) \"{track_label} AC Evo setup guide\""
+            f" (c) \"{track_label} key corners racing line\""
+        )
+        lines.append(
+            "  Cross-reference search results with the telemetry numbers below. "
+            "Do not recommend setup parameters that do not exist for this car."
+        )
         lines.append("")
 
         # ── Session overview
@@ -2896,18 +2962,19 @@ window.addEventListener('DOMContentLoaded', () => {
         
         # Analyze DRS usage patterns
         drs_usage_per_lap = {}
-        for lap_num, lap in enumerate(laps, start=1):
+        for lap in laps:
+            lap_num = lap["lap_num"]
             lap_track = lap.get("track", [])
             drs_active_frames = 0
             drs_available_frames = 0
             total_frames = len(lap_track)
-            
+
             for pt in lap_track:
                 if pt.get("drs_enabled", False):
                     drs_active_frames += 1
                 if pt.get("drs_available", False):
                     drs_available_frames += 1
-            
+
             if drs_available_frames > 0:
                 drs_usage_pct = (drs_active_frames / drs_available_frames) * 100
                 drs_usage_per_lap[lap_num] = {
@@ -2915,7 +2982,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     "available_frames": drs_available_frames,
                     "usage_pct": drs_usage_pct
                 }
-                
+
                 lines.append(f"  Lap {lap_num}: DRS used {drs_usage_pct:.1f}% of available time "
                            f"({drs_active_frames}/{drs_available_frames} frames)")
         
@@ -2943,34 +3010,39 @@ window.addEventListener('DOMContentLoaded', () => {
         ride_height_data = []
         pitch_data = []
         air_density_data = []
-        
-        for lap_num, lap in enumerate(laps, start=1):
+
+        for lap in laps:
+            lap_num = lap["lap_num"]
             lap_track = lap.get("track", [])
-            
+
             # Collect ride height and pitch data
             front_heights = [pt.get("ride_height_front", 0) for pt in lap_track if pt.get("ride_height_front", 0) > 0]
             rear_heights = [pt.get("ride_height_rear", 0) for pt in lap_track if pt.get("ride_height_rear", 0) > 0]
             pitch_values = [pt.get("pitch", 0) for pt in lap_track if pt.get("pitch", 0) != 0]
             air_densities = [pt.get("air_density", 0) for pt in lap_track if pt.get("air_density", 0) > 0]
-            
+
             if front_heights and rear_heights:
                 avg_front = sum(front_heights) / len(front_heights)
                 avg_rear = sum(rear_heights) / len(rear_heights)
                 ride_height_data.append((lap_num, avg_front, avg_rear, avg_rear - avg_front))
-                
-                lines.append(f"  Lap {lap_num}: Ride Height F={avg_front*1000:.1f}mm R={avg_rear*1000:.1f}mm "
-                           f"Rake={(avg_rear - avg_front)*1000:.1f}mm")
-            
+
+                lines.append(f"  Lap {lap_num}: Ride Height F={avg_front:.1f}mm R={avg_rear:.1f}mm "
+                           f"Rake={(avg_rear - avg_front):.1f}mm")
+
             if pitch_values:
                 avg_pitch = sum(pitch_values) / len(pitch_values)
                 pitch_deg = avg_pitch * (180.0 / math.pi)
-                pitch_data.append((lap_num, avg_pitch, pitch_deg))
-                
+                # Store pitch range along with avg for later sensitivity check
+                min_pitch = min(pitch_values)
+                max_pitch = max(pitch_values)
+                pitch_range = max_pitch - min_pitch
+                pitch_data.append((lap_num, avg_pitch, pitch_deg, pitch_range))
+
                 # Show pitch range (important for aero balance)
-                min_pitch = min(pitch_values) * (180.0 / math.pi)
-                max_pitch = max(pitch_values) * (180.0 / math.pi)
-                lines.append(f"    Pitch: avg={pitch_deg:+.2f}° range={min_pitch:+.2f}° to {max_pitch:+.2f}°")
-            
+                min_pitch_deg = min_pitch * (180.0 / math.pi)
+                max_pitch_deg = max_pitch * (180.0 / math.pi)
+                lines.append(f"    Pitch: avg={pitch_deg:+.2f}° range={min_pitch_deg:+.2f}° to {max_pitch_deg:+.2f}°")
+
             if air_densities:
                 avg_density = sum(air_densities) / len(air_densities)
                 air_density_data.append((lap_num, avg_density))
@@ -2986,25 +3058,24 @@ window.addEventListener('DOMContentLoaded', () => {
             avg_rake = sum(rakes) / len(rakes)
             rake_variance = max(rakes) - min(rakes)
             
-            if avg_rake < 0.010:  # Less than 10mm rake
-                lines.append(f"    >> LOW RAKE: {avg_rake*1000:.1f}mm average - consider increasing rear ride height "
+            if avg_rake < 10.0:  # Less than 10mm rake
+                lines.append(f"    >> LOW RAKE: {avg_rake:.1f}mm average - consider increasing rear ride height "
                            f"or lowering front for more rear downforce")
-            elif avg_rake > 0.050:  # More than 50mm rake
-                lines.append(f"    >> HIGH RAKE: {avg_rake*1000:.1f}mm average - may be excessive drag, "
+            elif avg_rake > 50.0:  # More than 50mm rake
+                lines.append(f"    >> HIGH RAKE: {avg_rake:.1f}mm average - may be excessive drag, "
                            f"consider reducing rake for better top speed")
             
-            if rake_variance > 0.015:  # More than 15mm variation
-                lines.append(f"    >> INCONSISTENT RAKE: varies by {rake_variance*1000:.1f}mm - "
+            if rake_variance > 15.0:  # More than 15mm variation
+                lines.append(f"    >> INCONSISTENT RAKE: varies by {rake_variance:.1f}mm - "
                            f"suspension compliance issue or inconsistent ride heights")
             
             # Check for pitch sensitivity
             if pitch_data:
-                pitch_ranges = [max(p[1] for p in pitch_data if p[0] == lap_num) - 
-                              min(p[1] for p in pitch_data if p[0] == lap_num) 
-                              for lap_num in set(p[0] for p in pitch_data)]
+                # pitch_data now stores (lap_num, avg_pitch, pitch_deg, pitch_range)
+                pitch_ranges = [p[3] for p in pitch_data]  # Use stored pitch_range
                 avg_pitch_range = sum(pitch_ranges) / len(pitch_ranges) if pitch_ranges else 0
                 avg_pitch_range_deg = avg_pitch_range * (180.0 / math.pi)
-                
+
                 if avg_pitch_range_deg > 2.0:  # More than 2 degrees pitch variation
                     lines.append(f"    >> HIGH PITCH SENSITIVITY: {avg_pitch_range_deg:.1f}° variation - "
                            f"consider stiffer springs or more aero balance")
@@ -3112,75 +3183,48 @@ window.addEventListener('DOMContentLoaded', () => {
                         lines.append(f"    Lap {ln}: {bias:.2f} ({bias*100:.0f}% front){bias_hint}")
                     lines.append("")
 
-        # ── Coaching request
+        # ── Coaching request (concise)
         lines.append("=" * 60)
-        lines.append("COACHING REQUEST:")
+        lines.append("RESPOND WITH EXACTLY THESE SIX SECTIONS — BULLET POINTS ONLY:")
         lines.append("")
-        lines.append("Using ALL telemetry data, provide concise, actionable coaching:")
+        lines.append(
+            "1. TOP 3 TIME-LOSS CORNERS\n"
+            "   For each: corner name | segment delta | one-sentence root cause."
+        )
         lines.append("")
-        lines.append("1. TIME LOSS PRIORITIES")
-        lines.append("   - Biggest time-loss corners and why")
-        lines.append("   - Use segment deltas and entry/exit speeds")
+        lines.append(
+            "2. DRIVING TECHNIQUE  (5 bullets max)\n"
+            "   Cover: brake onset/G/trail, turn-in timing, gas pickup, coasting.\n"
+            "   Cite specific numbers (e.g. 'brake onset 0.18s later at Raidillon')."
+        )
         lines.append("")
-        lines.append("2. BRAKING ANALYSIS")
-        lines.append("   - Brake timing: too early/late? Use brake_onset")
-        lines.append("   - Brake intensity: hard enough? Use peak_brake_g")
-        lines.append("   - Trail braking: effective? Use trail_brake% and combined_brake%")
-        lines.append("   - Brake bias vs ABS: check for lock tendency")
+        lines.append(
+            "3. CONSISTENCY  (3 bullets max)\n"
+            "   Highest-variation corners and whether the cause is reference-point "
+            "or commitment."
+        )
         lines.append("")
-        lines.append("3. TURN-IN & LINE")
-        lines.append("   - Turn-in timing: early/late? Use turn_in")
-        lines.append("   - Apex speed correlation with turn-in timing")
-        lines.append("   - Mid-corner corrections: wrong line? Use slip_angle")
+        lines.append(
+            f"4. CAR SETUP — {car_model}\n"
+            f"   Use your search results to confirm which parameters exist for this car.\n"
+            f"   Then list only changes supported by the telemetry, in this format:\n"
+            f"   | Parameter | Current indication from data | Suggested change | Reason |\n"
+            f"   Cover: tyre pressures, alignment, ARBs, dampers, brake bias, aero.\n"
+            f"   Skip any category where the data gives no clear signal."
+        )
         lines.append("")
-        lines.append("4. THROTTLE APPLICATION")
-        lines.append("   - Throttle timing: gas_on after apex")
-        lines.append("   - Coasting: frames with no gas/brake")
-        lines.append("   - Traction limits: slip_ratio during acceleration")
+        lines.append(
+            f"5. TRACK NOTES — {track_label}  (3 bullets max)\n"
+            f"   Use your search results to add track-specific context the data confirms\n"
+            f"   (e.g. 'Bus Stop — late apex: telemetry shows +0.4s lost here on exit')."
+        )
         lines.append("")
-        lines.append("5. GRIP UTILIZATION")
-        lines.append("   - Underutilized grip: peak_g < session peak")
-        lines.append("   - Low grip fill: coasting/not loading tires")
-        lines.append("   - Friction circle: compare corner G usage")
-        lines.append("   - Combined grip: braking + turning simultaneously")
-        lines.append("   - Tire limits: Fx/Fy forces and slip patterns")
+        lines.append(
+            "6. SINGLE BIGGEST GAIN\n"
+            "   One sentence. Specific corner + specific action + expected time delta."
+        )
         lines.append("")
-        lines.append("6. TYRE DEGRADATION")
-        lines.append("   - Peak_lat_g falling: grip loss - smoother inputs needed")
-        lines.append("   - Core temp rising: overheating - cooler driving")
-        lines.append("   - Slip_angle rising: sliding/mechanical wear")
-        lines.append("   - Wear rising: pace management for longer races")
-        lines.append("")
-        lines.append("7. GEAR OPTIMIZATION")
-        lines.append("   - Optimal gears: gear_rpm_window ~1.0")
-        lines.append("   - Exit acceleration: better gear choices")
-        lines.append("   - Shifting points: optimal power delivery")
-        lines.append("")
-        lines.append("8. AERODYNAMICS")
-        lines.append("   - Rake angle: optimal for track? Use ride height data")
-        lines.append("   - Pitch sensitivity: >2° = need stiffer setup")
-        lines.append("   - Ride height consistency: suspension compliance issues")
-        lines.append("   - Wing angles: adjust based on pitch balance/speed")
-        lines.append("   - Air density effects on downforce")
-        lines.append("")
-        lines.append("9. CONSISTENCY DIAGNOSIS")
-        lines.append("   HIGH variation corners: reference-point vs confidence vs technique issue")
-        lines.append("   Use brake onset/turn-in timing variance to distinguish")
-        lines.append("")
-        lines.append("10. BIGGEST IMPROVEMENT")
-        lines.append("   Single most impactful change with specific corner reference")
-        lines.append("   Example: 'at corner X, brake onset 0.3s earlier using 150m board'")
-        lines.append("")
-        lines.append("11. SETUP RECOMMENDATIONS")
-        lines.append("   Based on dynamics + balance hints (understeer/oversteer/neutral):")
-        lines.append("   - Tire pressures: hot targets/adjustment direction from temps")
-        lines.append("   - Alignment: camber/toe from slip angles and tire forces")
-        lines.append("   - ARBs/springs: front/rear balance from balance hints")
-        lines.append("   - Dampers: bump/rebound for entry/exit stability")
-        lines.append("   - Brake bias: from brake_torque distribution and ABS")
-        lines.append("   - Aerodynamics: ride height, rake, wing angles from pitch/aero data")
-        lines.append("")
-        lines.append("Ground all recommendations in specific numbers above.")
+        lines.append("Every bullet must be grounded in a number from the telemetry above.")
         lines.append("=" * 60)
 
         prompt = "\n".join(lines)

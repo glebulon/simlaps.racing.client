@@ -40,7 +40,6 @@ def main():
             else:
                 print(f"\n[ASYNCIO ERROR] {msg}")
         
-        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.set_exception_handler(handle_asyncio_exception)

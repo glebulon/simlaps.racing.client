@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "simlaps-ast-rag": {
+      "command": "python",
+      "args": [
+        "-u",
+        "c:\\Storage\\my documents\\sim-laps-client\\tools\\mcp_ast_rag_server.py",
+        "--repo-root",
+        "c:\\Storage\\my documents\\sim-laps-client",
+        "--db",
+        "c:\\Storage\\my documents\\sim-laps-client\\.windsurf\\rag\\ast.db"
+      ]
+    }
+  }
+}

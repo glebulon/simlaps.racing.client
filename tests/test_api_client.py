@@ -159,8 +159,10 @@ class TestSubmitLap:
         )
         # fuel_consumed_lap is the correct per-lap fuel field; fuel_liter_per_km is a
         # rate (L/km) and must never be submitted as fuelUsed.
-        manager._session_data.fuel_data.fuel_consumed_lap = 2.7
-        manager.update_fuel_from_graphics_shm({"fuel_liter_per_km": 0.04})  # rate only
+        manager.update_fuel_from_graphics_shm({
+            "fuel_liter_per_lap": 2.7,  # per-lap consumption
+            "fuel_liter_per_km": 0.04   # rate only
+        })
 
         client = APIClient(session_manager=manager)
         result = await client.submit_lap(sample_session, sample_lap)
@@ -176,10 +178,65 @@ class TestSubmitLap:
         assert payload["sector1"] == 40000
         assert payload["sector2"] == 41000
         assert payload["sector3"] == 42456
-        # fuel_consumed_lap should be submitted
+        # SHM fuel_consumed_lap should be submitted (authoritative source)
         assert payload["fuelUsed"] == 2.7
         # The per-km rate must NOT appear as fuelUsed
         assert payload.get("fuelUsed") != 0.04
+
+    @pytest.mark.asyncio
+    @patch('src.core.api_client.is_game_running')
+    @patch('httpx.AsyncClient.post')
+    async def test_submit_lap_uses_logs_fuel_when_shm_fuel_none(
+        self,
+        mock_post,
+        mock_game_running,
+        sample_session,
+        sample_lap,
+    ):
+        """SHM fuel is authoritative, but logs fuel is used as fallback when SHM is None."""
+        mock_game_running.return_value = True
+        mock_response = MagicMock()
+        mock_response.status_code = 201
+        mock_response.json.return_value = {"id": "test-lap-123"}
+        mock_post.return_value = mock_response
+
+        sample_session.track = "Unknown"
+        sample_session.car = "Unknown"
+        sample_session.game_version = "Unknown"
+        sample_session.session_type = "Unknown"
+        sample_session.player_id = None
+        sample_lap.sector1_ms = 0
+        sample_lap.sector2_ms = None
+        sample_lap.sector3_ms = -1
+        sample_lap.fuel_used = 3.5  # logs have fuel data
+
+        manager = SharedSessionManager()
+        manager.update_player_identification_from_logs(
+            {
+                "steam_id": "76561198000000001",
+                "car_model": "ferrari_296_gt3",
+            }
+        )
+        manager.update_session_metadata_from_static_shm(
+            {
+                "track": "monza",
+                "session": "RACE",
+                "ac_evo_version": "1.2.3",
+            }
+        )
+        manager.update_lap_timing_from_graphics_shm(sample_lap.lap_number, {"last_laptime_ms": 123456})
+        # SHM fuel not available (None)
+        manager.update_fuel_from_graphics_shm({
+            "fuel_liter_per_km": 0.04   # rate only, no per-lap data
+        })
+
+        client = APIClient(session_manager=manager)
+        result = await client.submit_lap(sample_session, sample_lap)
+
+        assert result.status == SubmissionStatus.SUCCESS
+        payload = mock_post.call_args.kwargs["json"]
+        # Logs fuel should be used as fallback when SHM fuel is None
+        assert payload["fuelUsed"] == 3.5
 
     @pytest.mark.asyncio
     @patch('src.core.api_client.is_game_running')

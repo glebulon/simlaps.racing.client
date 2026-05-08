@@ -11,7 +11,7 @@ from src.models import (
 )
 
 
-def test_update_from_graphics_sets_lap_validity_and_fuel() -> None:
+def test_update_from_graphics_sets_timing_and_fuel() -> None:
     manager = SharedSessionManager()
 
     manager.update_from_graphics_shm(
@@ -29,10 +29,9 @@ def test_update_from_graphics_sets_lap_validity_and_fuel() -> None:
         }
     )
 
+    # Lap validity is sourced from logs only — SHM graphics no longer sets it.
     lap_validity = manager.get_lap_validity_data(3)
-    assert lap_validity is not None
-    assert lap_validity.is_valid is False
-    assert lap_validity.source == "shm_graphics"
+    assert lap_validity is None
 
     lap_timing = manager.get_lap_timing_data(3)
     assert lap_timing is not None

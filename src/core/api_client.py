@@ -232,9 +232,10 @@ class APIClient:
 
         # Add fuel if available and valid
         # NOTE: fuel_consumption_rate is L/km (a rate), not L/lap — never use it as fuelUsed.
-        fuel_used_value = lap.fuel_used
+        # SHM fuel_liter_per_lap is authoritative; logs are fallback
+        fuel_used_value = shared_fuel_data.fuel_consumed_lap
         if fuel_used_value is None:
-            fuel_used_value = shared_fuel_data.fuel_consumed_lap
+            fuel_used_value = lap.fuel_used
 
         if fuel_used_value is not None:
             try:

@@ -32,7 +32,8 @@
   .lap-btn:hover { background: #2a2d3a; }
   canvas { max-width: 100%; }
   .track-wrap { position: relative; }
-  #track-canvas { border-radius: 6px; }
+  #track-canvas { border-radius: 6px; cursor: crosshair; }
+  #map-tooltip { position: absolute; background: rgba(13,15,20,0.95); border: 1px solid #3a3d4a; color: #e0e2ea; padding: 4px 10px; border-radius: 5px; font-size: 12px; font-weight: 600; pointer-events: none; display: none; white-space: nowrap; z-index: 10; }
   .corner-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   .corner-table th { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
   .corner-table td { padding: 6px 10px; border-bottom: 1px solid #1e2028; }
@@ -73,6 +74,7 @@
       </div>
       <div class="track-wrap">
         <canvas id="track-canvas"></canvas>
+        <div id="map-tooltip"></div>
       </div>
       <div style="margin-top:8px; display:flex; gap:6px; align-items:center; font-size:11px; color:var(--muted)">
         <span>Low</span>
@@ -235,11 +237,14 @@ function drawTrackMap() {
     ctx.strokeStyle = mode === 'speed' ? speedColor(frac) : mode === 'brake' ? brakeColor(vals[i]) : gasColor(vals[i]);
     ctx.moveTo(cx(p0.x), cz(p0.z)); ctx.lineTo(cx(p1.x), cz(p1.z)); ctx.stroke();
   }
-  lap.corners.forEach(c => {
+  window._cornerHits = [];
+  lap.corners.forEach((c, idx) => {
     const p = pts.find(pt => pt.frame === c.apex_frame) || pts[0];
-    ctx.beginPath(); ctx.arc(cx(p.x), cz(p.z), 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+    const px = cx(p.x), pz = cz(p.z);
+    ctx.beginPath(); ctx.arc(px, pz, 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
     ctx.fillStyle = '#000'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(c.id, cx(p.x), cz(p.z));
+    ctx.fillText(idx + 1, px, pz);
+    window._cornerHits.push({ px, pz, num: idx + 1, name: c.name || null });
   });
   const start = pts[0];
   ctx.beginPath(); ctx.arc(cx(start.x), cz(start.z), 8, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
@@ -424,6 +429,24 @@ window.addEventListener('DOMContentLoaded', () => {
   makeLapFilters('inputs-lap-filters', rebuildAll);
   makeLapFilters('dynamics-lap-filters', rebuildAll);
   drawTrackMap(); buildSpeedChart(); buildCornerChart(); buildCornerTable(); buildInputsChart(); buildDynamicsChart();
+  const mapCanvas = document.getElementById('track-canvas');
+  const mapTip = document.getElementById('map-tooltip');
+  mapCanvas.addEventListener('mousemove', e => {
+    const rect = mapCanvas.getBoundingClientRect();
+    const scaleX = mapCanvas.width / rect.width, scaleY = mapCanvas.height / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX, my = (e.clientY - rect.top) * scaleY;
+    const hits = window._cornerHits || [];
+    let found = null;
+    for (const h of hits) { if (Math.hypot(mx - h.px, my - h.pz) < 10) { found = h; break; } }
+    if (found) {
+      mapTip.textContent = found.name ? `C${found.num}: ${found.name}` : `Corner ${found.num}`;
+      const wrapRect = mapCanvas.parentElement.getBoundingClientRect();
+      mapTip.style.left = (e.clientX - wrapRect.left + 14) + 'px';
+      mapTip.style.top  = (e.clientY - wrapRect.top  - 10) + 'px';
+      mapTip.style.display = 'block';
+    } else { mapTip.style.display = 'none'; }
+  });
+  mapCanvas.addEventListener('mouseleave', () => { mapTip.style.display = 'none'; });
 });
 </script>
 </body>

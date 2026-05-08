@@ -1344,6 +1344,9 @@ class LogParser:
             return None
 
         game_valid = m.group(2) == "true"
+        # The Relevant onSplit message carries the authoritative game lap number.
+        # Correct any physics-derived lap_number (which can be off-by-one) here.
+        pending.lap_number = int(m.group(3))
         prev_state = pending.lap_state
         prev_valid = pending.is_valid
 
@@ -1672,6 +1675,10 @@ class LogParser:
                         if "has started the race!" in line:
                             if self._line_mentions_player_car(line):
                                 await self._emit_game_status(True, trigger="has started the race!")
+                                # After session restart, car detection may not re-fire.
+                                # Ensure we have a session so lap completion callbacks work.
+                                if not self.current_session:
+                                    self._start_new_session("RACE", line)
                         # AC Evo: pause-menu "Restart Session" emits this line
                         # but does NOT emit a fresh "Game Started!", so we
                         # have to drive the buffer reset ourselves.

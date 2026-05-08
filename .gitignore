@@ -76,3 +76,6 @@ Thumbs.db
 
 #obfuscated
 obfuscated/
+
+# Local AST/RAG artifacts
+.windsurf/rag/

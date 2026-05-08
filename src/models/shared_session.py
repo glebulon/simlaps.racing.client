@@ -404,6 +404,7 @@ class SharedSessionManager:
             current_fuel = fuel_data.get("fuel_liter_current_quantity")
             fuel_rate = fuel_data.get("fuel_liter_per_km")
             fuel_economy = fuel_data.get("km_per_fuel_liter")
+            fuel_per_lap = fuel_data.get("fuel_liter_per_lap")
 
             self._session_data.current_fuel = current_fuel
             self._session_data.fuel_consumption_rate = fuel_rate
@@ -412,6 +413,7 @@ class SharedSessionManager:
             self._session_data.fuel_data.current_fuel = current_fuel
             self._session_data.fuel_data.fuel_consumption_rate = fuel_rate
             self._session_data.fuel_data.fuel_economy = fuel_economy
+            self._session_data.fuel_data.fuel_consumed_lap = fuel_per_lap
             self._session_data.fuel_data.source = "shm_graphics"
 
             self._mark_source("current_fuel", "shm_graphics")
@@ -548,12 +550,11 @@ class SharedSessionManager:
                 self._session_data.lap_times_logs[lap_data.lap_number] = lap_time
                 self._mark_source("lap_times", "logs")
 
-            if lap_data.lap_number not in self._session_data.lap_validity:
-                self._session_data.lap_validity[lap_data.lap_number] = LapValidityData(
-                    lap_number=lap_data.lap_number,
-                    is_valid=lap_data.is_valid,
-                    source="logs",
-                )
+            self._session_data.lap_validity[lap_data.lap_number] = LapValidityData(
+                lap_number=lap_data.lap_number,
+                is_valid=lap_data.is_valid,
+                source="logs",
+            )
             self._session_data.lap_validity_flat[lap_data.lap_number] = lap_data.is_valid
 
             self._mark_source("lap_boundaries", "logs")
@@ -591,15 +592,6 @@ class SharedSessionManager:
         current_lap = int(graphics_data.get("session_current_lap") or 0)
         if current_lap > 0:
             self.update_lap_timing_from_graphics_shm(current_lap, graphics_data)
-            self.update_lap_validity_from_graphics_shm(
-                current_lap,
-                bool(
-                    graphics_data.get(
-                        "is_invalid",
-                        graphics_data.get("timing_is_invalid", False),
-                    )
-                ),
-            )
 
         self.update_fuel_from_graphics_shm(graphics_data)
 

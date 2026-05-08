@@ -20,6 +20,7 @@ class LapState(str, Enum):
     """
     PUSH               = "PUSH"                # Clean timed lap
     OUTLAP             = "OUTLAP"              # Pit-exit or formation lap
+    INLAP              = "INLAP"               # Return to pits lap
     INVALID_TRACK_LIMIT = "INVALID_TRACK_LIMIT"  # tyres out → 4 during lap
     INVALID_PENALTY    = "INVALID_PENALTY"     # UI penalty notification
     INVALID_SPLIT      = "INVALID_SPLIT"       # Missing / out-of-order sectors

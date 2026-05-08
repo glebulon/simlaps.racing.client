@@ -74,33 +74,33 @@ class PBCache:
             
             print(f"[PB_CACHE] Fetching from: {url}")
             print(f"[PB_CACHE] Params: {params}")
-            
+
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
                 response = await client.get(url, params=params)
-                
+
                 print(f"[PB_CACHE] Response status: {response.status_code}")
-                
+
                 if response.status_code != 200:
                     print(f"[PB_CACHE] Failed to preload PBs: HTTP {response.status_code}")
                     return False
-                
+
                 data = response.json()
                 personal_bests = data.get("personalBests", [])
-                
+
                 # Clear existing cache and populate with new data
                 self._cache.clear()
-                
+
                 for pb in personal_bests:
                     track_id = pb.get("trackId", "")
                     car_id = pb.get("carId", "")
                     best_time = pb.get("bestTime", 0)
                     set_at = pb.get("setAt")
-                    
+
                     if not track_id or not car_id or best_time <= 0:
                         continue
-                    
+
                     key = self._normalize_key(track_id, car_id)
-                    
+
                     # Parse timestamp if available
                     updated_at = None
                     if set_at:
@@ -108,15 +108,15 @@ class PBCache:
                             updated_at = datetime.fromisoformat(set_at.replace("Z", "+00:00"))
                         except ValueError:
                             pass
-                    
+
                     self._cache[key] = PersonalBest(
                         best_time_ms=best_time,
                         updated_at=updated_at
                     )
-                
+
                 self._steam_id = steam_id
                 self._loaded = True
-                
+
                 print(f"Preloaded {len(self._cache)} personal bests for Steam ID {steam_id}")
                 return True
                 
