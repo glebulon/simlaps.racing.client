@@ -3,7 +3,7 @@ Lap Card Component for displaying individual lap times.
 """
 
 import flet as ft
-from typing import Optional
+from typing import Callable, Optional
 from dataclasses import dataclass
 from enum import Enum
 
@@ -41,7 +41,7 @@ class LapCard(ft.Container):
     def __init__(
         self,
         data: LapCardData,
-        on_retry: Optional[callable] = None,
+        on_retry: Optional[Callable[["LapCard"], None]] = None,
     ):
         self.data = data
         self.on_retry = on_retry
@@ -177,7 +177,7 @@ class LapCard(ft.Container):
                     ),
                     ft.TextButton(
                         "Retry",
-                        on_click=lambda _: self.on_retry(self.data) if self.on_retry else None,
+                        on_click=lambda _: self.on_retry(self) if self.on_retry else None,
                         style=ft.ButtonStyle(color="#ff6b6b"),
                     ),
                 ],

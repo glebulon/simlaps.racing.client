@@ -19,6 +19,9 @@ from ...utils.config import AppConfig
 from ...version import GAME_DISPLAY_NAME
 
 
+UPDATE_DOWNLOAD_URL = "https://simlaps.racing/download"
+
+
 def get_icon_path() -> Optional[str]:
     """Get the path to the app icon (PNG for ft.Image)."""
     if getattr(sys, 'frozen', False):
@@ -56,11 +59,13 @@ class HomePage(ft.Column):
         on_settings_click: Optional[Callable] = None,
         on_history_click: Optional[Callable] = None,
         on_pb_cache_click: Optional[Callable] = None,
+        on_retry_lap: Optional[Callable[[LapCard], None]] = None,
     ):
         self.config = config
         self.on_settings_click = on_settings_click
         self.on_history_click = on_history_click
         self.on_pb_cache_click = on_pb_cache_click
+        self.on_retry_lap = on_retry_lap
         
         # Game state
         self._game_running = False
@@ -255,15 +260,21 @@ class HomePage(ft.Column):
             bgcolor="#0f0f1a",
         )
         
-        # Update notification banner (simplified - text only)
+        # Update notification banner
         self._update_banner = ft.Container(
             content=ft.Row([
                 ft.Icon(ft.Icons.NEW_RELEASES, color="#ffffff", size=20),
                 ft.Column([
                     ft.Text("Update Available", size=14, weight=ft.FontWeight.W_600, color="#ffffff"),
                     ft.Text("Get the latest version at:", size=12, color="#ffffff"),
-                    ft.Text("https://www.simlaps.racing/downloads/SimLapsClient.exe", size=12, color="#a5b4fc", selectable=True),
+                    ft.Text(UPDATE_DOWNLOAD_URL, size=12, color="#a5b4fc", selectable=True),
                 ], spacing=2, expand=True),
+                ft.TextButton(
+                    "Download",
+                    icon=ft.Icons.OPEN_IN_NEW,
+                    on_click=self._open_update_url,
+                    style=ft.ButtonStyle(color="#ffffff"),
+                ),
             ], alignment=ft.MainAxisAlignment.START),
             padding=ft.padding.symmetric(horizontal=16, vertical=12),
             bgcolor="#7c3aed",
@@ -381,10 +392,10 @@ class HomePage(ft.Column):
         if self.page:
             self.page.run_task(check)
 
-    def _open_update_url(self):
+    def _open_update_url(self, _=None):
         """Open browser to download update."""
         if self.page:
-            self.page.launch_url("https://simlaps.racing/download")
+            self.page.launch_url(UPDATE_DOWNLOAD_URL)
     
     def _handle_settings_click(self, e):
         """Handle Settings button click."""
@@ -503,9 +514,13 @@ class HomePage(ft.Column):
         """Update a lap card's status."""
         card.update_status(status, error_message)
     
-    def _on_retry_lap(self, card_data: LapCardData):
+    def _on_retry_lap(self, card: LapCard):
         """Handle retry button click on failed lap."""
-        pass
+        if not card.data.lap.is_valid and not self.config.submit_invalid_laps:
+            return
+
+        if self.on_retry_lap:
+            self.on_retry_lap(card)
     
     def clear_laps(self):
         """Clear all lap cards."""

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "simlaps-client"
-version = "1.2.0"
+dynamic = ["version"]
 description = "SimLaps Telemetry Client - Automatic lap time submission for ACE"
 readme = "README.md"
 license = {text = "MIT"}
@@ -46,6 +46,9 @@ simlaps-client = "src.main:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "src.version.VERSION"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

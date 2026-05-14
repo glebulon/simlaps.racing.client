@@ -16,13 +16,13 @@ from .pages.home import HomePage
 from .pages.settings import SettingsPage
 from .components.pb_cache_viewer import show_pb_cache_dialog
 from .pages.history import HistoryPage, HistoryEntry
-from .components.lap_card import LapCardStatus
+from .components.lap_card import LapCard, LapCardStatus
 from .components.status_bar import ConnectionStatus
 from .components.telemetry_status import TelemetryStatus, TelemetryButton
 from src.core.log_parser import LogParser
 from src.models import SessionData, LapData, SharedSessionManager
 from src.core.api_client import APIClient, SubmissionStatus
-from src.core.security import get_steam_user, is_game_running
+from src.core.security import get_steam_user, is_game_running, GameProcessStatus
 from src.core.discord_notifier import DiscordNotifier, LapData as DiscordLapData
 from src.core.pb_cache import get_pb_cache
 from src.core.telemetry_capture import TelemetryCapture
@@ -81,30 +81,29 @@ class SimLapsApp:
         self._telemetry_analyzer: Optional[TelemetryAnalyzer] = None
         self._telemetry_button: Optional[TelemetryButton] = None
         self._current_track_name: Optional[str] = None
-        self._telemetry_session_incomplete: bool = False
         
         # Pages
-        print("[APP] Initializing UI pages...")
+        log_debug(Component.APP, "Initializing UI pages")
         self._home_page: Optional[HomePage] = None
         self._settings_page: Optional[SettingsPage] = None
         self._history_page: Optional[HistoryPage] = None
         self._current_page = AppPage.HOME
         
         # History tracking
-        print("[APP] Setting up history tracking...")
+        log_debug(Component.APP, "Setting up history tracking")
         self._history_entries: list[HistoryEntry] = []
         
         # Initialize
-        print("[APP] Starting initialization...")
+        log_info(Component.APP, "Starting initialization")
         self._init_services()
         self._init_pages()
         self._attach_telemetry_ui()
         self._show_page(AppPage.HOME)
-        print("[APP] Initialization complete!")
+        log_info(Component.APP, "Initialization complete")
     
     def _setup_page(self):
         """Configure Flet page."""
-        print("[APP] Setting up Flet page...")
+        log_debug(Component.APP, "Setting up Flet page")
         try:
             self.page.title = "SimLaps Telemetry"
             self.page.width = 500
@@ -112,44 +111,42 @@ class SimLapsApp:
             self.page.bgcolor = "#0f0f1a"
             self.page.padding = 0
             self.page.spacing = 0
-            print("[APP] Flet page properties set")
+            log_debug(Component.APP, "Flet page properties set")
         except Exception as e:
-            print(f"[APP] Error setting up Flet page: {e}")
-            import traceback
-            traceback.print_exc()
+            log_exception(Component.APP, "Error setting up Flet page", e)
         
         # Set window close handler
-        print("[APP] Setting up window close handler...")
+        log_debug(Component.APP, "Setting up window close handler")
         try:
             self.page.on_close = self._on_window_close
-            print("[APP] Window close handler set")
+            log_debug(Component.APP, "Window close handler set")
         except Exception as e:
-            print(f"[APP] Error setting window close handler: {e}")
+            log_exception(Component.APP, "Error setting window close handler", e)
         
         # Set window icon
-        print("[APP] Setting up window icon...")
+        log_debug(Component.APP, "Setting up window icon")
         try:
             icon_path = self._get_icon_path()
             if icon_path:
                 self.page.window.icon = icon_path
-                print(f"[APP] Window icon set: {icon_path}")
+                log_debug(Component.APP, "Window icon set", icon_path=icon_path)
             else:
-                print("[APP] No icon file found")
+                log_debug(Component.APP, "No icon file found")
         except Exception as e:
-            print(f"[APP] Error setting window icon: {e}")
+            log_exception(Component.APP, "Error setting window icon", e)
         
         # Dark theme
-        print("[APP] Setting up dark theme...")
+        log_debug(Component.APP, "Setting up dark theme")
         try:
             self.page.theme_mode = ft.ThemeMode.DARK
             self.page.theme = ft.Theme(
                 color_scheme_seed="#7c3aed",
             )
-            print("[APP] Dark theme applied")
+            log_debug(Component.APP, "Dark theme applied")
         except Exception as e:
-            print(f"[APP] Error setting up theme: {e}")
+            log_exception(Component.APP, "Error setting up theme", e)
         
-        print("[APP] Flet page setup complete!")
+        log_info(Component.APP, "Flet page setup complete")
         
         # Window close handler
         self.page.on_close = self._on_window_close
@@ -202,7 +199,7 @@ class SimLapsApp:
     def _init_telemetry_services(self):
         """Initialize telemetry capture and analyzer services."""
         if not self._config.telemetry_enabled:
-            print("[APP] Telemetry disabled in settings")
+            log_debug(Component.APP, "Telemetry disabled in settings")
             return
         
         try:
@@ -221,53 +218,62 @@ class SimLapsApp:
             )
             
             # Create telemetry button
-            print(f"[APP] Creating TelemetryButton with on_click={self._open_telemetry_location}")
+            log_debug(Component.APP, "Creating TelemetryButton", callback=self._open_telemetry_location)
             self._telemetry_button = TelemetryButton(
                 on_click=self._open_telemetry_location,
                 output_path=self._config.telemetry_output_path,
             )
-            print(f"[APP] TelemetryButton created, on_click={self._telemetry_button.on_click}")
+            log_debug(Component.APP, "TelemetryButton created", callback=self._telemetry_button.on_click)
             
             # Set button on home page
             if self._home_page:
-                print(f"[APP] Home page exists, calling set_telemetry_button directly from _init_telemetry_services")
+                log_debug(Component.APP, "Home page exists, attaching telemetry button")
                 self._home_page.set_telemetry_button(
                     self._telemetry_button,
                     self._config.telemetry_output_path,
                 )
             else:
-                print(f"[APP] Home page doesn't exist yet, will attach later")
+                log_debug(Component.APP, "Home page not initialized yet; telemetry UI attach deferred")
             
-            print(f"[APP] Telemetry services initialized: output={self._config.telemetry_output_path}")
+            log_info(
+                Component.APP,
+                "Telemetry services initialized",
+                output=self._config.telemetry_output_path,
+            )
         except Exception as e:
-            print(f"[APP] Failed to initialize telemetry: {e}")
+            log_exception(Component.APP, "Failed to initialize telemetry", e)
             self._telemetry_capture = None
             self._telemetry_analyzer = None
 
     def _attach_telemetry_ui(self):
         """Attach telemetry UI controls after the home page exists."""
-        print(f"[APP] _attach_telemetry_ui called: home_page={self._home_page is not None}, button={self._telemetry_button is not None}")
+        log_debug(
+            Component.APP,
+            "Attach telemetry UI requested",
+            home_page_exists=self._home_page is not None,
+            button_exists=self._telemetry_button is not None,
+        )
         if self._telemetry_button:
-            print(f"[APP] Telemetry button on_click: {self._telemetry_button.on_click}")
+            log_debug(Component.APP, "Telemetry button callback", callback=self._telemetry_button.on_click)
         if self._home_page and self._telemetry_button:
-            print(f"[APP] Calling set_telemetry_button...")
+            log_debug(Component.APP, "Attaching telemetry button to home page")
             self._home_page.set_telemetry_button(
                 self._telemetry_button,
                 self._config.telemetry_output_path,
             )
         else:
-            print(f"[APP] NOT calling set_telemetry_button - missing home_page or button")
+            log_debug(Component.APP, "Skipped telemetry button attach; missing home_page or button")
 
     def _open_telemetry_location(self, e, output_path):
         """Open the telemetry output folder in file explorer."""
         import subprocess
         import os
         
-        print(f"[APP] _open_telemetry_location called with output_path={output_path}")
+        log_debug(Component.APP, "Open telemetry location requested", output_path=output_path)
         
         try:
             if not output_path:
-                print("[APP] No telemetry output path configured")
+                log_warning(Component.APP, "No telemetry output path configured")
                 if self.page:
                     self.page.snack_bar = ft.SnackBar(
                         content=ft.Text("Telemetry output path not configured"),
@@ -284,21 +290,23 @@ class SimLapsApp:
             if not os.path.exists(output_path):
                 raise FileNotFoundError(f"Directory does not exist: {output_path}")
             
-            print(f"[APP] Opening telemetry location: {output_path}")
-            print(f"[APP] Directory exists: {os.path.exists(output_path)}")
-            print(f"[APP] Is directory: {os.path.isdir(output_path)}")
+            log_debug(
+                Component.APP,
+                "Opening telemetry location",
+                output_path=output_path,
+                exists=os.path.exists(output_path),
+                is_directory=os.path.isdir(output_path),
+            )
             
             if sys.platform == "win32":
                 # Use os.startfile which is more reliable for opening folders on Windows
                 os.startfile(output_path)
-                print(f"[APP] Called os.startfile successfully")
+                log_debug(Component.APP, "Opened telemetry directory via os.startfile")
             else:
                 subprocess.Popen(["open", output_path])
-                print(f"[APP] Called subprocess.Popen successfully")
+                log_debug(Component.APP, "Opened telemetry directory via subprocess")
         except Exception as ex:
-            import traceback
-            print(f"[APP] Failed to open telemetry location: {ex}")
-            traceback.print_exc()
+            log_exception(Component.APP, "Failed to open telemetry location", ex, output_path=output_path)
             if self.page:
                 self.page.snack_bar = ft.SnackBar(
                     content=ft.Text(f"Failed to open folder: {ex}"),
@@ -314,6 +322,7 @@ class SimLapsApp:
             on_settings_click=lambda: self._show_page(AppPage.SETTINGS),
             on_history_click=lambda: self._show_page(AppPage.HISTORY),
             on_pb_cache_click=self._show_pb_cache_viewer,
+            on_retry_lap=self._on_retry_lap,
         )
         
         self._settings_page = SettingsPage(
@@ -342,14 +351,45 @@ class SimLapsApp:
         elif page == AppPage.HISTORY:
             self._history_page.set_entries(self._history_entries)
             self.page.add(self._history_page)
-    
+
+    def _get_history_entry_for_lap_number(self, lap_number: int) -> Optional[HistoryEntry]:
+        """Resolve a history entry from a lap card's absolute lap number."""
+        index = lap_number - 1
+        if 0 <= index < len(self._history_entries):
+            return self._history_entries[index]
+        return None
+
+    def _on_retry_lap(self, card: LapCard):
+        """Retry submission for a failed lap card."""
+        if not card.data.lap.is_valid and not self._config.submit_invalid_laps:
+            return
+
+        history_entry = self._get_history_entry_for_lap_number(card.data.lap_number)
+        if history_entry is None:
+            card.update_status(LapCardStatus.FAILED, "Retry unavailable: history entry missing")
+            return
+
+        self.page.run_task(
+            self._submit_lap,
+            card,
+            card.data.session,
+            card.data.lap,
+            history_entry,
+        )
+
     async def _on_lap_complete(self, session: SessionData, lap: LapData):
         """Handle completed lap from parser."""
-        print(f"[APP] _on_lap_complete called: {lap.lap_time_str} on {session.track}")
+        log_debug(
+            Component.APP,
+            "Lap complete event",
+            lap_time=lap.lap_time_str,
+            track=session.track,
+            lap_number=lap.lap_number,
+        )
         try:
             # Update detected user in UI
             if session.player_id:
-                print(f"[APP] Updating detected user: {session.player_id}")
+                log_debug(Component.APP, "Updating detected user", steam_id=session.player_id)
                 self._home_page.set_detected_user(session.player_id, session.player_name)
             
             # Update current track name for telemetry
@@ -368,8 +408,11 @@ class SimLapsApp:
             elif self._config.telemetry_enabled and self._telemetry_capture:
                 # A lap-complete event is too late to begin a useful capture
                 # for that lap and can fire during post-session shutdown.
-                self._telemetry_session_incomplete = True
-                print("[APP] Telemetry missed lap boundary; not starting capture from lap-complete")
+                log_debug(
+                    Component.APP,
+                    "Telemetry missed lap boundary; not starting capture from lap-complete",
+                    lap_number=lap.lap_number,
+                )
             
             # Determine if we should submit this lap (prefer authoritative shared validity)
             shared_lap_validity = self._session_manager.get_lap_validity_data(lap.lap_number)
@@ -381,22 +424,31 @@ class SimLapsApp:
             should_submit = self._config.auto_submit and (
                 effective_is_valid or self._config.submit_invalid_laps
             )
-            print(
-                f"[APP] should_submit={should_submit}, "
-                f"is_valid={lap.is_valid}, effective_is_valid={effective_is_valid}"
+            log_debug(
+                Component.APP,
+                "Lap submission decision",
+                should_submit=should_submit,
+                parser_is_valid=lap.is_valid,
+                effective_is_valid=effective_is_valid,
+                lap_number=lap.lap_number,
             )
-            print(
-                "[APP] lap diagnostics: "
-                f"state={getattr(lap, 'lap_state', 'UNKNOWN')} "
-                f"type={getattr(lap, 'lap_type', 'UNKNOWN')} "
-                f"phys_lap={getattr(lap, 'physics_lap_number', None)} "
-                f"sectors=({lap.sector1_ms},{lap.sector2_ms},{lap.sector3_ms}) "
-                f"consistent={getattr(lap, 'sectors_consistent', None)}"
+            log_debug(
+                Component.APP,
+                "Lap diagnostics",
+                lap_state=getattr(lap, "lap_state", "UNKNOWN"),
+                lap_type=getattr(lap, "lap_type", "UNKNOWN"),
+                physics_lap_number=getattr(lap, "physics_lap_number", None),
+                sector1_ms=lap.sector1_ms,
+                sector2_ms=lap.sector2_ms,
+                sector3_ms=lap.sector3_ms,
+                sectors_consistent=getattr(lap, "sectors_consistent", None),
             )
             if not effective_is_valid:
-                print(
-                    "[APP] invalid reason: "
-                    f"state={getattr(lap, 'lap_state', 'UNKNOWN')}"
+                log_debug(
+                    Component.APP,
+                    "Invalid lap diagnostics",
+                    lap_state=getattr(lap, "lap_state", "UNKNOWN"),
+                    lap_number=lap.lap_number,
                 )
 
             # Update local PB cache for every valid lap (independent of Discord posting)
@@ -408,9 +460,16 @@ class SimLapsApp:
                         session.car,
                         lap.lap_time_ms,
                     )
-                    print(f"[APP] PB cache update (valid lap): {pb_was_new}")
+                    log_debug(
+                        Component.APP,
+                        "PB cache update",
+                        pb_was_new=pb_was_new,
+                        track=session.track,
+                        car=session.car,
+                        lap_time_ms=lap.lap_time_ms,
+                    )
                 else:
-                    print("[APP] Skipping PB cache update: missing track/car")
+                    log_debug(Component.APP, "Skipping PB cache update: missing track/car")
             
             # Determine initial status
             if not effective_is_valid and not self._config.submit_invalid_laps:
@@ -430,35 +489,42 @@ class SimLapsApp:
             self._history_entries.append(history_entry)
             
             # Add to home page (this increments the counter)
-            print(f"[APP] Adding lap card to home page...")
             try:
                 card = self._home_page.add_lap(session, lap, status)
-                print(f"[APP] Lap card added successfully")
+                log_debug(Component.APP, "Lap card added", lap_number=lap.lap_number)
             except Exception as e:
                 # If home page add fails, remove the history entry to maintain sync
-                print(f"[ERROR] Failed to add lap card to home page: {e}")
+                log_exception(Component.APP, "Failed to add lap card to home page", e)
                 self._history_entries.pop()  # Remove the entry we just added
                 raise
             
             # Debug: Check synchronization
-            print(f"[DEBUG] Home lap count: {self._home_page._lap_count}")
-            print(f"[DEBUG] History entries: {len(self._history_entries)}")
-            print(f"[DEBUG] History entry added - was_submitted: {history_entry.was_submitted}, was_valid: {history_entry.was_valid}")
+            log_debug(
+                Component.APP,
+                "Lap/history synchronization state",
+                home_lap_count=self._home_page._lap_count,
+                history_entries=len(self._history_entries),
+                was_submitted=history_entry.was_submitted,
+                was_valid=history_entry.was_valid,
+            )
             
             # Verify synchronization
             if self._home_page._lap_count != len(self._history_entries):
-                print(f"[ERROR] Synchronization mismatch! Home: {self._home_page._lap_count}, History: {len(self._history_entries)}")
+                log_error(
+                    Component.APP,
+                    "Synchronization mismatch",
+                    home_lap_count=self._home_page._lap_count,
+                    history_entries=len(self._history_entries),
+                )
                 # This should never happen now, but if it does, we have a serious issue
             
             # Auto-submit if enabled
             if should_submit:
-                print(f"[APP] Auto-submitting lap...")
+                log_debug(Component.APP, "Auto-submitting lap", lap_number=lap.lap_number)
                 await self._submit_lap(card, session, lap, history_entry, pb_was_new=pb_was_new)
-                print(f"[APP] Auto-submit complete")
+                log_debug(Component.APP, "Auto-submit complete", lap_number=lap.lap_number)
         except Exception as e:
-            print(f"[ERROR] _on_lap_complete failed: {e}")
-            import traceback
-            traceback.print_exc()
+            log_exception(Component.APP, "_on_lap_complete failed", e)
     
     async def _submit_lap(
         self,
@@ -469,37 +535,43 @@ class SimLapsApp:
         pb_was_new: Optional[bool] = None,
     ):
         """Submit a lap to the server."""
-        print(f"[SUBMIT] Starting lap submission: {lap.lap_time_str} on {session.track}")
-        print(f"[SUBMIT] Lap valid: {lap.is_valid}, submit_invalid: {self._config.submit_invalid_laps}")
-        print(f"[SUBMIT] Server URL: {self._config.server_url}")
+        log_info(
+            Component.APP,
+            "Starting lap submission",
+            lap_time=lap.lap_time_str,
+            track=session.track,
+            lap_valid=lap.is_valid,
+            submit_invalid=self._config.submit_invalid_laps,
+            server_url=self._config.server_url,
+        )
         
         card.update_status(LapCardStatus.SUBMITTING)
         
         try:
-            print(f"[SUBMIT] Sending API request...")
+            log_debug(Component.APP, "Sending lap submission request")
             result = await self._api_client.submit_lap(
                 session=session,
                 lap=lap,
                 submit_invalid=self._config.submit_invalid_laps,
             )
-            print(f"[SUBMIT] API response received: {result}")
+            log_debug(Component.APP, "Lap submission response received", status=getattr(result, "status", None))
         except Exception as e:
-            print(f"[SUBMIT] Submit error: {e}")
+            log_exception(Component.APP, "Submit error", e)
             card.update_status(LapCardStatus.FAILED, f"Submit error: {str(e)}")
             return
         
         if result is None:
-            print(f"[SUBMIT] No response from server")
+            log_error(Component.APP, "No response from server")
             card.update_status(LapCardStatus.FAILED, "No response from server")
             return
         
         if result.status == SubmissionStatus.SUCCESS:
-            print(f"[SUBMIT] ✅ Lap submitted successfully!")
+            log_info(Component.APP, "Lap submitted successfully", lap_time=lap.lap_time_str, track=session.track)
             card.update_status(LapCardStatus.SUBMITTED)
             history_entry.was_submitted = True
             
             # Post to Discord if configured
-            print(f"[SUBMIT] Checking Discord posting...")
+            log_debug(Component.APP, "Checking Discord posting eligibility")
             await self._post_to_discord(
                 session,
                 lap,
@@ -508,22 +580,22 @@ class SimLapsApp:
                 pb_was_new=pb_was_new,
             )
         elif result.status == SubmissionStatus.INVALID_LAP:
-            print(f"[SUBMIT] ❌ Lap rejected as invalid: {result.message}")
+            log_warning(Component.APP, "Lap rejected as invalid", message=result.message)
             card.update_status(LapCardStatus.INVALID, result.message)
         elif result.status == SubmissionStatus.GAME_NOT_RUNNING:
-            print(f"[SUBMIT] ❌ Game not running: {result.message}")
+            log_warning(Component.APP, "Game not running during submission", message=result.message)
             card.update_status(LapCardStatus.FAILED, result.message)
         elif result.status == SubmissionStatus.SIGNATURE_ERROR:
-            print(f"[SUBMIT] ❌ Signature error: {result.message}")
+            log_warning(Component.APP, "Submission signature error", message=result.message)
             card.update_status(LapCardStatus.FAILED, result.message)
         elif result.status == SubmissionStatus.RATE_LIMITED:
-            print(f"[SUBMIT] ❌ Rate limited: {result.message}")
+            log_warning(Component.APP, "Submission rate limited", message=result.message)
             card.update_status(LapCardStatus.FAILED, result.message)
         elif result.status == SubmissionStatus.PLAUSIBILITY_FAILED:
-            print(f"[SUBMIT] ❌ Plausibility check failed: {result.message}")
+            log_warning(Component.APP, "Submission plausibility check failed", message=result.message)
             card.update_status(LapCardStatus.FAILED, result.message)
         else:
-            print(f"[SUBMIT] ❌ Unknown error: {result.message}")
+            log_error(Component.APP, "Unknown submission error", message=result.message)
             card.update_status(LapCardStatus.FAILED, result.message)
     
     async def _post_to_discord(
@@ -536,44 +608,44 @@ class SimLapsApp:
     ):
         """Post lap to Discord if configured and meets criteria."""
         try:
-            print(f"[DISCORD] Starting Discord post check...")
+            log_debug(Component.APP, "Starting Discord post check")
             
             # Check if Discord is properly configured
             if not self._config.discord_enabled:
-                print(f"[DISCORD] ❌ Discord disabled in settings")
+                log_debug(Component.APP, "Discord disabled in settings")
                 return
             
             # Validate webhook URL
             if not self._config.discord_webhook_url or not self._config.discord_webhook_url.strip():
-                print(f"[DISCORD] ❌ No webhook URL configured")
+                log_debug(Component.APP, "No Discord webhook URL configured")
                 return
             
             # Check if Discord notifier is initialized
             if not self._discord_notifier:
-                print("[DISCORD] ❌ Discord notifier not initialized - skipping post")
+                log_warning(Component.APP, "Discord notifier not initialized - skipping post")
                 return
             
-            print(f"[DISCORD] ✅ Discord configured, checking PB criteria...")
+            log_debug(Component.APP, "Discord configured, checking PB criteria")
             
             # Check personal best criteria
             is_pb = False
-            print(f"[DISCORD] PB-only mode: {self._config.discord_pb_only}")
+            log_debug(Component.APP, "Discord PB-only mode", discord_pb_only=self._config.discord_pb_only)
             if self._config.discord_pb_only:
                 # pb_was_new is pre-computed in _on_lap_complete before submission.
                 # Do NOT call check_and_update_pb again here — it was already called
                 # and would always return False on a second call for the same lap.
                 is_pb = bool(pb_was_new)
-                print(f"[DISCORD] PB check result: {is_pb}")
+                log_debug(Component.APP, "Discord PB check result", is_pb=is_pb)
                 if not is_pb:
-                    print(f"[DISCORD] ❌ Skipping Discord post: not a personal best")
+                    log_debug(Component.APP, "Skipping Discord post: not a personal best")
                     return  # Not a personal best, skip posting
             else:
                 # Not PB-only mode, post all valid laps.
                 # Still update the cache so the PB flag is accurate for display.
                 is_pb = bool(pb_was_new)
-                print(f"[DISCORD] PB check result (non-PB-only mode): {is_pb}")
+                log_debug(Component.APP, "Discord PB check result (non-PB-only mode)", is_pb=is_pb)
             
-            print(f"[DISCORD] ✅ Creating Discord lap data...")
+            log_debug(Component.APP, "Creating Discord lap data")
             # Create Discord lap data
             sector_times = None
             if lap.sector1_ms is not None and lap.sector2_ms is not None and lap.sector3_ms is not None:
@@ -593,19 +665,17 @@ class SimLapsApp:
                 tire_compound=lap.tyre_compound if lap.tyre_compound != "Unknown" else None,
             )
             
-            print(f"[DISCORD] 📤 Posting to Discord webhook...")
+            log_debug(Component.APP, "Posting lap to Discord webhook")
             # Post to Discord (non-blocking, failure-safe)
             success = await self._discord_notifier.post_lap(discord_lap)
             if success:
-                print(f"[DISCORD] ✅ Discord post successful: {lap.lap_time_str} on {session.track}")
+                log_info(Component.APP, "Discord post successful", lap_time=lap.lap_time_str, track=session.track)
             else:
-                print(f"[DISCORD] ❌ Discord post failed: {lap.lap_time_str} on {session.track}")
+                log_warning(Component.APP, "Discord post failed", lap_time=lap.lap_time_str, track=session.track)
                 # Note: Error details are already logged in DiscordNotifier.post_lap()
                 
         except Exception as e:
-            print(f"[DISCORD] 💥 Error posting to Discord: {e}")
-            import traceback
-            traceback.print_exc()
+            log_exception(Component.APP, "Error posting to Discord", e)
             # Discord failures should never block lap submission
     
     async def _on_parser_status(self, status: str):
@@ -631,7 +701,7 @@ class SimLapsApp:
         restarted session is fully recorded.
         """
         log_info(Component.APP, "Session restart — discarding telemetry buffer and restarting")
-        print("[APP] Session restart detected — restarting telemetry capture")
+        log_debug(Component.APP, "Session restart detected; restarting telemetry capture")
         self._session_manager.reset()
         if self._telemetry_capture and self._telemetry_capture.is_capturing():
             await self._stop_telemetry_capture("session_restart", discard=True)
@@ -650,7 +720,7 @@ class SimLapsApp:
                 # Clear stale lap validity / timing data from the previous session.
                 self._session_manager.reset()
                 # Start telemetry capture
-                print("[APP] Triggering telemetry capture start (session active)")
+                log_info(Component.APP, "Triggering telemetry capture start (session active)")
                 await self._start_telemetry_capture()
             else:
                 # Still connected/monitoring, just no active session
@@ -671,21 +741,16 @@ class SimLapsApp:
                   enabled=self._config.telemetry_enabled, 
                   capture_exists=self._telemetry_capture is not None,
                   output_prefix=output_prefix)
-        print(f"[TELEMETRY_START] Requested - enabled={self._config.telemetry_enabled}, capture_exists={self._telemetry_capture is not None}, prefix={output_prefix}")
         
         if not self._telemetry_capture or not self._config.telemetry_enabled:
             log_info(Component.APP, "Telemetry start skipped: disabled or unavailable")
-            print(f"[TELEMETRY_START] SKIPPED - disabled or unavailable")
             return
         if self._telemetry_capture.is_capturing():
             log_info(Component.APP, "Telemetry start skipped: already capturing")
-            print(f"[TELEMETRY_START] SKIPPED - already capturing (prefix={self._telemetry_capture.get_output_prefix()})")
             return
         
         try:
-            new_prefix = self._telemetry_capture._make_output_prefix()
-            log_info(Component.APP, "Starting telemetry capture from UI", prefix=new_prefix)
-            print(f"[TELEMETRY_START] STARTING with prefix={new_prefix}")
+            log_info(Component.APP, "Starting telemetry capture from UI")
             if self._home_page:
                 self._home_page.set_telemetry_status(TelemetryStatus.CAPTURING, 0)
             
@@ -693,16 +758,17 @@ class SimLapsApp:
             success = await self._telemetry_capture.start_capture()
             if not success:
                 log_error(Component.APP, "Telemetry capture failed to start")
-                print(f"[TELEMETRY_START] FAILED to start")
                 if self._home_page:
                     self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
             else:
-                self._telemetry_session_incomplete = False
-                print(f"[TELEMETRY_START] SUCCESS - capturing with prefix={self._telemetry_capture.get_output_prefix()}")
+                log_info(
+                    Component.APP,
+                    "Telemetry capture started successfully",
+                    prefix=self._telemetry_capture.get_output_prefix(),
+                )
             
         except Exception as e:
             log_exception(Component.APP, "Telemetry start error", e)
-            print(f"[TELEMETRY_START] EXCEPTION: {e}")
             if self._home_page:
                 self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
     
@@ -711,7 +777,6 @@ class SimLapsApp:
         output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
         frame_count = len(self._telemetry_capture.get_frames()) if self._telemetry_capture else 0
         log_info(Component.APP, "Telemetry auto-stop", reason=reason, prefix=output_prefix, frames=frame_count)
-        print(f"[TELEMETRY_AUTO_STOP] reason={reason}, prefix={output_prefix}, frames={frame_count}")
         
         # Update UI to show stopped status
         if self._home_page:
@@ -767,26 +832,25 @@ class SimLapsApp:
         output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
         is_capturing = self._telemetry_capture.is_capturing() if self._telemetry_capture else False
         log_info(Component.APP, "Telemetry stop requested", reason=reason, prefix=output_prefix, capturing=is_capturing)
-        print(f"[TELEMETRY_STOP] Requested - reason={reason}, prefix={output_prefix}, capturing={is_capturing}")
         
         if not self._telemetry_capture or not self._telemetry_analyzer:
-            print(f"[TELEMETRY_STOP] SKIPPED - capture or analyzer missing")
+            log_debug(Component.APP, "Telemetry stop skipped: capture or analyzer missing")
             return
         if not self._telemetry_capture.is_capturing():
             stop_reason = self._telemetry_capture.get_stop_reason()
             if stop_reason is not None:
-                print(f"[TELEMETRY_STOP] SKIPPED - already stopped (reason: {stop_reason})")
+                log_debug(Component.APP, "Telemetry stop skipped: already stopped", stop_reason=stop_reason)
                 return
-            print(f"[TELEMETRY_STOP] PROCEEDING - not capturing but no stop reason set")
+            log_debug(Component.APP, "Proceeding with telemetry stop: not capturing but no stop reason set")
         
         try:
-            print(f"[TELEMETRY_STOP] STOPPING capture with prefix={self._telemetry_capture.get_output_prefix()}")
+            log_debug(Component.APP, "Stopping telemetry capture", prefix=self._telemetry_capture.get_output_prefix())
             frames = await self._telemetry_capture.stop_capture(reason)
             frame_count = len(frames)
-            print(f"[TELEMETRY_STOP] STOPPED - captured {frame_count} frames, prefix was={output_prefix}")
+            log_info(Component.APP, "Telemetry capture stopped", frames=frame_count, prefix=output_prefix)
 
             if discard:
-                print(f"[TELEMETRY_STOP] DISCARDING {frame_count} frames (contaminated buffer)")
+                log_info(Component.APP, "Discarding captured frames (contaminated buffer)", frames=frame_count)
                 self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
                 return
 
@@ -795,7 +859,7 @@ class SimLapsApp:
                 self._home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
                 
                 # Run analysis with track name
-                print(f"[TELEMETRY_ANALYSIS] Starting analysis: frames={frame_count}, prefix={output_prefix}")
+                log_info(Component.APP, "Starting telemetry analysis", frames=frame_count, prefix=output_prefix)
                 metadata = self._telemetry_capture.get_metadata()
                 lap_boundaries = self._telemetry_capture.get_lap_boundaries()
                 result = await self._telemetry_analyzer.analyze(
@@ -807,18 +871,24 @@ class SimLapsApp:
                     game_lap_boundaries=lap_boundaries,
                 )
                 
-                print(f"[TELEMETRY_ANALYSIS] COMPLETE: laps={result.laps_detected}, best={result.best_lap_time:.2f}s, html={result.html_path}, ai_prompt={result.ai_prompt_path}")
+                log_info(
+                    Component.APP,
+                    "Telemetry analysis complete",
+                    laps=result.laps_detected,
+                    best_lap_time=f"{result.best_lap_time:.2f}s",
+                    html_path=result.html_path,
+                    ai_prompt_path=result.ai_prompt_path,
+                )
                 self._home_page.set_telemetry_status(
                     TelemetryStatus.COMPLETE,
                     frame_count,
                     result.html_path,
                 )
             else:
-                print(f"[TELEMETRY_STOP] No frames captured, skipping analysis")
+                log_debug(Component.APP, "No frames captured, skipping analysis")
                 self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
                 
         except Exception as e:
-            print(f"[TELEMETRY_STOP] ERROR: {e}")
             log_exception(Component.APP, "Telemetry stop/analysis error", e)
             self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
     
@@ -834,16 +904,19 @@ class SimLapsApp:
         # Preload personal bests for PB detection
         if not self._pb_cache.is_loaded() or self._pb_cache.get_steam_id() != steam_id:
             server_url = self._config.server_url
-            print(f"[APP] Preloading personal bests from server: {server_url}")
-            print(f"[APP] Steam ID: {steam_id}")
+            log_info(Component.APP, "Preloading personal bests", server_url=server_url, steam_id=steam_id)
             success = await self._pb_cache.preload_from_api(steam_id)
             if success:
                 stats = self._pb_cache.get_cache_stats()
-                print(f"[APP] PB cache loaded successfully: {stats['combo_count']} combos")
-                print(f"[APP] Cache stats: {stats}")
+                log_info(
+                    Component.APP,
+                    "PB cache loaded successfully",
+                    combo_count=stats["combo_count"],
+                    stats=stats,
+                )
             else:
-                print(f"[APP] Failed to preload PB cache from server")
-                print(f"[APP] Discord PB detection may be unreliable")
+                log_warning(Component.APP, "Failed to preload PB cache from server")
+                log_warning(Component.APP, "Discord PB detection may be unreliable")
     
     async def _on_game_version(self, version: str):
         """Handle game version detection from log parser."""
@@ -884,7 +957,7 @@ class SimLapsApp:
                 if (
                     self._telemetry_capture
                     and self._telemetry_capture.is_capturing()
-                    and not is_game_running()
+                    and is_game_running() != GameProcessStatus.RUNNING
                 ):
                     log_info(Component.APP, "Game process gone (monitor) — stopping telemetry")
                     await self._on_game_status_change(False)
@@ -948,12 +1021,13 @@ class SimLapsApp:
         
         # Re-initialize telemetry if settings changed
         if config.telemetry_enabled and not self._telemetry_capture:
-            print("[APP] Telemetry enabled - initializing services...")
+            log_info(Component.APP, "Telemetry enabled - initializing services")
             self._init_telemetry_services()
             self._attach_telemetry_ui()
-            self._start_telemetry_on_startup()
+            if self._telemetry_capture:
+                self.page.run_task(self._start_telemetry_capture)
         elif not config.telemetry_enabled and self._telemetry_capture:
-            print("[APP] Telemetry disabled - stopping services...")
+            log_info(Component.APP, "Telemetry disabled - stopping services")
             if self._telemetry_capture.is_capturing():
                 self.page.run_task(self._telemetry_capture.stop_capture, "disabled")
             self._telemetry_capture = None
@@ -1008,9 +1082,13 @@ class SimLapsApp:
     
     def _show_pb_cache_viewer(self, e=None):
         """Show the PB cache viewer dialog."""
-        print(f"[APP] PB cache viewer called! PB cache: {self._pb_cache}")
-        print(f"[APP] PB cache type: {type(self._pb_cache)}")
-        print(f"[APP] PB cache loaded: {self._pb_cache.is_loaded() if self._pb_cache else 'None'}")
+        log_debug(
+            Component.APP,
+            "PB cache viewer requested",
+            pb_cache=self._pb_cache,
+            pb_cache_type=type(self._pb_cache).__name__,
+            is_loaded=self._pb_cache.is_loaded() if self._pb_cache else None,
+        )
         show_pb_cache_dialog(self.page, self._pb_cache)
     
     async def _test_connection(self, server_url: str) -> tuple[bool, str]:
@@ -1042,7 +1120,7 @@ class SimLapsApp:
         """Cleanup resources before exit."""
         # Stop telemetry capture first if running
         if self._telemetry_capture and self._telemetry_capture.is_capturing():
-            print("[APP] Cleanup: stopping active telemetry capture...")
+            log_info(Component.APP, "Cleanup: stopping active telemetry capture")
             # Use run_task to properly await async stop
             if self.page:
                 self.page.run_task(self._telemetry_capture.stop_capture, "app_close")
@@ -1062,33 +1140,37 @@ async def main(page: ft.Page):
     app = SimLapsApp(page)
     
     # Log initial configuration status
-    print(f"[APP] Server URL: {app._config.server_url}")
-    print(f"[APP] Discord enabled: {app._config.discord_enabled}")
-    print(f"[APP] Discord webhook configured: {bool(app._config.discord_webhook_url)}")
-    print(f"[APP] PB-only mode: {app._config.discord_pb_only}")
-    print(f"[APP] PB cache loaded: {app._pb_cache.is_loaded()}")
+    log_info(
+        Component.APP,
+        "Initial configuration",
+        server_url=app._config.server_url,
+        discord_enabled=app._config.discord_enabled,
+        discord_webhook_configured=bool(app._config.discord_webhook_url),
+        discord_pb_only=app._config.discord_pb_only,
+        pb_cache_loaded=app._pb_cache.is_loaded(),
+    )
     
     # Try to detect Steam user immediately from registry
     steam_id, steam_name = get_steam_user()
     if steam_id:
-        print(f"[APP] Steam user detected on startup: {steam_id} ({steam_name})")
+        log_info(Component.APP, "Steam user detected on startup", steam_id=steam_id, steam_name=steam_name)
         app._home_page.set_detected_user(steam_id, steam_name)
         
         # Trigger Discord initialization immediately
         if app._config.discord_webhook_url and app._config.discord_enabled:
             app._discord_notifier = DiscordNotifier(app._config.discord_webhook_url)
-            print(f"[APP] Discord notifier initialized for user {steam_id}")
+            log_info(Component.APP, "Discord notifier initialized", steam_id=steam_id)
         
         # Preload personal bests immediately
-        print(f"[APP] Triggering PB preload for Steam user: {steam_id}")
+        log_info(Component.APP, "Triggering PB preload for Steam user", steam_id=steam_id)
         success = await app._pb_cache.preload_from_api(steam_id)
         if success:
             stats = app._pb_cache.get_cache_stats()
-            print(f"[APP] PB cache loaded on startup: {stats['combo_count']} combos")
+            log_info(Component.APP, "PB cache loaded on startup", combo_count=stats["combo_count"])
         else:
-            print(f"[APP] Failed to preload PB cache on startup")
+            log_warning(Component.APP, "Failed to preload PB cache on startup")
     else:
-        print("[APP] No Steam user detected - PB preload will wait for log detection")
+        log_debug(Component.APP, "No Steam user detected - PB preload will wait for log detection")
     
     # Start monitoring after PB preload
     await app.start_monitoring()

@@ -249,6 +249,10 @@ class SharedSessionManager:
         with self._lock:
             return dict(self._session_data.car_setup)
 
+    def get_car(self) -> str:
+        with self._lock:
+            return self._session_data.car
+
     def get_session_metadata(self) -> Dict[str, Any]:
         with self._lock:
             md = self._session_data.session_metadata

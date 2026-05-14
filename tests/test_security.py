@@ -18,6 +18,8 @@ from src.core.security import (
     generate_nonce,
     get_app_secret,
     is_game_running,
+    GameProcessStatus,
+    get_security_status,
     GAME_PROCESS_NAMES,
 )
 
@@ -138,9 +140,9 @@ class TestGameDetection:
     
     @patch('src.core.security.PSUTIL_AVAILABLE', False)
     def test_is_game_running_no_psutil(self):
-        """Test that is_game_running returns True when psutil unavailable."""
+        """Test that is_game_running returns UNKNOWN when psutil unavailable."""
         result = is_game_running()
-        assert result is True  # Fail open for safety
+        assert result == GameProcessStatus.UNKNOWN
     
     @patch('src.core.security.PSUTIL_AVAILABLE', True)
     @patch('psutil.process_iter')
@@ -151,7 +153,7 @@ class TestGameDetection:
         mock_process_iter.return_value = [mock_proc]
         
         result = is_game_running()
-        assert result is True
+        assert result == GameProcessStatus.RUNNING
     
     @patch('src.core.security.PSUTIL_AVAILABLE', True)
     @patch('psutil.process_iter')
@@ -162,9 +164,20 @@ class TestGameDetection:
         mock_process_iter.return_value = [mock_proc]
         
         result = is_game_running()
-        assert result is False
+        assert result == GameProcessStatus.NOT_RUNNING
     
     def test_game_process_names(self):
         """Test that known game process names are defined."""
         assert "AssettoCorsaEVO.exe" in GAME_PROCESS_NAMES
         assert "AC2-Win64-Shipping.exe" in GAME_PROCESS_NAMES
+
+
+class TestSecurityStatus:
+    """Test security status helper."""
+
+    @patch("src.core.security.is_game_running", return_value=False)
+    def test_get_security_status_includes_secret_configured(self, _mock_is_game_running):
+        status = get_security_status()
+
+        assert "secret_configured" in status
+        assert isinstance(status["secret_configured"], bool)

@@ -20,14 +20,6 @@ class SimpleLogCapture:
         self.lock = threading.Lock()
         self.capture_enabled = True  # Start enabled by default
 
-    def enable_capture(self):
-        """Enable log capture only when needed."""
-        self.capture_enabled = True
-
-    def disable_capture(self):
-        """Disable log capture."""
-        self.capture_enabled = False
-
     def add_log(self, message):
         """Add a log entry if capture is enabled."""
         if self.capture_enabled:
@@ -228,7 +220,9 @@ def start_log_capture():
                 if self.original is not None:
                     try:
                         self.original.write(text)
-                    except Exception:
+                    except (OSError, IOError, ValueError):
+                        # Expected: stream closed during shutdown or redirected
+                        # Silently ignore - capture continues regardless of original stream
                         pass
 
                 if text.strip():
@@ -242,7 +236,9 @@ def start_log_capture():
                 if self.original is not None:
                     try:
                         self.original.flush()
-                    except Exception:
+                    except (OSError, IOError, ValueError):
+                        # Expected: stream closed during shutdown
+                        # Silently ignore - capture continues regardless
                         pass
 
             def isatty(self):
@@ -250,7 +246,9 @@ def start_log_capture():
                     return False
                 try:
                     return self.original.isatty()
-                except Exception:
+                except (OSError, IOError, AttributeError):
+                    # Expected: stream closed or missing isatty method
+                    # Return False as safe default
                     return False
 
         sys.stdout = UniversalWriter(original_stdout, _log_capture)
@@ -265,7 +263,9 @@ def start_log_capture():
             import traceback
 
             _log_capture.add_log(traceback.format_exc())
-        except Exception:
+        except (ImportError, OSError, IOError):
+            # Expected: traceback module unavailable or capture write failed
+            # Silently ignore - we've already logged the primary error
             pass
 
 

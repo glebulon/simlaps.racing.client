@@ -419,7 +419,7 @@ def build_track(frames: List[FrameData], hz: float = 1.0, start_idx: int = 0) ->
             has_graphics = bool(gr)
             has_auth_progress = gr.get("has_authoritative_progress", False) if gr else False
             norm_pos = gr.get("normalized_car_position") if gr else None
-            print(f"[ANALYZER] Frame {i} graphics check: has_graphics={has_graphics}, has_auth_progress={has_auth_progress}, norm_pos={norm_pos}")
+            log_debug(Component.ANALYZER, "Frame graphics check", frame=i, has_graphics=has_graphics, has_auth_progress=has_auth_progress, norm_pos=norm_pos)
 
         speed = _optional_float(ph.get("speed_kmh"))
         if speed is None:
@@ -447,7 +447,7 @@ def build_track(frames: List[FrameData], hz: float = 1.0, start_idx: int = 0) ->
             graphics_norm_pos = _optional_float(gr.get("normalized_car_position"))
             # Debug: Log graphics position on first frame
             if i == start_idx and graphics_norm_pos is not None:
-                print(f"[ANALYZER] First frame graphics normalized_position: {graphics_norm_pos}")
+                log_debug(Component.ANALYZER, "First frame graphics normalized_position", norm_pos=graphics_norm_pos)
 
         physics_norm_pos = _optional_float(
             ph.get("normalized_spline_position")
@@ -706,14 +706,14 @@ def detect_laps(track: List[Dict], hz: float = 1.0, allow_position_fallback: boo
     """Detect lap boundaries."""
     norm_result = _detect_laps_by_norm_pos(track, hz=hz)
     if norm_result:
-        print("[ANALYZER] Lap detection: using normalized car position")
+        log_debug(Component.ANALYZER, "Lap detection: using normalized car position")
         return norm_result
 
     if not allow_position_fallback:
-        print("[ANALYZER] Lap detection: normalized progress unavailable")
+        log_debug(Component.ANALYZER, "Lap detection: normalized progress unavailable")
         return []
 
-    print("[ANALYZER] Lap detection: using dead-reckoning position")
+    log_debug(Component.ANALYZER, "Lap detection: using dead-reckoning position")
     return _detect_laps_by_position(track, hz=hz)
 
 
@@ -1490,19 +1490,17 @@ class TelemetryAnalyzer:
         game_lap_boundaries: Optional[List] = None,  # Can be List[int] or List[Tuple[int, Optional[float], Optional[int]]]
     ) -> AnalysisResult:
         """Run full analysis pipeline and generate outputs."""
-        print(f"[ANALYZER] analyze() called: frames={len(frames)}, prefix={output_prefix}, track={track_name}")
         log_info(Component.ANALYZER, "Starting analysis", frames=len(frames), hz=hz, track=track_name, prefix=output_prefix)
 
         if len(frames) < 20:
-            print(f"[ANALYZER] SKIPPING - insufficient frames ({len(frames)} < 20), prefix={output_prefix}")
             log_warning(Component.ANALYZER, "Analysis skipped: insufficient frames", frames=len(frames), prefix=output_prefix)
             return await self._generate_empty_result(output_prefix)
 
         track_key, track_profile = _select_track_profile_for_analysis(track_name)
         if track_profile:
-            print(f"[ANALYZER] Track profile: {track_profile['display_name']}")
+            log_info(Component.ANALYZER, "Track profile selected", profile=track_profile['display_name'])
         else:
-            print("[ANALYZER] Track profile: none - using auto corner detection")
+            log_debug(Component.ANALYZER, "Track profile: none - using auto corner detection")
 
         drive_start = 0
         for i, f in enumerate(frames):
@@ -1518,7 +1516,7 @@ class TelemetryAnalyzer:
 
         track = build_track(frames, hz=hz, start_idx=drive_start)
         if not track:
-            print("[ANALYZER] No plausible telemetry frames after quality filtering")
+            log_warning(Component.ANALYZER, "No plausible telemetry frames after quality filtering")
             return await self._generate_empty_result(output_prefix)
 
         authoritative_progress_ratio = _fraction(track, lambda pt: pt.get("has_authoritative_progress") and pt.get("norm_pos") is not None)
@@ -1708,7 +1706,7 @@ class TelemetryAnalyzer:
                 "uses_canonical_progress": uses_canonical_progress,
             })
             fuel_str = f"  fuel {fuel_used:.3f}L" if fuel_used is not None else ""
-            print(f"[ANALYZER] Lap {game_lap_num}: {lap_time:.0f}s  max {max(pt['speed'] for pt in lap_track):.0f} km/h  {len(corners)} corners{fuel_str}")
+            log_debug(Component.ANALYZER, "Lap summary", lap_num=game_lap_num, lap_time=f"{lap_time:.0f}s", max_speed=f"{max(pt['speed'] for pt in lap_track):.0f} km/h", corners=len(corners), fuel=fuel_str)
 
         if not laps:
             log_warning(Component.ANALYZER, "Analysis complete: no valid laps found")
@@ -1796,6 +1794,7 @@ class TelemetryAnalyzer:
             "config_key": track_profile["config_key"] if track_profile else None,
             "config_name": track_profile["config_name"] if track_profile else None,
             "track_label": track_profile["display_name"] if track_profile else track_name,
+            "car": self._session_manager.get_car(),
             "laps": laps,
             "best_lap_num": best_lap["lap_num"],
             "reference_lap_num": ref_lap["lap_num"],
@@ -1820,10 +1819,10 @@ class TelemetryAnalyzer:
         }
         self._session_manager.update_from_telemetry(telemetry_summary)
 
-        print(f"[ANALYZER] Generating outputs with prefix={output_prefix}")
+        log_info(Component.ANALYZER, "Generating outputs", prefix=output_prefix)
         html_path = await self._generate_html(data, output_prefix)
         ai_prompt_path = await self._generate_ai_prompt(data, output_prefix)
-        print(f"[ANALYZER] Outputs generated: html={html_path}, ai_prompt={ai_prompt_path}")
+        log_info(Component.ANALYZER, "Outputs generated", html=html_path, ai_prompt=ai_prompt_path)
 
         return AnalysisResult(
             html_path=html_path,
@@ -1835,7 +1834,6 @@ class TelemetryAnalyzer:
 
     async def _generate_empty_result(self, output_prefix: Optional[str] = None) -> AnalysisResult:
         """Generate result for empty/invalid data without creating files."""
-        print(f"[ANALYZER] _generate_empty_result: prefix={output_prefix} - NO FILES CREATED")
         log_info(Component.ANALYZER, "Skipping output: insufficient or invalid telemetry data", prefix=output_prefix)
         return AnalysisResult(
             html_path=None,
@@ -1946,7 +1944,7 @@ class TelemetryAnalyzer:
         with open(html_path, "w", encoding="utf-8") as f:
             f.write(html_content)
 
-        print(f"[ANALYZER] Generated HTML report: {html_path}")
+        log_debug(Component.ANALYZER, "Generated HTML report", path=html_path)
         return html_path
 
     @staticmethod
@@ -2437,12 +2435,16 @@ window.addEventListener('DOMContentLoaded', () => {
         reference_lap = next((lap for lap in laps if lap["lap_num"] == reference_lap_num), best_lap)
         comparison_lap = next((lap for lap in laps if lap["lap_num"] == comparison_lap_num), best_lap)
 
+        # ── Car name from shared session data
+        car_model: str = data.get("car") or "Unknown Car"
+
         lines: List[str] = []
 
         if analysis_mode != "full" or not ref_corners:
             lines.append("Telemetry coaching is running in DIAGNOSTIC mode.")
             lines.append("")
             lines.append(f"Track: {track_label}")
+            lines.append(f"Car: {car_model}")
             lines.append(f"Laps available: {len(laps)}")
             lines.append(f"Analysis confidence: {analysis_confidence}")
             lines.append(f"Authoritative progress coverage: {authoritative_progress_ratio:.0%}")
@@ -2461,14 +2463,8 @@ window.addEventListener('DOMContentLoaded', () => {
                 f.write("\n".join(lines) + "\n")
             return ai_prompt_path
 
-        # ── Car name from session metadata (may be None for older captures)
-        meta = data.get("meta") or {}
-        car_model: str = (
-            meta.get("car_model")
-            or meta.get("car_name")
-            or meta.get("car")
-            or "Unknown Car"
-        )
+        # ── Car name from shared session data
+        car_model: str = data.get("car") or "Unknown Car"
 
         # ── Preamble / persona
         lines.append(
@@ -2497,6 +2493,7 @@ window.addEventListener('DOMContentLoaded', () => {
         # ── Session context
         lines.append("SESSION CONTEXT:")
         lines.append(f"- Track:          {track_label}")
+        lines.append(f"- Car:            {car_model}")
         lines.append(f"- Analysis mode:  {analysis_mode}")
         lines.append(f"- Confidence:     {analysis_confidence}")
         lines.append(f"- Reference lap:  #{reference_lap_num}")
@@ -3232,5 +3229,5 @@ window.addEventListener('DOMContentLoaded', () => {
         with open(ai_prompt_path, "w", encoding="utf-8") as f:
             f.write(prompt)
 
-        print(f"[ANALYZER] Generated AI prompt: {ai_prompt_path} ({len(prompt):,} chars)")
+        log_debug(Component.ANALYZER, "Generated AI prompt", path=ai_prompt_path, chars=len(prompt))
         return ai_prompt_path

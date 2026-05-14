@@ -239,22 +239,6 @@ class ConfigManager:
         config.steam_name = steam_name
         self.save()
     
-    def get_log_path(self) -> Path:
-        """Get the log file path as Path object."""
-        return Path(self.get().log_path)
-    
-    def set_log_path(self, path: str) -> None:
-        """Set the log file path."""
-        self.update(log_path=path)
-    
-    def get_server_url(self) -> str:
-        """Get the server URL."""
-        return self.get().server_url
-    
-    def set_server_url(self, url: str) -> None:
-        """Set the server URL."""
-        self.update(server_url=url.rstrip("/"))
-    
     def set_discord_config(
         self,
         webhook_url: Optional[str] = None,
@@ -279,15 +263,10 @@ class ConfigManager:
         if pb_only is not None:
             updates["discord_pb_only"] = pb_only
         if post_invalid is not None:
-            updates["discord_post_invalid"] = post_invalid
+            updates["submit_invalid_laps"] = post_invalid
         
         if updates:
             self.update(**updates)
-    
-    def is_discord_configured(self) -> bool:
-        """Check if Discord is properly configured."""
-        config = self.get()
-        return bool(config.discord_webhook_url and config.discord_enabled)
 
 
 # Global config manager instance
@@ -300,13 +279,3 @@ def get_config_manager() -> ConfigManager:
     if _config_manager is None:
         _config_manager = ConfigManager()
     return _config_manager
-
-
-def get_config() -> AppConfig:
-    """Get the current configuration."""
-    return get_config_manager().get()
-
-
-def save_config() -> bool:
-    """Save the current configuration."""
-    return get_config_manager().save()

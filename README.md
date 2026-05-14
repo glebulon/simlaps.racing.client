@@ -317,11 +317,15 @@ black src/
 
 ### Version Management
 
-Version is managed in `src/version.py`. Update there to change the version number across the application.
+The client version has a single source of truth: `src/version.py`.
+
+- Update `VERSION_MAJOR`, `VERSION_MINOR`, and `VERSION_PATCH` in `src/version.py`.
+- Packaging metadata in `pyproject.toml` is populated automatically via:
+  - `[project] dynamic = ["version"]`
+  - `[tool.setuptools.dynamic] version = {attr = "src.version.VERSION"}`
+- Runtime aliases also resolve from the same source (`src.__version__` -> `src.version.VERSION`).
 
 ## Version
-
-Current version: **1.2.2**
 
 - Added telemetry capture and analysis
 - Added game-reported lap boundary support

@@ -1,4 +1,6 @@
 """SimLaps Telemetry Client - Automatic lap time submission for ACE."""
 
-__version__ = "1.0.0"
+from .version import VERSION
+
+__version__ = VERSION
 __author__ = "SimLaps"

@@ -1,8 +1,8 @@
 Telemetry coaching is running in DIAGNOSTIC mode.
 
 Track: Unknown Track
-Car: Unknown
-Laps available: 3
+Car: Ferrari 296 GT3
+Laps available: 2
 Analysis confidence: medium
 Authoritative progress coverage: 100%
 Plausible physics coverage: 0%
@@ -11,8 +11,6 @@ Detailed corner coaching has been suppressed because the lap alignment is not tr
 
 Reasons:
 - Physics frame plausibility coverage is only 0%; derived metrics are degraded.
-- Telemetry starts at game lap 2; earlier logged laps are not included.
-- Log/shared session reaches lap 5, but telemetry only reaches lap 4; detailed coaching suppressed.
 - No trustworthy canonical corners were available for comparison.
 
 Use the session only for diagnostics until graphics-based progress coverage is reliable.

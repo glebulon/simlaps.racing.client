@@ -12,6 +12,7 @@ from datetime import datetime
 from src.core.discord_notifier import DiscordNotifier, LapData, create_discord_notifier
 from src.core.pb_cache import PBCache, PersonalBest
 from src.models import LapData as SessionLapData, SessionData
+from src.ui.components.lap_card import LapCardStatus
 from src.ui.app import SimLapsApp
 from src.utils.config import AppConfig
 
@@ -447,6 +448,174 @@ class TestAppDiscordPosting:
         await app._on_lap_complete(session, lap)
 
         app._submit_lap.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_on_lap_complete_missed_boundary_does_not_create_dead_telemetry_state(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app._config = AppConfig(auto_submit=False, submit_invalid_laps=False, telemetry_enabled=True)
+        app._session_manager = MagicMock()
+        app._session_manager.get_lap_validity_data.return_value = None
+        app._pb_cache = MagicMock()
+        app._pb_cache.check_and_update_pb.return_value = True
+        app._telemetry_capture = MagicMock()
+        app._telemetry_capture.is_capturing.return_value = False
+        app._history_entries = []
+        app._submit_lap = AsyncMock()
+
+        card = MagicMock()
+        app._home_page = MagicMock()
+        app._home_page.add_lap.return_value = card
+        app._home_page._lap_count = 1
+
+        session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+        lap = SessionLapData(
+            lap_number=7,
+            physics_lap_number=7,
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=True,
+            timestamp="2026-04-29T00:21:00",
+        )
+
+        await app._on_lap_complete(session, lap)
+
+        assert not hasattr(app, "_telemetry_session_incomplete")
+
+    @pytest.mark.asyncio
+    async def test_start_telemetry_capture_does_not_call_private_prefix_method(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app._config = AppConfig(telemetry_enabled=True)
+        app._home_page = MagicMock()
+
+        telemetry_capture = MagicMock()
+        telemetry_capture.get_output_prefix.side_effect = [None, "05-10-20-12-00"]
+        telemetry_capture.is_capturing.return_value = False
+        telemetry_capture.start_capture = AsyncMock(return_value=True)
+        telemetry_capture._make_output_prefix = MagicMock(return_value="should-not-be-used")
+        app._telemetry_capture = telemetry_capture
+
+        await app._start_telemetry_capture()
+
+        telemetry_capture.start_capture.assert_awaited_once()
+        telemetry_capture._make_output_prefix.assert_not_called()
+
+    def test_retry_lap_schedules_submit_task_for_matching_history_entry(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app.page = MagicMock()
+        app._config = AppConfig(submit_invalid_laps=False)
+
+        history_entry = MagicMock()
+        app._history_entries = [history_entry]
+
+        session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+        lap = SessionLapData(
+            lap_number=9,
+            physics_lap_number=9,
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=True,
+            timestamp="2026-04-29T00:21:00",
+        )
+
+        card = MagicMock()
+        card.data = MagicMock(session=session, lap=lap, lap_number=1)
+
+        app._on_retry_lap(card)
+
+        app.page.run_task.assert_called_once_with(
+            app._submit_lap,
+            card,
+            session,
+            lap,
+            history_entry,
+        )
+
+    def test_retry_lap_skips_invalid_lap_when_submit_invalid_disabled(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app.page = MagicMock()
+        app._config = AppConfig(submit_invalid_laps=False)
+        app._history_entries = [MagicMock()]
+
+        session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+        lap = SessionLapData(
+            lap_number=9,
+            physics_lap_number=9,
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=False,
+            timestamp="2026-04-29T00:21:00",
+        )
+
+        card = MagicMock()
+        card.data = MagicMock(session=session, lap=lap, lap_number=1)
+
+        app._on_retry_lap(card)
+
+        app.page.run_task.assert_not_called()
+
+    def test_retry_lap_reports_missing_history_entry(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app.page = MagicMock()
+        app._config = AppConfig(submit_invalid_laps=True)
+        app._history_entries = []
+
+        session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+        lap = SessionLapData(
+            lap_number=9,
+            physics_lap_number=9,
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=True,
+            timestamp="2026-04-29T00:21:00",
+        )
+
+        card = MagicMock()
+        card.data = MagicMock(session=session, lap=lap, lap_number=1)
+
+        app._on_retry_lap(card)
+
+        card.update_status.assert_called_once_with(
+            LapCardStatus.FAILED,
+            "Retry unavailable: history entry missing",
+        )
+        app.page.run_task.assert_not_called()
+
+    def test_save_settings_enabling_telemetry_schedules_capture_start(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app.page = MagicMock()
+        app._config = AppConfig(server_url="https://simlaps.racing", telemetry_enabled=False)
+        app._config_manager = MagicMock()
+        app._discord_notifier = None
+        app._pb_cache = MagicMock()
+        app._pb_cache.server_url = "https://simlaps.racing"
+        app._session_manager = MagicMock()
+        app._telemetry_capture = None
+        app._telemetry_analyzer = None
+        app._telemetry_button = None
+        app._home_page = MagicMock()
+        app._log_parser = MagicMock()
+        app._log_parser.is_running = False
+
+        def init_telemetry_services():
+            app._telemetry_capture = MagicMock()
+
+        app._init_telemetry_services = MagicMock(side_effect=init_telemetry_services)
+        app._attach_telemetry_ui = MagicMock()
+
+        with patch("src.ui.app.APIClient") as mock_api_client_cls, patch("src.ui.app.LogParser"):
+            mock_api_client_cls.return_value = MagicMock()
+
+            app._save_settings(
+                AppConfig(
+                    server_url="https://simlaps.racing",
+                    telemetry_enabled=True,
+                    telemetry_output_path="telemetry",
+                )
+            )
+
+        app._init_telemetry_services.assert_called_once()
+        app._attach_telemetry_ui.assert_called_once()
+        app.page.run_task.assert_called_once_with(app._start_telemetry_capture)
 
 
 if __name__ == "__main__":

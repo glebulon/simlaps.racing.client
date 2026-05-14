@@ -116,19 +116,3 @@ class StatusBar(ft.Container):
         
         self.content = self._build_content()
         self.update()
-    
-    def set_connected(self, message: str = "Connected"):
-        """Set status to connected."""
-        self.set_status(ConnectionStatus.CONNECTED, message)
-    
-    def set_disconnected(self, message: str = "Not connected"):
-        """Set status to disconnected."""
-        self.set_status(ConnectionStatus.DISCONNECTED, message)
-    
-    def set_connecting(self, message: str = "Connecting..."):
-        """Set status to connecting."""
-        self.set_status(ConnectionStatus.CONNECTING, message)
-    
-    def set_error(self, message: str = "Error"):
-        """Set status to error."""
-        self.set_status(ConnectionStatus.ERROR, message)

@@ -147,7 +147,18 @@ class HistoryPage(ft.Container):
             dt = datetime.fromisoformat(entry.timestamp)
             time_str = dt.strftime("%H:%M")
             date_str = dt.strftime("%b %d")
-        except:
+        except (TypeError, ValueError):
+            time_str = "--:--"
+            date_str = "---"
+        except Exception as ex:
+            from ...utils.structured_logger import log_exception, Component
+
+            log_exception(
+                Component.HISTORY,
+                "Unexpected error parsing history timestamp",
+                ex,
+                timestamp=entry.timestamp,
+            )
             time_str = "--:--"
             date_str = "---"
         

@@ -55,7 +55,9 @@ class DebugLogger:
                 ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
                 DebugLogger._file.write(f"[{ts}] {message}\n")
                 DebugLogger._file.flush()
-            except Exception:
+            except (OSError, IOError):
+                # Expected: file closed during shutdown or disk full
+                # Silently ignore - debug log is non-critical
                 pass
 
     def log(self, message: str) -> None:
@@ -68,6 +70,8 @@ class DebugLogger:
             try:
                 DebugLogger._file.close()
             except Exception:
+                # Expected: file already closed or handle invalid during shutdown
+                # Silently ignore - debug log is non-critical, state reset in finally
                 pass
             finally:
                 DebugLogger._file = None

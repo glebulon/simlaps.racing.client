@@ -1,6 +1,7 @@
 Telemetry coaching is running in DIAGNOSTIC mode.
 
 Track: Unknown Track
+Car: Unknown
 Laps available: 2
 Analysis confidence: medium
 Authoritative progress coverage: 100%

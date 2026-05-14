@@ -12,7 +12,7 @@ from enum import Enum
 
 from ..models import SessionData, LapData, SharedSessionManager
 from ..utils.debug_logger import DebugLogger
-from .security import sign_payload, is_game_running
+from .security import sign_payload, is_game_running, GameProcessStatus
 from ..version import VERSION, USER_AGENT
 
 
@@ -127,11 +127,11 @@ class APIClient:
         )
         self._debug.log(f"  is_valid (effective): {effective_is_valid}")
         
-        # Anti-cheat: Verify game is running before submission
-        game_running = is_game_running()
-        self._debug.log(f"  is_game_running: {game_running}")
-        if not game_running:
-            self._debug.log(f"[API] Rejected: Game not running")
+        # Anti-cheat: Verify game is running before submission (fail-closed)
+        game_status = is_game_running()
+        self._debug.log(f"  is_game_running: {game_status}")
+        if game_status != GameProcessStatus.RUNNING:
+            self._debug.log(f"[API] Rejected: Game not running or detection uncertain")
             return SubmissionResult(
                 status=SubmissionStatus.GAME_NOT_RUNNING,
                 message="Game must be running to submit laps",

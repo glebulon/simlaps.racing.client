@@ -1052,4 +1052,39 @@ class TestTelemetryAnalyzer:
         with open(result.ai_prompt_path, "r", encoding="utf-8") as fh:
             prompt = fh.read()
         assert "Telemetry coaching is running in DIAGNOSTIC mode." in prompt
-        assert "Log/shared session reaches lap 5, but telemetry only reaches lap 4" in prompt
+
+    @pytest.mark.asyncio
+    async def test_analyze_includes_car_from_shared_session_in_ai_prompt(self):
+        """Car from shared session should appear in AI prompt SESSION CONTEXT."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+        from src.models.lap import SessionData
+
+        frames = [create_mock_frame(i, speed=95.0 + (i % 30), position=i * 0.01) for i in range(220)]
+        manager = SharedSessionManager()
+        manager.update_lap_timing_from_graphics_shm(1, {"last_laptime_ms": 150000})
+        manager.update_lap_timing_from_graphics_shm(2, {"last_laptime_ms": 140000})
+        manager.update_lap_validity_from_graphics_shm(1, True)
+        manager.update_lap_validity_from_graphics_shm(2, True)
+        # Set car in shared session
+        manager.update_from_logs(
+            SessionData(
+                car="Ferrari 296 GT3",
+                track="Laguna Seca",
+                session_type="race",
+            )
+        )
+
+        analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=manager)
+        game_markers = [(50, 150000), (150, 140000)]
+
+        result = await analyzer.analyze(
+            frames,
+            hz=10.0,
+            game_lap_boundaries=game_markers,
+            output_prefix="test_car_in_prompt",
+        )
+
+        assert result is not None
+        with open(result.ai_prompt_path, "r", encoding="utf-8") as fh:
+            prompt = fh.read()
+        assert "Car: Ferrari 296 GT3" in prompt
