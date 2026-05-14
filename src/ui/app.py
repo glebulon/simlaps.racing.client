@@ -18,12 +18,15 @@ from .components.pb_cache_viewer import show_pb_cache_dialog
 from .pages.history import HistoryPage, HistoryEntry
 from .components.lap_card import LapCard, LapCardStatus
 from .components.status_bar import ConnectionStatus
-from .components.telemetry_status import TelemetryStatus, TelemetryButton
+from .components.telemetry_status import TelemetryButton
+from .services.lap_submission_service import LapSubmissionService
+from .services.monitoring_service import MonitoringService
+from .services.telemetry_lifecycle_service import TelemetryLifecycleService
 from src.core.log_parser import LogParser
 from src.models import SessionData, LapData, SharedSessionManager
-from src.core.api_client import APIClient, SubmissionStatus
-from src.core.security import get_steam_user, is_game_running, GameProcessStatus
-from src.core.discord_notifier import DiscordNotifier, LapData as DiscordLapData
+from src.core.api_client import APIClient
+from src.core.security import get_steam_user
+from src.core.discord_notifier import DiscordNotifier
 from src.core.pb_cache import get_pb_cache
 from src.core.telemetry_capture import TelemetryCapture
 from src.core.track_catalog import TRACK_CATALOG
@@ -71,10 +74,10 @@ class SimLapsApp:
         self._pb_cache = get_pb_cache(self._config.server_url)
         log_info(Component.APP, "PB cache initialized", initialized=self._pb_cache is not None)
         
-        # Parser task
-        log_info(Component.APP, "Initializing parser task")
-        self._parser_task: Optional[asyncio.Task] = None
-        self._game_monitor_task: Optional[asyncio.Task] = None
+        # Monitoring lifecycle service
+        self._monitoring_service = MonitoringService(self.page)
+        self._telemetry_lifecycle_service = TelemetryLifecycleService()
+        self._lap_submission_service = LapSubmissionService()
         
         # Telemetry services
         self._telemetry_capture: Optional[TelemetryCapture] = None
@@ -535,68 +538,21 @@ class SimLapsApp:
         pb_was_new: Optional[bool] = None,
     ):
         """Submit a lap to the server."""
-        log_info(
-            Component.APP,
-            "Starting lap submission",
-            lap_time=lap.lap_time_str,
-            track=session.track,
-            lap_valid=lap.is_valid,
-            submit_invalid=self._config.submit_invalid_laps,
-            server_url=self._config.server_url,
+        submission_service = getattr(self, "_lap_submission_service", None)
+        if submission_service is None:
+            submission_service = LapSubmissionService()
+            self._lap_submission_service = submission_service
+
+        await submission_service.submit_lap(
+            api_client=self._api_client,
+            config=self._config,
+            card=card,
+            session=session,
+            lap=lap,
+            history_entry=history_entry,
+            pb_was_new=pb_was_new,
+            post_to_discord=self._post_to_discord,
         )
-        
-        card.update_status(LapCardStatus.SUBMITTING)
-        
-        try:
-            log_debug(Component.APP, "Sending lap submission request")
-            result = await self._api_client.submit_lap(
-                session=session,
-                lap=lap,
-                submit_invalid=self._config.submit_invalid_laps,
-            )
-            log_debug(Component.APP, "Lap submission response received", status=getattr(result, "status", None))
-        except Exception as e:
-            log_exception(Component.APP, "Submit error", e)
-            card.update_status(LapCardStatus.FAILED, f"Submit error: {str(e)}")
-            return
-        
-        if result is None:
-            log_error(Component.APP, "No response from server")
-            card.update_status(LapCardStatus.FAILED, "No response from server")
-            return
-        
-        if result.status == SubmissionStatus.SUCCESS:
-            log_info(Component.APP, "Lap submitted successfully", lap_time=lap.lap_time_str, track=session.track)
-            card.update_status(LapCardStatus.SUBMITTED)
-            history_entry.was_submitted = True
-            
-            # Post to Discord if configured
-            log_debug(Component.APP, "Checking Discord posting eligibility")
-            await self._post_to_discord(
-                session,
-                lap,
-                steam_id=session.player_id,
-                steam_name=session.player_name,
-                pb_was_new=pb_was_new,
-            )
-        elif result.status == SubmissionStatus.INVALID_LAP:
-            log_warning(Component.APP, "Lap rejected as invalid", message=result.message)
-            card.update_status(LapCardStatus.INVALID, result.message)
-        elif result.status == SubmissionStatus.GAME_NOT_RUNNING:
-            log_warning(Component.APP, "Game not running during submission", message=result.message)
-            card.update_status(LapCardStatus.FAILED, result.message)
-        elif result.status == SubmissionStatus.SIGNATURE_ERROR:
-            log_warning(Component.APP, "Submission signature error", message=result.message)
-            card.update_status(LapCardStatus.FAILED, result.message)
-        elif result.status == SubmissionStatus.RATE_LIMITED:
-            log_warning(Component.APP, "Submission rate limited", message=result.message)
-            card.update_status(LapCardStatus.FAILED, result.message)
-        elif result.status == SubmissionStatus.PLAUSIBILITY_FAILED:
-            log_warning(Component.APP, "Submission plausibility check failed", message=result.message)
-            card.update_status(LapCardStatus.FAILED, result.message)
-        else:
-            log_error(Component.APP, "Unknown submission error", message=result.message)
-            card.update_status(LapCardStatus.FAILED, result.message)
     
     async def _post_to_discord(
         self,
@@ -607,76 +563,20 @@ class SimLapsApp:
         pb_was_new: Optional[bool] = None,
     ):
         """Post lap to Discord if configured and meets criteria."""
-        try:
-            log_debug(Component.APP, "Starting Discord post check")
-            
-            # Check if Discord is properly configured
-            if not self._config.discord_enabled:
-                log_debug(Component.APP, "Discord disabled in settings")
-                return
-            
-            # Validate webhook URL
-            if not self._config.discord_webhook_url or not self._config.discord_webhook_url.strip():
-                log_debug(Component.APP, "No Discord webhook URL configured")
-                return
-            
-            # Check if Discord notifier is initialized
-            if not self._discord_notifier:
-                log_warning(Component.APP, "Discord notifier not initialized - skipping post")
-                return
-            
-            log_debug(Component.APP, "Discord configured, checking PB criteria")
-            
-            # Check personal best criteria
-            is_pb = False
-            log_debug(Component.APP, "Discord PB-only mode", discord_pb_only=self._config.discord_pb_only)
-            if self._config.discord_pb_only:
-                # pb_was_new is pre-computed in _on_lap_complete before submission.
-                # Do NOT call check_and_update_pb again here — it was already called
-                # and would always return False on a second call for the same lap.
-                is_pb = bool(pb_was_new)
-                log_debug(Component.APP, "Discord PB check result", is_pb=is_pb)
-                if not is_pb:
-                    log_debug(Component.APP, "Skipping Discord post: not a personal best")
-                    return  # Not a personal best, skip posting
-            else:
-                # Not PB-only mode, post all valid laps.
-                # Still update the cache so the PB flag is accurate for display.
-                is_pb = bool(pb_was_new)
-                log_debug(Component.APP, "Discord PB check result (non-PB-only mode)", is_pb=is_pb)
-            
-            log_debug(Component.APP, "Creating Discord lap data")
-            # Create Discord lap data
-            sector_times = None
-            if lap.sector1_ms is not None and lap.sector2_ms is not None and lap.sector3_ms is not None:
-                sector_times = [lap.sector1_ms, lap.sector2_ms, lap.sector3_ms]
-            
-            discord_lap = DiscordLapData(
-                track_name=session.track,
-                car_name=session.car,
-                lap_time_ms=lap.lap_time_ms,
-                valid=lap.is_valid,
-                steam_id=steam_id,
-                steam_name=steam_name,
-                is_personal_best=is_pb,
-                created_at=lap.timestamp,
-                sector_times_ms=sector_times,
-                fuel_used_liters=lap.fuel_used,
-                tire_compound=lap.tyre_compound if lap.tyre_compound != "Unknown" else None,
-            )
-            
-            log_debug(Component.APP, "Posting lap to Discord webhook")
-            # Post to Discord (non-blocking, failure-safe)
-            success = await self._discord_notifier.post_lap(discord_lap)
-            if success:
-                log_info(Component.APP, "Discord post successful", lap_time=lap.lap_time_str, track=session.track)
-            else:
-                log_warning(Component.APP, "Discord post failed", lap_time=lap.lap_time_str, track=session.track)
-                # Note: Error details are already logged in DiscordNotifier.post_lap()
-                
-        except Exception as e:
-            log_exception(Component.APP, "Error posting to Discord", e)
-            # Discord failures should never block lap submission
+        submission_service = getattr(self, "_lap_submission_service", None)
+        if submission_service is None:
+            submission_service = LapSubmissionService()
+            self._lap_submission_service = submission_service
+
+        await submission_service.post_to_discord(
+            config=self._config,
+            discord_notifier=self._discord_notifier,
+            session=session,
+            lap=lap,
+            steam_id=steam_id,
+            steam_name=steam_name,
+            pb_was_new=pb_was_new,
+        )
     
     async def _on_parser_status(self, status: str):
         """Handle status update from parser."""
@@ -736,89 +636,31 @@ class SimLapsApp:
     
     async def _start_telemetry_capture(self):
         """Start telemetry capture when game session begins."""
-        output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
-        log_debug(Component.APP, "Telemetry start requested", 
-                  enabled=self._config.telemetry_enabled, 
-                  capture_exists=self._telemetry_capture is not None,
-                  output_prefix=output_prefix)
-        
-        if not self._telemetry_capture or not self._config.telemetry_enabled:
-            log_info(Component.APP, "Telemetry start skipped: disabled or unavailable")
-            return
-        if self._telemetry_capture.is_capturing():
-            log_info(Component.APP, "Telemetry start skipped: already capturing")
-            return
-        
-        try:
-            log_info(Component.APP, "Starting telemetry capture from UI")
-            if self._home_page:
-                self._home_page.set_telemetry_status(TelemetryStatus.CAPTURING, 0)
-            
-            # Start capture synchronously
-            success = await self._telemetry_capture.start_capture()
-            if not success:
-                log_error(Component.APP, "Telemetry capture failed to start")
-                if self._home_page:
-                    self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
-            else:
-                log_info(
-                    Component.APP,
-                    "Telemetry capture started successfully",
-                    prefix=self._telemetry_capture.get_output_prefix(),
-                )
-            
-        except Exception as e:
-            log_exception(Component.APP, "Telemetry start error", e)
-            if self._home_page:
-                self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
+        lifecycle_service = getattr(self, "_telemetry_lifecycle_service", None)
+        if lifecycle_service is None:
+            lifecycle_service = TelemetryLifecycleService()
+            self._telemetry_lifecycle_service = lifecycle_service
+
+        await lifecycle_service.start_capture(
+            telemetry_capture=self._telemetry_capture,
+            home_page=self._home_page,
+            telemetry_enabled=self._config.telemetry_enabled,
+        )
     
     async def _on_telemetry_auto_stop(self, reason: str):
         """Handle automatic stop of telemetry capture (game crash/quit detected)."""
-        output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
-        frame_count = len(self._telemetry_capture.get_frames()) if self._telemetry_capture else 0
-        log_info(Component.APP, "Telemetry auto-stop", reason=reason, prefix=output_prefix, frames=frame_count)
-        
-        # Update UI to show stopped status
-        if self._home_page:
-            self._home_page.set_connection_status(
-                ConnectionStatus.CONNECTED,
-                f"Session ended ({reason})",
-            )
-        
-        # Run analysis on captured frames
-        if self._telemetry_capture and self._telemetry_analyzer:
-            frames = self._telemetry_capture.get_frames()
-            frame_count = len(frames)
-            
-            if frame_count > 0:
-                log_info(Component.APP, "Starting analysis", frames=frame_count)
-                try:
-                    self._home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
-                    
-                    metadata = self._telemetry_capture.get_metadata()
-                    lap_boundaries = self._telemetry_capture.get_lap_boundaries()
-                    result = await self._telemetry_analyzer.analyze(
-                        frames,
-                        hz=10.0,
-                        metadata=metadata,
-                        track_name=self._current_track_name,
-                        output_prefix=self._telemetry_capture.get_output_prefix(),
-                        game_lap_boundaries=lap_boundaries,
-                    )
-                    
-                    log_info(Component.APP, "Analysis complete", 
-                            laps=result.laps_detected, 
-                            best_lap_time=f"{result.best_lap_time:.1f}s")
-                    self._home_page.set_telemetry_status(
-                        TelemetryStatus.COMPLETE,
-                        frame_count,
-                        result.html_path,
-                    )
-                except Exception as e:
-                    log_exception(Component.APP, "Analysis error", e)
-                    self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
-            else:
-                self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
+        lifecycle_service = getattr(self, "_telemetry_lifecycle_service", None)
+        if lifecycle_service is None:
+            lifecycle_service = TelemetryLifecycleService()
+            self._telemetry_lifecycle_service = lifecycle_service
+
+        await lifecycle_service.handle_auto_stop(
+            reason=reason,
+            telemetry_capture=self._telemetry_capture,
+            telemetry_analyzer=self._telemetry_analyzer,
+            home_page=self._home_page,
+            current_track_name=self._current_track_name,
+        )
     
     async def _stop_telemetry_capture(self, reason: str = "session_end", discard: bool = False):
         """Stop telemetry capture and generate analysis when game session ends.
@@ -829,68 +671,19 @@ class SimLapsApp:
                 Used when the buffer is known to be contaminated (e.g. session
                 restart while a previous run was still being recorded).
         """
-        output_prefix = self._telemetry_capture.get_output_prefix() if self._telemetry_capture else None
-        is_capturing = self._telemetry_capture.is_capturing() if self._telemetry_capture else False
-        log_info(Component.APP, "Telemetry stop requested", reason=reason, prefix=output_prefix, capturing=is_capturing)
-        
-        if not self._telemetry_capture or not self._telemetry_analyzer:
-            log_debug(Component.APP, "Telemetry stop skipped: capture or analyzer missing")
-            return
-        if not self._telemetry_capture.is_capturing():
-            stop_reason = self._telemetry_capture.get_stop_reason()
-            if stop_reason is not None:
-                log_debug(Component.APP, "Telemetry stop skipped: already stopped", stop_reason=stop_reason)
-                return
-            log_debug(Component.APP, "Proceeding with telemetry stop: not capturing but no stop reason set")
-        
-        try:
-            log_debug(Component.APP, "Stopping telemetry capture", prefix=self._telemetry_capture.get_output_prefix())
-            frames = await self._telemetry_capture.stop_capture(reason)
-            frame_count = len(frames)
-            log_info(Component.APP, "Telemetry capture stopped", frames=frame_count, prefix=output_prefix)
+        lifecycle_service = getattr(self, "_telemetry_lifecycle_service", None)
+        if lifecycle_service is None:
+            lifecycle_service = TelemetryLifecycleService()
+            self._telemetry_lifecycle_service = lifecycle_service
 
-            if discard:
-                log_info(Component.APP, "Discarding captured frames (contaminated buffer)", frames=frame_count)
-                self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
-                return
-
-            if frame_count > 0:
-                # Show analyzing status
-                self._home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
-                
-                # Run analysis with track name
-                log_info(Component.APP, "Starting telemetry analysis", frames=frame_count, prefix=output_prefix)
-                metadata = self._telemetry_capture.get_metadata()
-                lap_boundaries = self._telemetry_capture.get_lap_boundaries()
-                result = await self._telemetry_analyzer.analyze(
-                    frames, 
-                    hz=10.0,
-                    metadata=metadata,
-                    track_name=self._current_track_name,
-                    output_prefix=output_prefix,
-                    game_lap_boundaries=lap_boundaries,
-                )
-                
-                log_info(
-                    Component.APP,
-                    "Telemetry analysis complete",
-                    laps=result.laps_detected,
-                    best_lap_time=f"{result.best_lap_time:.2f}s",
-                    html_path=result.html_path,
-                    ai_prompt_path=result.ai_prompt_path,
-                )
-                self._home_page.set_telemetry_status(
-                    TelemetryStatus.COMPLETE,
-                    frame_count,
-                    result.html_path,
-                )
-            else:
-                log_debug(Component.APP, "No frames captured, skipping analysis")
-                self._home_page.set_telemetry_status(TelemetryStatus.IDLE)
-                
-        except Exception as e:
-            log_exception(Component.APP, "Telemetry stop/analysis error", e)
-            self._home_page.set_telemetry_status(TelemetryStatus.ERROR)
+        await lifecycle_service.stop_capture(
+            reason=reason,
+            discard=discard,
+            telemetry_capture=self._telemetry_capture,
+            telemetry_analyzer=self._telemetry_analyzer,
+            home_page=self._home_page,
+            current_track_name=self._current_track_name,
+        )
     
     async def _on_user_detected(self, steam_id: str, player_name: Optional[str]):
         """Handle user detection from log parser."""
@@ -929,70 +722,21 @@ class SimLapsApp:
     
     async def start_monitoring(self):
         """Start monitoring the log file."""
-        if self._parser_task and not self._parser_task.done():
-            return
-        
-        # Try to get game version from existing log file
-        game_version = self._get_game_version_from_log()
-        if game_version:
-            self._home_page.set_game_version(game_version)
-        
-        # Set initial status - monitoring but not necessarily game running
-        self._home_page.set_game_running(False)  # Will be set to True when session starts
-        self._home_page.set_connection_status(
-            ConnectionStatus.CONNECTED,
-            "Monitoring log file...",
+        await self._monitoring_service.start(
+            log_parser=self._log_parser,
+            home_page=self._home_page,
+            log_path=self._config.log_path,
+            on_game_status_change=self._on_game_status_change,
+            is_telemetry_capturing=lambda: bool(
+                self._telemetry_capture and self._telemetry_capture.is_capturing()
+            ),
         )
-        
-        # Use page.run_task() for proper Flet background task handling
-        self._parser_task = self.page.run_task(self._run_parser)
-        self._game_monitor_task = self.page.run_task(self._run_game_monitor)
-    
-    async def _run_game_monitor(self):
-        """Poll is_game_running() and stop telemetry if the process disappears."""
-        POLL_INTERVAL = 5.0
-        try:
-            while True:
-                await asyncio.sleep(POLL_INTERVAL)
-                if (
-                    self._telemetry_capture
-                    and self._telemetry_capture.is_capturing()
-                    and is_game_running() != GameProcessStatus.RUNNING
-                ):
-                    log_info(Component.APP, "Game process gone (monitor) — stopping telemetry")
-                    await self._on_game_status_change(False)
-                    break
-        except asyncio.CancelledError:
-            pass
-
-    async def _run_parser(self):
-        """Run the log parser in background."""
-        try:
-            await self._log_parser.follow()
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            self._home_page.set_connection_status(
-                ConnectionStatus.ERROR,
-                f"Error: {str(e)}",
-            )
     
     def stop_monitoring(self):
         """Stop monitoring the log file."""
-        if self._log_parser:
-            self._log_parser.stop()
-        
-        if self._parser_task:
-            self._parser_task.cancel()
-            self._parser_task = None
-        
-        if self._game_monitor_task:
-            self._game_monitor_task.cancel()
-            self._game_monitor_task = None
-        
-        self._home_page.set_connection_status(
-            ConnectionStatus.DISCONNECTED,
-            "Monitoring stopped",
+        self._monitoring_service.stop(
+            log_parser=self._log_parser,
+            home_page=self._home_page,
         )
     
     def _save_settings(self, config: AppConfig):
@@ -1095,26 +839,6 @@ class SimLapsApp:
         """Test connection to server."""
         test_client = APIClient(server_url=server_url)
         return await test_client.test_connection()
-    
-    def _get_game_version_from_log(self) -> Optional[str]:
-        """Read game version from the first few lines of the log file."""
-        import re
-        try:
-            log_path = self._config.log_path
-            if os.path.exists(log_path):
-                with open(log_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    # Only read first 10 lines - version is at the top
-                    for _ in range(10):
-                        line = f.readline()
-                        if not line:
-                            break
-                        if "Build release" in line:
-                            match = re.search(r"Build release ([^,]+),", line)
-                            if match:
-                                return match.group(1)
-        except Exception:
-            pass
-        return None
     
     def _cleanup(self):
         """Cleanup resources before exit."""
