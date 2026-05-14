@@ -176,7 +176,7 @@ sim-laps-client/
 │   │       └── telemetry_status.py
 │   └── utils/
 │       ├── config.py        # Settings management
-│       └── debug_logger.py   # Debug logging
+│       └── structured_logger.py # Structured logging
 ├── tests/
 │   ├── fixtures/           # Test data files
 │   ├── test_api_client.py
@@ -232,10 +232,12 @@ ACE Game → Log File → SimLaps Client → Server
 
 ### Telemetry Data
 
-- **Physics Only**: Captures physics shared memory region (graphics/static not supported)
-- **Fallback Detection**: Uses velocity integration and normalized spline position for lap detection
+- **Multi-Region Capture**: Captures physics, graphics, and static shared memory regions
+- **Decode Pipeline**: Decodes physics (speed, position, fuel), graphics (normalized car position), and static (session metadata) from shared memory
+- **Lap Detection**: Uses normalized car position from graphics region when available, with fallback to velocity integration
 - **Track Catalog**: Built-in profiles for 20+ tracks with corner definitions
 - **Min Lap Time**: Configurable per-track to filter spurious detections
+- **Output Formats**: Generates HTML telemetry reports, AI coaching prompts, and JSONL exports
 
 ### API Submission Format
 
@@ -295,6 +297,10 @@ Settings are stored at:
 ### Running Tests
 
 ```bash
+# Using project venv Python (recommended)
+venv-sim-laps-client\Scripts\python.exe -m pytest tests/
+
+# Or using system pytest
 pytest tests/
 ```
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from ..models import SessionData, LapData, SharedSessionManager
-from ..utils.debug_logger import DebugLogger
+from ..utils.structured_logger import log_debug, log_error, log_info, log_warning, log_exception, Component
 from .security import sign_payload, is_game_running, GameProcessStatus
 from ..version import VERSION, USER_AGENT
 
@@ -62,7 +62,6 @@ class APIClient:
         """
         self.server_url = (server_url or self.DEFAULT_SERVER_URL).rstrip("/")
         self._client: Optional[httpx.AsyncClient] = None
-        self._debug = DebugLogger()
         self._session_manager = session_manager or SharedSessionManager()
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -116,22 +115,19 @@ class APIClient:
         Returns:
             SubmissionResult with status and details
         """
-        self._debug.log(f"[API] submit_lap called")
-        self._debug.log(f"  lap_time: {lap.lap_time_str} ({lap.lap_time_ms}ms)")
-        self._debug.log(f"  is_valid (lap): {lap.is_valid}")
-        self._debug.log(f"  submit_invalid setting: {submit_invalid}")
+        log_debug(Component.API, "submit_lap called", lap_time=lap.lap_time_str, lap_time_ms=lap.lap_time_ms, is_valid=lap.is_valid, submit_invalid=submit_invalid)
 
         shared_lap_validity = self._session_manager.get_lap_validity_data(lap.lap_number)
         effective_is_valid = (
             shared_lap_validity.is_valid if shared_lap_validity is not None else lap.is_valid
         )
-        self._debug.log(f"  is_valid (effective): {effective_is_valid}")
+        log_debug(Component.API, "Effective validity", effective_is_valid=effective_is_valid)
         
         # Anti-cheat: Verify game is running before submission (fail-closed)
         game_status = is_game_running()
-        self._debug.log(f"  is_game_running: {game_status}")
+        log_debug(Component.API, "Game running check", game_status=game_status)
         if game_status != GameProcessStatus.RUNNING:
-            self._debug.log(f"[API] Rejected: Game not running or detection uncertain")
+            log_warning(Component.API, "Rejected: Game not running or detection uncertain")
             return SubmissionResult(
                 status=SubmissionStatus.GAME_NOT_RUNNING,
                 message="Game must be running to submit laps",
@@ -139,7 +135,7 @@ class APIClient:
 
         # Don't submit invalid laps unless explicitly requested
         if not effective_is_valid and not submit_invalid:
-            self._debug.log(f"[API] Rejected: Invalid lap and submit_invalid=False")
+            log_debug(Component.API, "Rejected: Invalid lap and submit_invalid=False")
             return SubmissionResult(
                 status=SubmissionStatus.INVALID_LAP,
                 message="Lap was invalidated (penalty or off-track)",
@@ -148,12 +144,9 @@ class APIClient:
         # Validate we have a user ID
         shared_player_identification = self._session_manager.get_player_identification()
         final_user_id = user_id or session.player_id or shared_player_identification.steam_id
-        self._debug.log(f"  user_id param: {user_id}")
-        self._debug.log(f"  session.player_id: {session.player_id}")
-        self._debug.log(f"  shared steam_id: {shared_player_identification.steam_id}")
-        self._debug.log(f"  final_user_id: {final_user_id}")
+        log_debug(Component.API, "User ID resolution", user_id=user_id, session_player_id=session.player_id, shared_steam_id=shared_player_identification.steam_id, final_user_id=final_user_id)
         if not final_user_id:
-            self._debug.log(f"[API] Rejected: No user ID")
+            log_warning(Component.API, "Rejected: No user ID")
             return SubmissionResult(
                 status=SubmissionStatus.ERROR,
                 message="No Steam ID detected - please start a session in game",
@@ -175,12 +168,7 @@ class APIClient:
 
         # Build submission payload
         track_id = self._normalize_track_id(effective_track)
-        self._debug.log(f"  track: {effective_track} -> {track_id}")
-        self._debug.log(f"  car: {effective_car}")
-        self._debug.log(f"  lap_time_ms (lap): {lap.lap_time_ms}")
-        self._debug.log(
-            f"  lap_time_ms (shared): {getattr(shared_lap_timing, 'last_lap_time_ms', None)}"
-        )
+        log_debug(Component.API, "Track normalization", effective_track=effective_track, track_id=track_id, car=effective_car, lap_time_ms=lap.lap_time_ms, shared_lap_time_ms=getattr(shared_lap_timing, 'last_lap_time_ms', None))
 
         # Ensure time is int and positive
         final_time_candidate = None
@@ -191,11 +179,11 @@ class APIClient:
 
         final_time = int(final_time_candidate)
         if final_time <= 0:
-             self._debug.log(f"[API] Rejected: Invalid lap time {final_time}")
-             return SubmissionResult(
-                 status=SubmissionStatus.INVALID_LAP,
-                 message="Invalid lap time (<= 0)",
-             )
+            log_debug(Component.API, "Rejected: Invalid lap time", final_time=final_time)
+            return SubmissionResult(
+                status=SubmissionStatus.INVALID_LAP,
+                message="Invalid lap time (<= 0)",
+            )
 
         payload = {
             "userId": final_user_id,
@@ -255,8 +243,7 @@ class APIClient:
         # Sign the payload (adds _timestamp, _nonce, _signature)
         signed_payload = sign_payload(payload)
         
-        self._debug.log(f"[API] Sending to {self.server_url}{self.SUBMIT_ENDPOINT}")
-        self._debug.log(f"[API] Payload keys: {list(signed_payload.keys())}")
+        log_debug(Component.API, "Sending submission", server_url=f"{self.server_url}{self.SUBMIT_ENDPOINT}", payload_keys=list(signed_payload.keys()))
 
         try:
             client = await self._get_client()
@@ -265,11 +252,11 @@ class APIClient:
                 json=signed_payload,
             )
             
-            self._debug.log(f"[API] Response status: {response.status_code}")
+            log_debug(Component.API, "Response status", status_code=response.status_code)
 
             if response.status_code == 201:
                 data = response.json()
-                self._debug.log(f"[API] SUCCESS! Lap ID: {data.get('id')}")
+                log_info(Component.API, "SUCCESS", lap_id=data.get('id'))
                 return SubmissionResult(
                     status=SubmissionStatus.SUCCESS,
                     message="Lap submitted successfully",
@@ -278,7 +265,7 @@ class APIClient:
             elif response.status_code == 401:
                 # Signature verification failed
                 error_data = response.json() if response.content else {}
-                self._debug.log(f"[API] 401 error response: {error_data}")
+                log_warning(Component.API, "401 signature error", error_data=error_data)
                 return SubmissionResult(
                     status=SubmissionStatus.SIGNATURE_ERROR,
                     message="Signature verification failed - please update the app",
@@ -306,10 +293,7 @@ class APIClient:
                 error_data = response.json()
                 error_msg = error_data.get("error", "Plausibility check failed")
                 
-                # Detailed logging for server-side validation errors
-                self._debug.log(f"[API] 422 ERROR - Server rejected submission")
-                self._debug.log(f"[API] Error data: {error_data}")
-                self._debug.log(f"[API] Payload sent: {signed_payload}")
+                log_debug(Component.API, "422 plausibility error", error_data=error_data, payload_sent=signed_payload)
                 
                 return SubmissionResult(
                     status=SubmissionStatus.PLAUSIBILITY_FAILED,
@@ -320,10 +304,7 @@ class APIClient:
                 error_data = response.json()
                 error_msg = error_data.get("error", "Validation error")
                 
-                # Detailed logging for server-side validation errors
-                self._debug.log(f"[API] 400 ERROR - Server validation failed")
-                self._debug.log(f"[API] Error data: {error_data}")
-                self._debug.log(f"[API] Payload sent: {signed_payload}")
+                log_debug(Component.API, "400 validation error", error_data=error_data, payload_sent=signed_payload)
                 
                 if isinstance(error_msg, list):
                     error_msg = "; ".join(str(e) for e in error_msg)
@@ -339,10 +320,7 @@ class APIClient:
                 except (ValueError, KeyError, TypeError):
                     error_data = {"error": response.text}
                 
-                self._debug.log(f"[API] 4XX ERROR - Status {response.status_code}")
-                self._debug.log(f"[API] Error data: {error_data}")
-                self._debug.log(f"[API] Payload sent: {signed_payload}")
-                self._debug.log(f"[API] Response headers: {dict(response.headers)}")
+                log_debug(Component.API, "4XX client error", status_code=response.status_code, error_data=error_data, payload_sent=signed_payload, headers=dict(response.headers))
                 
                 error_msg = error_data.get("error", "Client error") if isinstance(error_data, dict) else str(error_data)
                 if isinstance(error_msg, list):
@@ -359,21 +337,19 @@ class APIClient:
                 )
 
         except httpx.NetworkError as e:
-            self._debug.log(f"[API] Network error: {e}")
+            log_error(Component.API, "Network error", error=str(e))
             return SubmissionResult(
                 status=SubmissionStatus.NETWORK_ERROR,
                 message=f"Network error: {str(e)}",
             )
         except httpx.TimeoutException:
-            self._debug.log(f"[API] Timeout")
+            log_error(Component.API, "Request timeout")
             return SubmissionResult(
                 status=SubmissionStatus.NETWORK_ERROR,
                 message="Request timed out",
             )
         except (RuntimeError, OSError, ConnectionError) as e:
-            import traceback
-            self._debug.log(f"[API] Exception: {e}")
-            self._debug.log(f"[API] Traceback: {traceback.format_exc()}")
+            log_exception(Component.API, "API exception", e)
             return SubmissionResult(
                 status=SubmissionStatus.ERROR,
                 message=f"Unexpected error: {str(e)}",
@@ -447,17 +423,17 @@ class APIClient:
             Tuple of (success, message)
         """
         try:
-            self._debug.log("[API] test_secret called")
+            log_debug(Component.API, "test_secret called")
             from .security import create_signature, get_timestamp, generate_nonce, get_app_secret
             
             # Log the decoded secret
             secret = get_app_secret()
-            self._debug.log(f"[API] get_app_secret() = {secret[:20]}... (len={len(secret)})")
+            log_debug(Component.API, "get_app_secret result", secret=secret[:20], len=len(secret))
             
             # Create a test signature with known test values
             timestamp = get_timestamp()
             nonce = generate_nonce()
-            self._debug.log(f"[API] timestamp={timestamp}, nonce={nonce[:8]}...")
+            log_debug(Component.API, "timestamp", timestamp=timestamp, nonce=nonce[:8])
             
             # Sign with test payload (must match server expectations)
             signature = create_signature(
@@ -467,7 +443,7 @@ class APIClient:
                 track_id='test',
                 lap_time=0,
             )
-            self._debug.log(f"[API] signature = {signature[:20]}...")
+            log_debug(Component.API, "signature", signature=signature[:20])
             
             # Send to test endpoint
             client = await self._get_client()
@@ -495,7 +471,7 @@ class APIClient:
                 return False, f"Unexpected status {response.status_code}"
                 
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
-            self._debug.log(f"[API] test_secret error: {e}")
+            log_error(Component.API, "test_secret error", error=str(e))
             return False, f"Error testing secret: {str(e)}"
 
     async def check_for_updates(self) -> dict:
@@ -541,10 +517,10 @@ class APIClient:
                         
             return {"available": False}
         except httpx.NetworkError as e:
-            self._debug.log(f"[API] Update check failed: {e}")
+            log_error(Component.API, "Update check failed", error=str(e))
             return {"available": False}
         except (RuntimeError, OSError, ConnectionError) as e:
-            self._debug.log(f"[API] Update check failed: {e}")
+            log_error(Component.API, "Update check failed", error=str(e))
             return {"available": False}
 
     async def close(self) -> None:

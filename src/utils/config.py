@@ -38,11 +38,6 @@ def get_config_path() -> Path:
 class AppConfig:
     """Application configuration settings."""
     
-    # Authentication
-    steam_id: Optional[str] = None
-    steam_name: Optional[str] = None
-    api_key: Optional[str] = None
-    
     # Paths
     log_path: str = field(default_factory=lambda: DEFAULT_LOG_PATH)
     
@@ -87,16 +82,16 @@ class AppConfig:
     
     @classmethod
     def from_dict(cls, data: dict) -> "AppConfig":
-        """Create config from dictionary."""
+        """Create config from dictionary.
+        
+        Note: Legacy auth fields (steam_id, steam_name, api_key) are automatically
+        ignored when loading from old config files due to field filtering.
+        """
         # Filter to only valid fields
         valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered)
     
-    def is_authenticated(self) -> bool:
-        """Check if user is authenticated."""
-        return bool(self.steam_id and self.api_key)
-
 
 class ConfigManager:
     """
@@ -210,34 +205,6 @@ class ConfigManager:
         self._config = AppConfig()
         self.save()
         return self._config
-    
-    def clear_auth(self) -> None:
-        """Clear authentication data."""
-        config = self.get()
-        config.steam_id = None
-        config.steam_name = None
-        config.api_key = None
-        self.save()
-    
-    def set_auth(
-        self,
-        steam_id: str,
-        api_key: str,
-        steam_name: Optional[str] = None,
-    ) -> None:
-        """
-        Set authentication data.
-        
-        Args:
-            steam_id: Steam ID64
-            api_key: API key for server
-            steam_name: Optional Steam display name
-        """
-        config = self.get()
-        config.steam_id = steam_id
-        config.api_key = api_key
-        config.steam_name = steam_name
-        self.save()
     
     def set_discord_config(
         self,

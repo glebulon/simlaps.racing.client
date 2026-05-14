@@ -11,8 +11,6 @@ from enum import Enum
 from typing import Optional, Any, Dict
 from pathlib import Path
 
-from .debug_logger import _debug
-
 
 class LogLevel(Enum):
     """Log levels for structured logging."""
