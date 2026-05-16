@@ -19,9 +19,13 @@ from .pages.history import HistoryPage, HistoryEntry
 from .components.lap_card import LapCard, LapCardStatus
 from .components.status_bar import ConnectionStatus
 from .components.telemetry_status import TelemetryButton
+from .services.app_lifecycle_service import AppLifecycleService
+from .services.lap_processing_service import LapProcessingService
 from .services.lap_submission_service import LapSubmissionService
 from .services.monitoring_service import MonitoringService
+from .services.settings_service import SettingsService
 from .services.telemetry_lifecycle_service import TelemetryLifecycleService
+from .services.user_bootstrap_service import UserBootstrapService
 from src.core.log_parser import LogParser
 from src.models import SessionData, LapData, SharedSessionManager
 from src.core.api_client import APIClient
@@ -31,8 +35,8 @@ from src.core.pb_cache import get_pb_cache
 from src.core.telemetry_capture import TelemetryCapture
 from src.core.track_catalog import TRACK_CATALOG
 from src.core.telemetry_analyzer import TelemetryAnalyzer
-from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
-from src.utils.config import ConfigManager, AppConfig, get_config_manager
+from src.utils.structured_logger import log_debug, log_info, log_warning, log_exception, Component
+from src.utils.config import AppConfig, get_config_manager
 
 
 class AppPage(Enum):
@@ -76,8 +80,12 @@ class SimLapsApp:
         
         # Monitoring lifecycle service
         self._monitoring_service = MonitoringService(self.page)
+        self._app_lifecycle_service = AppLifecycleService()
+        self._lap_processing_service = LapProcessingService()
+        self._settings_service = SettingsService()
         self._telemetry_lifecycle_service = TelemetryLifecycleService()
         self._lap_submission_service = LapSubmissionService()
+        self._user_bootstrap_service = UserBootstrapService()
         
         # Telemetry services
         self._telemetry_capture: Optional[TelemetryCapture] = None
@@ -150,9 +158,6 @@ class SimLapsApp:
             log_exception(Component.APP, "Error setting up theme", e)
         
         log_info(Component.APP, "Flet page setup complete")
-        
-        # Window close handler
-        self.page.on_close = self._on_window_close
     
     def _get_icon_path(self) -> Optional[str]:
         """Get the path to the app icon (ICO for window icon)."""
@@ -184,8 +189,15 @@ class SimLapsApp:
         )
         
         # Log parser with callbacks
-        self._log_parser = LogParser(
-            log_path=self._config.log_path,
+        self._log_parser = self._create_log_parser(self._config.log_path)
+        
+        # Initialize telemetry if enabled
+        self._init_telemetry_services()
+
+    def _create_log_parser(self, log_path: str) -> LogParser:
+        """Create a log parser wired to current app callbacks."""
+        return LogParser(
+            log_path=log_path,
             on_lap_complete=self._on_lap_complete,
             on_status_change=self._on_parser_status,
             on_game_status_change=self._on_game_status_change,
@@ -195,9 +207,6 @@ class SimLapsApp:
             on_session_restart=self._on_session_restart,
             session_manager=self._session_manager,
         )
-        
-        # Initialize telemetry if enabled
-        self._init_telemetry_services()
     
     def _init_telemetry_services(self):
         """Initialize telemetry capture and analyzer services."""
@@ -362,6 +371,14 @@ class SimLapsApp:
             return self._history_entries[index]
         return None
 
+    def _get_or_create_service(self, attr_name: str, factory):
+        """Get a lazily initialized service instance (supports __new__-based tests)."""
+        service = getattr(self, attr_name, None)
+        if service is None:
+            service = factory()
+            setattr(self, attr_name, service)
+        return service
+
     def _on_retry_lap(self, card: LapCard):
         """Retry submission for a failed lap card."""
         if not card.data.lap.is_valid and not self._config.submit_invalid_laps:
@@ -390,142 +407,17 @@ class SimLapsApp:
             lap_number=lap.lap_number,
         )
         try:
-            # Update detected user in UI
-            if session.player_id:
-                log_debug(Component.APP, "Updating detected user", steam_id=session.player_id)
-                self._home_page.set_detected_user(session.player_id, session.player_name)
-            
-            # Update current track name for telemetry
-            if session.track and session.track != "Unknown":
-                self._current_track_name = session.track
+            processing_service = self._get_or_create_service(
+                "_lap_processing_service",
+                LapProcessingService,
+            )
 
-            # Record lap boundary so the analyzer can use authoritative lap splits.
-            # Fuel per lap is owned entirely by the log parser (Physics SHM + spike
-            # detection) and is already set on lap.fuel_used before this point.
-            if self._telemetry_capture and self._telemetry_capture.is_capturing():
-                self._telemetry_capture.record_lap_boundary(
-                    lap.lap_time_ms,
-                    lap.lap_number,
-                )
-
-            elif self._config.telemetry_enabled and self._telemetry_capture:
-                # A lap-complete event is too late to begin a useful capture
-                # for that lap and can fire during post-session shutdown.
-                log_debug(
-                    Component.APP,
-                    "Telemetry missed lap boundary; not starting capture from lap-complete",
-                    lap_number=lap.lap_number,
-                )
-            
-            # Determine if we should submit this lap (prefer authoritative shared validity)
-            shared_lap_validity = self._session_manager.get_lap_validity_data(lap.lap_number)
-            effective_is_valid = (
-                shared_lap_validity.is_valid
-                if shared_lap_validity is not None
-                else lap.is_valid
+            await processing_service.handle_lap_complete(
+                app=self,
+                session=session,
+                lap=lap,
+                create_history_entry=HistoryEntry,
             )
-            should_submit = self._config.auto_submit and (
-                effective_is_valid or self._config.submit_invalid_laps
-            )
-            log_debug(
-                Component.APP,
-                "Lap submission decision",
-                should_submit=should_submit,
-                parser_is_valid=lap.is_valid,
-                effective_is_valid=effective_is_valid,
-                lap_number=lap.lap_number,
-            )
-            log_debug(
-                Component.APP,
-                "Lap diagnostics",
-                lap_state=getattr(lap, "lap_state", "UNKNOWN"),
-                lap_type=getattr(lap, "lap_type", "UNKNOWN"),
-                physics_lap_number=getattr(lap, "physics_lap_number", None),
-                sector1_ms=lap.sector1_ms,
-                sector2_ms=lap.sector2_ms,
-                sector3_ms=lap.sector3_ms,
-                sectors_consistent=getattr(lap, "sectors_consistent", None),
-            )
-            if not effective_is_valid:
-                log_debug(
-                    Component.APP,
-                    "Invalid lap diagnostics",
-                    lap_state=getattr(lap, "lap_state", "UNKNOWN"),
-                    lap_number=lap.lap_number,
-                )
-
-            # Update local PB cache for every valid lap (independent of Discord posting)
-            pb_was_new: Optional[bool] = None
-            if effective_is_valid and lap.lap_time_ms > 0:
-                if session.track and session.track != "Unknown" and session.car and session.car != "Unknown":
-                    pb_was_new = self._pb_cache.check_and_update_pb(
-                        session.track,
-                        session.car,
-                        lap.lap_time_ms,
-                    )
-                    log_debug(
-                        Component.APP,
-                        "PB cache update",
-                        pb_was_new=pb_was_new,
-                        track=session.track,
-                        car=session.car,
-                        lap_time_ms=lap.lap_time_ms,
-                    )
-                else:
-                    log_debug(Component.APP, "Skipping PB cache update: missing track/car")
-            
-            # Determine initial status
-            if not effective_is_valid and not self._config.submit_invalid_laps:
-                status = LapCardStatus.INVALID
-            else:
-                status = LapCardStatus.SUBMITTING if should_submit else LapCardStatus.PENDING
-            
-            # Add to history FIRST (before home page to ensure synchronization)
-            history_entry = HistoryEntry(
-                track=session.track,
-                car=session.car,
-                lap_time_ms=lap.lap_time_ms,
-                timestamp=lap.timestamp,
-                was_submitted=False,
-                was_valid=lap.is_valid,
-            )
-            self._history_entries.append(history_entry)
-            
-            # Add to home page (this increments the counter)
-            try:
-                card = self._home_page.add_lap(session, lap, status)
-                log_debug(Component.APP, "Lap card added", lap_number=lap.lap_number)
-            except Exception as e:
-                # If home page add fails, remove the history entry to maintain sync
-                log_exception(Component.APP, "Failed to add lap card to home page", e)
-                self._history_entries.pop()  # Remove the entry we just added
-                raise
-            
-            # Debug: Check synchronization
-            log_debug(
-                Component.APP,
-                "Lap/history synchronization state",
-                home_lap_count=self._home_page._lap_count,
-                history_entries=len(self._history_entries),
-                was_submitted=history_entry.was_submitted,
-                was_valid=history_entry.was_valid,
-            )
-            
-            # Verify synchronization
-            if self._home_page._lap_count != len(self._history_entries):
-                log_error(
-                    Component.APP,
-                    "Synchronization mismatch",
-                    home_lap_count=self._home_page._lap_count,
-                    history_entries=len(self._history_entries),
-                )
-                # This should never happen now, but if it does, we have a serious issue
-            
-            # Auto-submit if enabled
-            if should_submit:
-                log_debug(Component.APP, "Auto-submitting lap", lap_number=lap.lap_number)
-                await self._submit_lap(card, session, lap, history_entry, pb_was_new=pb_was_new)
-                log_debug(Component.APP, "Auto-submit complete", lap_number=lap.lap_number)
         except Exception as e:
             log_exception(Component.APP, "_on_lap_complete failed", e)
     
@@ -538,10 +430,10 @@ class SimLapsApp:
         pb_was_new: Optional[bool] = None,
     ):
         """Submit a lap to the server."""
-        submission_service = getattr(self, "_lap_submission_service", None)
-        if submission_service is None:
-            submission_service = LapSubmissionService()
-            self._lap_submission_service = submission_service
+        submission_service = self._get_or_create_service(
+            "_lap_submission_service",
+            LapSubmissionService,
+        )
 
         await submission_service.submit_lap(
             api_client=self._api_client,
@@ -563,10 +455,10 @@ class SimLapsApp:
         pb_was_new: Optional[bool] = None,
     ):
         """Post lap to Discord if configured and meets criteria."""
-        submission_service = getattr(self, "_lap_submission_service", None)
-        if submission_service is None:
-            submission_service = LapSubmissionService()
-            self._lap_submission_service = submission_service
+        submission_service = self._get_or_create_service(
+            "_lap_submission_service",
+            LapSubmissionService,
+        )
 
         await submission_service.post_to_discord(
             config=self._config,
@@ -636,10 +528,10 @@ class SimLapsApp:
     
     async def _start_telemetry_capture(self):
         """Start telemetry capture when game session begins."""
-        lifecycle_service = getattr(self, "_telemetry_lifecycle_service", None)
-        if lifecycle_service is None:
-            lifecycle_service = TelemetryLifecycleService()
-            self._telemetry_lifecycle_service = lifecycle_service
+        lifecycle_service = self._get_or_create_service(
+            "_telemetry_lifecycle_service",
+            TelemetryLifecycleService,
+        )
 
         await lifecycle_service.start_capture(
             telemetry_capture=self._telemetry_capture,
@@ -649,10 +541,10 @@ class SimLapsApp:
     
     async def _on_telemetry_auto_stop(self, reason: str):
         """Handle automatic stop of telemetry capture (game crash/quit detected)."""
-        lifecycle_service = getattr(self, "_telemetry_lifecycle_service", None)
-        if lifecycle_service is None:
-            lifecycle_service = TelemetryLifecycleService()
-            self._telemetry_lifecycle_service = lifecycle_service
+        lifecycle_service = self._get_or_create_service(
+            "_telemetry_lifecycle_service",
+            TelemetryLifecycleService,
+        )
 
         await lifecycle_service.handle_auto_stop(
             reason=reason,
@@ -671,10 +563,10 @@ class SimLapsApp:
                 Used when the buffer is known to be contaminated (e.g. session
                 restart while a previous run was still being recorded).
         """
-        lifecycle_service = getattr(self, "_telemetry_lifecycle_service", None)
-        if lifecycle_service is None:
-            lifecycle_service = TelemetryLifecycleService()
-            self._telemetry_lifecycle_service = lifecycle_service
+        lifecycle_service = self._get_or_create_service(
+            "_telemetry_lifecycle_service",
+            TelemetryLifecycleService,
+        )
 
         await lifecycle_service.stop_capture(
             reason=reason,
@@ -687,29 +579,31 @@ class SimLapsApp:
     
     async def _on_user_detected(self, steam_id: str, player_name: Optional[str]):
         """Handle user detection from log parser."""
-        if self._home_page:
-            self._home_page.set_detected_user(steam_id, player_name)
-        
-        # Initialize Discord notifier if configured
-        if self._config.discord_webhook_url and self._config.discord_enabled:
-            self._discord_notifier = DiscordNotifier(self._config.discord_webhook_url)
-        
-        # Preload personal bests for PB detection
-        if not self._pb_cache.is_loaded() or self._pb_cache.get_steam_id() != steam_id:
-            server_url = self._config.server_url
-            log_info(Component.APP, "Preloading personal bests", server_url=server_url, steam_id=steam_id)
-            success = await self._pb_cache.preload_from_api(steam_id)
-            if success:
-                stats = self._pb_cache.get_cache_stats()
-                log_info(
-                    Component.APP,
-                    "PB cache loaded successfully",
-                    combo_count=stats["combo_count"],
-                    stats=stats,
-                )
-            else:
-                log_warning(Component.APP, "Failed to preload PB cache from server")
-                log_warning(Component.APP, "Discord PB detection may be unreliable")
+        bootstrap_service = self._get_or_create_service(
+            "_user_bootstrap_service",
+            UserBootstrapService,
+        )
+
+        await bootstrap_service.handle_detected_user(
+            app=self,
+            steam_id=steam_id,
+            player_name=player_name,
+            create_discord_notifier=DiscordNotifier,
+        )
+
+    async def _bootstrap_startup_user(self, steam_id: Optional[str], steam_name: Optional[str]) -> None:
+        """Handle startup-time user bootstrap from registry detection."""
+        bootstrap_service = self._get_or_create_service(
+            "_user_bootstrap_service",
+            UserBootstrapService,
+        )
+
+        await bootstrap_service.handle_startup_user(
+            app=self,
+            steam_id=steam_id,
+            steam_name=steam_name,
+            create_discord_notifier=DiscordNotifier,
+        )
     
     async def _on_game_version(self, version: str):
         """Handle game version detection from log parser."""
@@ -741,69 +635,19 @@ class SimLapsApp:
     
     def _save_settings(self, config: AppConfig):
         """Save settings and apply changes."""
-        self._config = config
-        self._config_manager.save()
-        
-        # Update Discord notifier
-        if config.discord_webhook_url and config.discord_enabled:
-            self._discord_notifier = DiscordNotifier(config.discord_webhook_url)
-        else:
-            self._discord_notifier = None
-        
-        # Update PB cache if server URL changed
-        if self._pb_cache.server_url != config.server_url:
-            self._pb_cache = get_pb_cache(config.server_url)
-        
-        # Update API client
-        self._api_client = APIClient(
-            server_url=config.server_url,
-            session_manager=self._session_manager,
+        settings_service = self._get_or_create_service(
+            "_settings_service",
+            SettingsService,
         )
-        
-        # Update services with new settings
-        self._api_client.set_server_url(config.server_url)
-        
-        # Re-initialize telemetry if settings changed
-        if config.telemetry_enabled and not self._telemetry_capture:
-            log_info(Component.APP, "Telemetry enabled - initializing services")
-            self._init_telemetry_services()
-            self._attach_telemetry_ui()
-            if self._telemetry_capture:
-                self.page.run_task(self._start_telemetry_capture)
-        elif not config.telemetry_enabled and self._telemetry_capture:
-            log_info(Component.APP, "Telemetry disabled - stopping services")
-            if self._telemetry_capture.is_capturing():
-                self.page.run_task(self._telemetry_capture.stop_capture, "disabled")
-            self._telemetry_capture = None
-            self._telemetry_analyzer = None
-            # Remove button from home page
-            if self._home_page:
-                self._home_page.set_telemetry_button(None, "")
-            self._telemetry_button = None
-        
-        # Restart parser if log path changed
-        was_running = self._log_parser.is_running if self._log_parser else False
-        
-        if was_running:
-            self.stop_monitoring()
-        
-        self._log_parser = LogParser(
-            log_path=config.log_path,
-            on_lap_complete=self._on_lap_complete,
-            on_status_change=self._on_parser_status,
-            on_game_status_change=self._on_game_status_change,
-            on_user_detected=self._on_user_detected,
-            on_game_version=self._on_game_version,
-            on_session_end=self._on_car_removed,
-            on_session_restart=self._on_session_restart,
-            session_manager=self._session_manager,
+
+        settings_service.apply(
+            app=self,
+            config=config,
+            create_discord_notifier=DiscordNotifier,
+            get_pb_cache_for_server=get_pb_cache,
+            create_api_client=APIClient,
+            create_log_parser=self._create_log_parser,
         )
-        
-        if was_running:
-            self.page.run_task(self.start_monitoring)
-        
-        # Update home page
-        self._home_page.update_config(self._config)
     
     async def _test_discord_webhook(self, webhook_url: str) -> tuple[bool, str]:
         """Test Discord webhook connection."""
@@ -842,17 +686,12 @@ class SimLapsApp:
     
     def _cleanup(self):
         """Cleanup resources before exit."""
-        # Stop telemetry capture first if running
-        if self._telemetry_capture and self._telemetry_capture.is_capturing():
-            log_info(Component.APP, "Cleanup: stopping active telemetry capture")
-            # Use run_task to properly await async stop
-            if self.page:
-                self.page.run_task(self._telemetry_capture.stop_capture, "app_close")
-        
-        self.stop_monitoring()
-        
-        if self._api_client:
-            self.page.run_task(self._api_client.close)
+        lifecycle_service = self._get_or_create_service(
+            "_app_lifecycle_service",
+            AppLifecycleService,
+        )
+
+        lifecycle_service.cleanup(app=self)
 
 
 async def main(page: ft.Page):
@@ -876,25 +715,7 @@ async def main(page: ft.Page):
     
     # Try to detect Steam user immediately from registry
     steam_id, steam_name = get_steam_user()
-    if steam_id:
-        log_info(Component.APP, "Steam user detected on startup", steam_id=steam_id, steam_name=steam_name)
-        app._home_page.set_detected_user(steam_id, steam_name)
-        
-        # Trigger Discord initialization immediately
-        if app._config.discord_webhook_url and app._config.discord_enabled:
-            app._discord_notifier = DiscordNotifier(app._config.discord_webhook_url)
-            log_info(Component.APP, "Discord notifier initialized", steam_id=steam_id)
-        
-        # Preload personal bests immediately
-        log_info(Component.APP, "Triggering PB preload for Steam user", steam_id=steam_id)
-        success = await app._pb_cache.preload_from_api(steam_id)
-        if success:
-            stats = app._pb_cache.get_cache_stats()
-            log_info(Component.APP, "PB cache loaded on startup", combo_count=stats["combo_count"])
-        else:
-            log_warning(Component.APP, "Failed to preload PB cache on startup")
-    else:
-        log_debug(Component.APP, "No Steam user detected - PB preload will wait for log detection")
+    await app._bootstrap_startup_user(steam_id, steam_name)
     
     # Start monitoring after PB preload
     await app.start_monitoring()
