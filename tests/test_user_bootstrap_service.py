@@ -99,3 +99,39 @@ async def test_handle_startup_user_detected_initializes_and_preloads():
     create_discord_notifier.assert_called_once_with("https://discord.com/api/webhooks/123/abc")
     app._pb_cache.preload_from_api.assert_awaited_once_with("76561198321627695")
     assert app._discord_notifier is notifier
+
+
+@pytest.mark.asyncio
+async def test_handle_detected_user_logs_warning_on_preload_failure():
+    app = _make_app()
+    app._pb_cache.is_loaded.return_value = False
+    app._pb_cache.get_steam_id.return_value = None
+    app._pb_cache.preload_from_api = AsyncMock(return_value=False)
+
+    service = UserBootstrapService()
+    await service.handle_detected_user(
+        app=app,
+        steam_id="76561198321627695",
+        player_name="Driver",
+        create_discord_notifier=MagicMock(return_value=MagicMock()),
+    )
+
+    app._pb_cache.preload_from_api.assert_awaited_once_with("76561198321627695")
+
+
+@pytest.mark.asyncio
+async def test_handle_startup_user_logs_warning_on_preload_failure():
+    app = _make_app()
+    app._pb_cache.is_loaded.return_value = False
+    app._pb_cache.get_steam_id.return_value = None
+    app._pb_cache.preload_from_api = AsyncMock(return_value=False)
+
+    service = UserBootstrapService()
+    await service.handle_startup_user(
+        app=app,
+        steam_id="76561198321627695",
+        steam_name="Driver",
+        create_discord_notifier=MagicMock(return_value=MagicMock()),
+    )
+
+    app._pb_cache.preload_from_api.assert_awaited_once_with("76561198321627695")

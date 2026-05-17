@@ -160,8 +160,8 @@ class TestCornerDetection:
             ]
         }
         
-        corners = detect_profiled_corners(track, 0, 200, track_profile)
-        
+        corners = detect_profiled_corners(track, 0, 200, track_profile, hz=10.0)
+
         # Should detect corners from profile
         assert len(corners) == 3
         assert all("lap_pos" in c for c in corners)
@@ -207,8 +207,8 @@ class TestCornerDetection:
         frames = [create_mock_frame(i, position=i * 0.01) for i in range(200)]
         track = build_track(frames, hz=10.0)
         
-        corners = detect_profiled_corners(track, 0, 200, track_profile)
-        
+        corners = detect_profiled_corners(track, 0, 200, track_profile, hz=10.0)
+
         assert isinstance(corners, list)
 
 
@@ -1088,3 +1088,217 @@ class TestTelemetryAnalyzer:
         with open(result.ai_prompt_path, "r", encoding="utf-8") as fh:
             prompt = fh.read()
         assert "Car: Ferrari 296 GT3" in prompt
+
+
+class TestFixedMeasurementWindow:
+    """Regression tests for fixed lap_progress measurement window segment times."""
+
+    def test_corner_measurement_window(self):
+        """Measurement window is centred on the profile midpoint."""
+        from src.core.telemetry_analyzer import _corner_measurement_window
+
+        spec = {"start": 0.20, "end": 0.30}
+        m_start, m_end = _corner_measurement_window(spec)
+
+        # Centre is 0.25; window is [0.25 - 0.015, 0.25 + 0.025]
+        assert m_start == pytest.approx(0.235, abs=1e-9)
+        assert m_end == pytest.approx(0.275, abs=1e-9)
+
+    def test_detect_profiled_corners_stores_segment_time_with_norm_pos(self):
+        """When norm_pos is available segment_time_s uses the fixed window."""
+        from src.core.telemetry_analyzer import detect_profiled_corners
+
+        # Build a simple track where a corner lives at progress 0.20-0.30
+        track = []
+        for i in range(200):
+            track.append({
+                "frame": i,
+                "norm_pos": i / 200.0,
+                "speed": 80.0 if 0.20 <= (i / 200.0) < 0.30 else 100.0,
+                "x": float(i),
+                "z": 0.0,
+            })
+
+        profile = {
+            "corners": [
+                {"id": 1, "start": 0.20, "end": 0.30, "name": "Corner 1"},
+            ]
+        }
+
+        corners = detect_profiled_corners(track, 0, 200, profile, hz=10.0)
+        assert len(corners) == 1
+        c = corners[0]
+        assert "segment_time_s" in c
+        assert c["segment_time_s"] is not None
+        # Fixed window [0.235, 0.275) => frames 47-54 => ~0.7s at 10Hz
+        assert c["segment_time_s"] == pytest.approx(0.7, abs=0.1)
+        assert c["confidence_label"] == "medium"
+
+    def test_detect_profiled_corners_fallback_without_norm_pos(self):
+        """Without norm_pos confidence is LOW and segment_time_s is None."""
+        from src.core.telemetry_analyzer import detect_profiled_corners, corner_segment_time
+
+        track = []
+        for i in range(200):
+            track.append({
+                "frame": i,
+                "speed": 80.0 if 40 <= i < 60 else 100.0,
+                "x": float(i),
+                "z": 0.0,
+            })
+
+        profile = {
+            "corners": [
+                {"id": 1, "start": 0.20, "end": 0.30, "name": "Corner 1"},
+            ]
+        }
+
+        corners = detect_profiled_corners(track, 0, 200, profile, hz=10.0)
+        assert len(corners) == 1
+        c = corners[0]
+        assert c.get("segment_time_s") is None
+        assert c["confidence_label"] == "low"
+        # Falls back to (end_frame - start_frame) / hz
+        assert corner_segment_time(c, hz=10.0) == pytest.approx(1.9, abs=0.1)
+
+    def test_detect_profiled_corners_canonical_uses_fixed_window(self):
+        """Canonical path stores segment_time_s over fixed window, not dynamic entry/exit."""
+        from src.core.telemetry_analyzer import _build_canonical_lap, _detect_profiled_corners_canonical
+
+        # Canonical track with uniform progress and time_s
+        samples = []
+        for i in range(100):
+            samples.append({
+                "frame": i,
+                "lap_progress": i / 100.0,
+                "time_s": i / 10.0,
+                "speed": 70.0 if 0.20 <= (i / 100.0) < 0.30 else 120.0,
+                "brake": 0.5 if 0.22 <= (i / 100.0) < 0.26 else 0.0,
+                "gas": 0.0,
+                "steer": 0.0,
+                "x": float(i),
+                "z": 0.0,
+            })
+
+        canonical_lap = {
+            "samples": samples,
+            "progress_start": 0.0,
+            "progress_end": 1.0,
+            "source_samples": 100,
+            "grid_bins": 100,
+        }
+
+        profile = {
+            "corners": [
+                {"id": 1, "start": 0.20, "end": 0.30, "name": "Corner 1"},
+            ]
+        }
+
+        corners = _detect_profiled_corners_canonical(
+            canonical_lap["samples"],
+            profile,
+            hz=10.0,
+            authoritative_progress=True,
+        )
+        assert len(corners) == 1
+        c = corners[0]
+        # Fixed window [0.235, 0.275) => indices 23-27 => 4 bins => 0.4s at 10Hz
+        assert c["segment_time_s"] == pytest.approx(0.4, abs=0.1)
+        # start_frame/end_frame still reflect dynamic entry/exit for speed analysis
+        assert c["start_frame"] != c["end_frame"]
+
+    def test_corner_segment_time_prefers_stored_value(self):
+        """corner_segment_time uses segment_time_s when present."""
+        from src.core.telemetry_analyzer import corner_segment_time
+
+        # start/end imply 5.0s, but stored value says 3.5s
+        corner = {"start_frame": 100, "end_frame": 150, "segment_time_s": 3.5}
+        assert corner_segment_time(corner, hz=10.0) == 3.5
+
+    @pytest.mark.asyncio
+    async def test_ai_prompt_flags_suspect_low_confidence_delta(self):
+        """_generate_ai_prompt flags suspect deltas for LOW-confidence corners."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+
+        # Craft minimal data that triggers full-mode + suspect delta logic
+        ref_corner = {
+            "id": 1,
+            "name": "Test Chicane",
+            "apex_speed": 100.0,
+            "entry_speed": 120.0,
+            "exit_speed": 110.0,
+            "start_frame": 20,
+            "end_frame": 40,
+            "apex_frame": 30,
+            "segment_time_s": 2.0,
+            "confidence_label": "low",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
+        }
+        cmp_corner = {
+            "id": 1,
+            "name": "Test Chicane",
+            "apex_speed": 95.0,
+            "entry_speed": 115.0,
+            "exit_speed": 105.0,
+            "start_frame": 20,
+            "end_frame": 40,
+            "apex_frame": 30,
+            "segment_time_s": 8.0,
+            "confidence_label": "low",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
+        }
+
+        lap1 = {
+            "lap_num": 1,
+            "lap_time_s": 120.0,
+            "lap_time_str": "2:00.00",
+            "max_speed": 200.0,
+            "avg_speed": 150.0,
+            "start_frame": 0,
+            "end_frame": 100,
+            "corners": [ref_corner],
+            "track": [],
+        }
+        lap2 = {
+            "lap_num": 2,
+            "lap_time_s": 125.0,
+            "lap_time_str": "2:05.00",
+            "max_speed": 195.0,
+            "avg_speed": 145.0,
+            "start_frame": 0,
+            "end_frame": 100,
+            "corners": [cmp_corner],
+            "track": [],
+        }
+
+        data = {
+            "hz": 10.0,
+            "laps": [lap1, lap2],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
+            "ref_corners": [{"id": 1, "name": "Test Chicane"}],
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
+            "car": "Test Car",
+        }
+
+        analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
+        ai_prompt_path = await analyzer._generate_ai_prompt(data, output_prefix="test_suspect_delta")
+
+        with open(ai_prompt_path, "r", encoding="utf-8") as fh:
+            prompt = fh.read()
+
+        assert "TIME LOSS RANKING" in prompt
+        # Delta is 6.0s with LOW confidence -> should be flagged suspect and capped at 3.0s
+        assert "suspect" in prompt.lower() or "SUSPECT" in prompt

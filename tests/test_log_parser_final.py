@@ -7,6 +7,7 @@ Targeting specific uncovered branches and edge cases.
 import pytest
 import asyncio
 import os
+from unittest.mock import patch
 os.environ["APP_SECRET"] = "31cdbbaf05e962038c9221bdc22845b7639f4a1e914b4596db6b8608a5ea5e18"
 
 from src.core.log_parser import LogParser
@@ -443,10 +444,10 @@ class TestLogBufferOperations:
     def test_export_logs_failure(self, tmp_path):
         """Test export logs failure handling."""
         parser = LogParser()
-        
+
         parser._add_to_log_buffer("Line 1")
-        
-        # Try to write to invalid path
-        result = parser.export_logs_to_file("/nonexistent/path/file.txt")
-        
+
+        with patch("src.core.log_parser.open", side_effect=OSError("permission denied")):
+            result = parser.export_logs_to_file("some_path.txt")
+
         assert result is False

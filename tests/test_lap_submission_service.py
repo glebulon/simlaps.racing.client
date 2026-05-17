@@ -104,3 +104,384 @@ async def test_post_to_discord_pb_only_skips_when_not_pb():
     )
 
     discord_notifier.post_lap.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_submit_lap_api_error_sets_failed():
+    service = LapSubmissionService()
+
+    api_client = MagicMock()
+    api_client.submit_lap = AsyncMock(side_effect=RuntimeError("network error"))
+
+    config = SimpleNamespace(submit_invalid_laps=False, server_url="https://simlaps.racing")
+    card = MagicMock()
+
+    await service.submit_lap(
+        api_client=api_client,
+        config=config,
+        card=card,
+        session=SimpleNamespace(track="Laguna Seca", player_id="steam123", player_name="Driver"),
+        lap=SimpleNamespace(lap_time_str="1:29.556", is_valid=True),
+        history_entry=SimpleNamespace(was_submitted=False),
+        pb_was_new=False,
+        post_to_discord=AsyncMock(),
+    )
+
+    card.update_status.assert_any_call(LapCardStatus.FAILED, "Submit error: network error")
+
+
+@pytest.mark.asyncio
+async def test_submit_lap_null_result_sets_failed():
+    service = LapSubmissionService()
+
+    api_client = MagicMock()
+    api_client.submit_lap = AsyncMock(return_value=None)
+
+    config = SimpleNamespace(submit_invalid_laps=False, server_url="https://simlaps.racing")
+    card = MagicMock()
+
+    await service.submit_lap(
+        api_client=api_client,
+        config=config,
+        card=card,
+        session=SimpleNamespace(track="Laguna Seca", player_id="steam123", player_name="Driver"),
+        lap=SimpleNamespace(lap_time_str="1:29.556", is_valid=True),
+        history_entry=SimpleNamespace(was_submitted=False),
+        pb_was_new=False,
+        post_to_discord=AsyncMock(),
+    )
+
+    card.update_status.assert_any_call(LapCardStatus.FAILED, "No response from server")
+
+
+@pytest.mark.asyncio
+async def test_submit_lap_game_not_running_status():
+    service = LapSubmissionService()
+
+    api_client = MagicMock()
+    api_client.submit_lap = AsyncMock(
+        return_value=SimpleNamespace(status=SubmissionStatus.GAME_NOT_RUNNING, message="game quit")
+    )
+
+    config = SimpleNamespace(submit_invalid_laps=False, server_url="https://simlaps.racing")
+    card = MagicMock()
+
+    await service.submit_lap(
+        api_client=api_client,
+        config=config,
+        card=card,
+        session=SimpleNamespace(track="Laguna Seca", player_id="steam123", player_name="Driver"),
+        lap=SimpleNamespace(lap_time_str="1:29.556", is_valid=True),
+        history_entry=SimpleNamespace(was_submitted=False),
+        pb_was_new=False,
+        post_to_discord=AsyncMock(),
+    )
+
+    card.update_status.assert_any_call(LapCardStatus.FAILED, "game quit")
+
+
+@pytest.mark.asyncio
+async def test_submit_lap_rate_limited_status():
+    service = LapSubmissionService()
+
+    api_client = MagicMock()
+    api_client.submit_lap = AsyncMock(
+        return_value=SimpleNamespace(status=SubmissionStatus.RATE_LIMITED, message="slow down")
+    )
+
+    config = SimpleNamespace(submit_invalid_laps=False, server_url="https://simlaps.racing")
+    card = MagicMock()
+
+    await service.submit_lap(
+        api_client=api_client,
+        config=config,
+        card=card,
+        session=SimpleNamespace(track="Laguna Seca", player_id="steam123", player_name="Driver"),
+        lap=SimpleNamespace(lap_time_str="1:29.556", is_valid=True),
+        history_entry=SimpleNamespace(was_submitted=False),
+        pb_was_new=False,
+        post_to_discord=AsyncMock(),
+    )
+
+    card.update_status.assert_any_call(LapCardStatus.FAILED, "slow down")
+
+
+@pytest.mark.asyncio
+async def test_submit_lap_unknown_error_status():
+    service = LapSubmissionService()
+
+    api_client = MagicMock()
+    api_client.submit_lap = AsyncMock(
+        return_value=SimpleNamespace(status=SubmissionStatus.PLAUSIBILITY_FAILED, message="cheat detected")
+    )
+
+    config = SimpleNamespace(submit_invalid_laps=False, server_url="https://simlaps.racing")
+    card = MagicMock()
+
+    await service.submit_lap(
+        api_client=api_client,
+        config=config,
+        card=card,
+        session=SimpleNamespace(track="Laguna Seca", player_id="steam123", player_name="Driver"),
+        lap=SimpleNamespace(lap_time_str="1:29.556", is_valid=True),
+        history_entry=SimpleNamespace(was_submitted=False),
+        pb_was_new=False,
+        post_to_discord=AsyncMock(),
+    )
+
+    card.update_status.assert_any_call(LapCardStatus.FAILED, "cheat detected")
+
+
+@pytest.mark.asyncio
+async def test_post_to_discord_disabled_skips():
+    service = LapSubmissionService()
+
+    config = SimpleNamespace(
+        discord_enabled=False,
+        discord_pb_only=True,
+        discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+    )
+    discord_notifier = MagicMock()
+
+    await service.post_to_discord(
+        config=config,
+        discord_notifier=discord_notifier,
+        session=SimpleNamespace(track="Laguna Seca", car="Ferrari 296 GT3"),
+        lap=SimpleNamespace(
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=True,
+            timestamp="2026-04-29T00:21:00",
+            sector1_ms=None,
+            sector2_ms=None,
+            sector3_ms=None,
+            fuel_used=2.3,
+            tyre_compound="Unknown",
+        ),
+        steam_id="steam123",
+        steam_name="Driver",
+        pb_was_new=True,
+    )
+
+    discord_notifier.post_lap.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_post_to_discord_no_webhook_skips():
+    service = LapSubmissionService()
+
+    config = SimpleNamespace(
+        discord_enabled=True,
+        discord_pb_only=True,
+        discord_webhook_url="",
+    )
+    discord_notifier = MagicMock()
+
+    await service.post_to_discord(
+        config=config,
+        discord_notifier=discord_notifier,
+        session=SimpleNamespace(track="Laguna Seca", car="Ferrari 296 GT3"),
+        lap=SimpleNamespace(
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=True,
+            timestamp="2026-04-29T00:21:00",
+            sector1_ms=None,
+            sector2_ms=None,
+            sector3_ms=None,
+            fuel_used=2.3,
+            tyre_compound="Unknown",
+        ),
+        steam_id="steam123",
+        steam_name="Driver",
+        pb_was_new=True,
+    )
+
+    discord_notifier.post_lap.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_post_to_discord_no_notifier_skips():
+    service = LapSubmissionService()
+
+    config = SimpleNamespace(
+        discord_enabled=True,
+        discord_pb_only=True,
+        discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+    )
+
+    await service.post_to_discord(
+        config=config,
+        discord_notifier=None,
+        session=SimpleNamespace(track="Laguna Seca", car="Ferrari 296 GT3"),
+        lap=SimpleNamespace(
+            lap_time_ms=89556,
+            lap_time_str="1:29.556",
+            is_valid=True,
+            timestamp="2026-04-29T00:21:00",
+            sector1_ms=None,
+            sector2_ms=None,
+            sector3_ms=None,
+            fuel_used=2.3,
+            tyre_compound="Unknown",
+        ),
+        steam_id="steam123",
+        steam_name="Driver",
+        pb_was_new=True,
+    )
+
+
+@pytest.mark.asyncio
+async def test_post_to_discord_non_pb_mode_posts_anyway():
+    service = LapSubmissionService()
+
+    config = SimpleNamespace(
+        discord_enabled=True,
+        discord_pb_only=False,
+        discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+    )
+    discord_notifier = MagicMock()
+    discord_notifier.post_lap = AsyncMock(return_value=True)
+
+    session = SimpleNamespace(track="Laguna Seca", car="Ferrari 296 GT3")
+    lap = SimpleNamespace(
+        lap_time_ms=89556,
+        lap_time_str="1:29.556",
+        is_valid=True,
+        timestamp="2026-04-29T00:21:00",
+        sector1_ms=30000,
+        sector2_ms=30000,
+        sector3_ms=29556,
+        fuel_used=2.3,
+        tyre_compound="Soft",
+    )
+
+    await service.post_to_discord(
+        config=config,
+        discord_notifier=discord_notifier,
+        session=session,
+        lap=lap,
+        steam_id="steam123",
+        steam_name="Driver",
+        pb_was_new=False,
+    )
+
+    discord_notifier.post_lap.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_post_to_discord_with_sectors():
+    service = LapSubmissionService()
+
+    config = SimpleNamespace(
+        discord_enabled=True,
+        discord_pb_only=True,
+        discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+    )
+    discord_notifier = MagicMock()
+    discord_notifier.post_lap = AsyncMock(return_value=True)
+
+    session = SimpleNamespace(track="Laguna Seca", car="Ferrari 296 GT3")
+    lap = SimpleNamespace(
+        lap_time_ms=89556,
+        lap_time_str="1:29.556",
+        is_valid=True,
+        timestamp="2026-04-29T00:21:00",
+        sector1_ms=30000,
+        sector2_ms=30000,
+        sector3_ms=29556,
+        fuel_used=2.3,
+        tyre_compound="Soft",
+    )
+
+    await service.post_to_discord(
+        config=config,
+        discord_notifier=discord_notifier,
+        session=session,
+        lap=lap,
+        steam_id="steam123",
+        steam_name="Driver",
+        pb_was_new=True,
+    )
+
+    discord_notifier.post_lap.assert_awaited_once()
+    posted = discord_notifier.post_lap.await_args[0][0]
+    assert posted.sector_times_ms == [30000, 30000, 29556]
+    assert posted.tire_compound == "Soft"
+    assert posted.is_personal_best is True
+
+
+@pytest.mark.asyncio
+async def test_post_to_discord_failure_logged():
+    service = LapSubmissionService()
+
+    config = SimpleNamespace(
+        discord_enabled=True,
+        discord_pb_only=False,
+        discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+    )
+    discord_notifier = MagicMock()
+    discord_notifier.post_lap = AsyncMock(return_value=False)
+
+    session = SimpleNamespace(track="Laguna Seca", car="Ferrari 296 GT3")
+    lap = SimpleNamespace(
+        lap_time_ms=89556,
+        lap_time_str="1:29.556",
+        is_valid=True,
+        timestamp="2026-04-29T00:21:00",
+        sector1_ms=None,
+        sector2_ms=None,
+        sector3_ms=None,
+        fuel_used=2.3,
+        tyre_compound="Unknown",
+    )
+
+    await service.post_to_discord(
+        config=config,
+        discord_notifier=discord_notifier,
+        session=session,
+        lap=lap,
+        steam_id="steam123",
+        steam_name="Driver",
+        pb_was_new=False,
+    )
+
+    discord_notifier.post_lap.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_post_to_discord_exception_handled():
+    service = LapSubmissionService()
+
+    config = SimpleNamespace(
+        discord_enabled=True,
+        discord_pb_only=False,
+        discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+    )
+    discord_notifier = MagicMock()
+    discord_notifier.post_lap = AsyncMock(side_effect=RuntimeError("webhook down"))
+
+    session = SimpleNamespace(track="Laguna Seca", car="Ferrari 296 GT3")
+    lap = SimpleNamespace(
+        lap_time_ms=89556,
+        lap_time_str="1:29.556",
+        is_valid=True,
+        timestamp="2026-04-29T00:21:00",
+        sector1_ms=None,
+        sector2_ms=None,
+        sector3_ms=None,
+        fuel_used=2.3,
+        tyre_compound="Unknown",
+    )
+
+    await service.post_to_discord(
+        config=config,
+        discord_notifier=discord_notifier,
+        session=session,
+        lap=lap,
+        steam_id="steam123",
+        steam_name="Driver",
+        pb_was_new=False,
+    )
+
+    discord_notifier.post_lap.assert_awaited_once()

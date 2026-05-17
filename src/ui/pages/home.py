@@ -158,7 +158,7 @@ class HomePage(ft.Column):
             self._game_status_container.padding = 16
             self._game_status_container.bgcolor = "#1e1e2e"
             self._game_status_container.border_radius = 12
-            self._game_status_container.border = ft.border.all(1, "#51cf66")
+            self._game_status_container.border = ft.Border.all(1, "#51cf66")
         else:
             # Monitoring - show detected user if available
             if self._detected_steam_id:
@@ -192,7 +192,7 @@ class HomePage(ft.Column):
                 self._game_status_container.padding = 16
                 self._game_status_container.bgcolor = "#1e1e2e"
                 self._game_status_container.border_radius = 12
-                self._game_status_container.border = ft.border.all(1, "#ffd43b")
+                self._game_status_container.border = ft.Border.all(1, "#ffd43b")
             else:
                 # No user info yet - show waiting state
                 self._game_status_container.content = ft.Column(
@@ -210,7 +210,7 @@ class HomePage(ft.Column):
                     spacing=8,
                 )
                 self._game_status_container.padding = 24
-                self._game_status_container.border = ft.border.all(1, "#3d3d5c")
+                self._game_status_container.border = ft.Border.all(1, "#3d3d5c")
             self._game_status_container.bgcolor = "#1e1e2e"
             self._game_status_container.border_radius = 12
             self._game_status_container.alignment = ft.Alignment(0, 0)

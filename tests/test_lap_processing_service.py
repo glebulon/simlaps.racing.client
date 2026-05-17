@@ -114,3 +114,148 @@ async def test_handle_lap_complete_rolls_back_history_if_card_creation_fails():
         )
 
     assert app._history_entries == []
+
+
+@pytest.mark.asyncio
+async def test_handle_lap_complete_updates_detected_user_when_player_id_present():
+    app = _make_app(auto_submit=False)
+    app._session_manager.get_lap_validity_data.return_value = None
+    card = MagicMock()
+    app._home_page.add_lap.return_value = card
+
+    session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3", player_id="123", player_name="Driver")
+    lap = SessionLapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=90000,
+        lap_time_str="1:30.000",
+        is_valid=True,
+        timestamp="2026-04-29T00:00:00",
+    )
+
+    service = LapProcessingService()
+    await service.handle_lap_complete(
+        app=app,
+        session=session,
+        lap=lap,
+        create_history_entry=lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    app._home_page.set_detected_user.assert_called_once_with("123", "Driver")
+
+
+@pytest.mark.asyncio
+async def test_handle_lap_complete_logs_telemetry_missed_boundary():
+    app = _make_app(telemetry_enabled=True)
+    app._telemetry_capture = MagicMock()
+    app._telemetry_capture.is_capturing.return_value = False
+    app._session_manager.get_lap_validity_data.return_value = None
+    card = MagicMock()
+    app._home_page.add_lap.return_value = card
+
+    session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+    lap = SessionLapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=90000,
+        lap_time_str="1:30.000",
+        is_valid=True,
+        timestamp="2026-04-29T00:00:00",
+    )
+
+    service = LapProcessingService()
+    await service.handle_lap_complete(
+        app=app,
+        session=session,
+        lap=lap,
+        create_history_entry=lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    app._telemetry_capture.record_lap_boundary.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_lap_complete_records_telemetry_boundary_when_capturing():
+    app = _make_app(telemetry_enabled=True)
+    app._telemetry_capture = MagicMock()
+    app._telemetry_capture.is_capturing.return_value = True
+    app._session_manager.get_lap_validity_data.return_value = None
+    card = MagicMock()
+    app._home_page.add_lap.return_value = card
+
+    session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+    lap = SessionLapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=90000,
+        lap_time_str="1:30.000",
+        is_valid=True,
+        timestamp="2026-04-29T00:00:00",
+    )
+
+    service = LapProcessingService()
+    await service.handle_lap_complete(
+        app=app,
+        session=session,
+        lap=lap,
+        create_history_entry=lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    app._telemetry_capture.record_lap_boundary.assert_called_once_with(90000, 1)
+
+
+@pytest.mark.asyncio
+async def test_handle_lap_complete_skips_pb_cache_when_unknown_track_or_car():
+    app = _make_app(auto_submit=False)
+    app._session_manager.get_lap_validity_data.return_value = None
+    card = MagicMock()
+    app._home_page.add_lap.return_value = card
+
+    session = SessionData(track="Unknown", car="Ferrari 296 GT3")
+    lap = SessionLapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=90000,
+        lap_time_str="1:30.000",
+        is_valid=True,
+        timestamp="2026-04-29T00:00:00",
+    )
+
+    service = LapProcessingService()
+    await service.handle_lap_complete(
+        app=app,
+        session=session,
+        lap=lap,
+        create_history_entry=lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    app._pb_cache.check_and_update_pb.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_lap_complete_logs_sync_mismatch():
+    app = _make_app(auto_submit=False)
+    app._session_manager.get_lap_validity_data.return_value = None
+    card = MagicMock()
+    app._home_page.add_lap.return_value = card
+    app._home_page._lap_count = 999  # Force mismatch
+
+    session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
+    lap = SessionLapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=90000,
+        lap_time_str="1:30.000",
+        is_valid=True,
+        timestamp="2026-04-29T00:00:00",
+    )
+
+    service = LapProcessingService()
+    await service.handle_lap_complete(
+        app=app,
+        session=session,
+        lap=lap,
+        create_history_entry=lambda **kwargs: SimpleNamespace(**kwargs),
+    )
+
+    assert len(app._history_entries) == 1

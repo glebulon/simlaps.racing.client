@@ -219,10 +219,12 @@ class TestGameDetection:
         try:
             result = is_game_running()
             
-            # Should return a boolean
-            assert isinstance(result, bool)
-        except Exception:
-            pytest.skip("Game detection not available on this platform")
+            # Should return a GameProcessStatus enum
+            from src.core.security import GameProcessStatus
+            assert isinstance(result, GameProcessStatus)
+            assert result in [GameProcessStatus.RUNNING, GameProcessStatus.NOT_RUNNING, GameProcessStatus.UNKNOWN]
+        except Exception as e:
+            pytest.skip(f"Game detection not available on this platform: {e}")
 
     def test_get_game_process_info_integration(self):
         """Test get_game_process_info integration (platform-specific)."""
@@ -231,8 +233,8 @@ class TestGameDetection:
             
             # Should return None or a dict with process info
             assert result is None or isinstance(result, dict)
-        except Exception:
-            pytest.skip("Game detection not available on this platform")
+        except Exception as e:
+            pytest.skip(f"Game detection not available on this platform: {e}")
 
 
 class TestSteamUser:

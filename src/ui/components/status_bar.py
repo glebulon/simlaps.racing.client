@@ -29,7 +29,7 @@ class StatusBar(ft.Container):
             content=self._build_content(),
             padding=ft.padding.symmetric(horizontal=16, vertical=12),
             bgcolor="#1a1a2e",
-            border=ft.border.only(top=ft.BorderSide(1, "#2d2d4a")),
+            border=ft.Border.only(top=ft.BorderSide(1, "#2d2d4a")),
         )
     
     def _get_status_color(self) -> str:

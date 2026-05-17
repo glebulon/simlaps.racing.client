@@ -1,0 +1,92 @@
+You are an expert Assetto Corsa Evo race engineer. Analyse telemetry for the Test Car at Test Track.
+Your entire response must be CONCISE. Use bullet points. No padding, no repetition. Every claim must reference a specific number from the telemetry data below.
+If you have knowledge of the Test Car setup parameters in AC Evo, use it. Otherwise limit setup advice to parameters confirmed by the telemetry signals (brake bias, tyre pressure, balance).
+
+SESSION CONTEXT:
+- Track:          Test Track
+- Car:            Test Car
+- Analysis mode:  full
+- Confidence:     high
+- Reference lap:  #1
+- Compare lap:    #2
+
+SESSION OVERVIEW:
+- Total laps analysed: 2
+- Best lap:   #1  2:00.00
+- Worst lap:  #2  2:05.00
+- Delta best/worst: 5.00s
+- Top speed: 200.0 km/h
+- Authoritative progress coverage: 100%
+- Plausible physics coverage:      100%
+
+LAP-BY-LAP SUMMARY:
+  Lap 1: 2:00.00  max 200.0 km/h  avg 150.0 km/h <- BEST
+  Lap 2: 2:05.00  max 195.0 km/h  avg 145.0 km/h <- WORST
+
+CORNER-BY-CORNER ANALYSIS:
+(entry/apex/exit speeds in km/h; comparison model = reference lap vs comparison lap)
+NOTE: Session-level confidence is high (good progress/physics coverage) but
+      per-corner confidence is low because the track-profile windows are small.
+      Treat corner speed deltas as directional only, not exact comparisons.
+
+BRAKING & TIMING ANALYSIS:
+(brake_onset = seconds before corner entry; turn_in = seconds before entry;
+ gas_on = seconds after apex; trail_brake% = % of entry-to-apex with brake applied;
+ coast = frames near apex with neither gas nor brake; peak_brake_g = peak decel G)
+
+GRIP UTILIZATION ANALYSIS (friction circle):
+(peak_total_g = grip envelope; grip_fill% = avg/peak = how much grip is used on average;
+ combined_brake% = % of braking frames with lat_g > 0.3 = trail braking effectiveness)
+
+  Session peak combined G: 0.00G
+
+TIME LOSS RANKING (worst -> best, by segment time delta):
+  (Deltas capped at ±10s; LOW-confidence deltas > ±3s flagged as suspect.)
+  Test Chicane                   +3.00s
+  >> NOTE: Test Chicane had suspect deltas (>±3s with LOW confidence).
+     Do not recommend specific time gains for these corners — the data is unreliable.
+
+AERODYNAMICS & DRS ANALYSIS:
+(drs_state = DRS flap position; drs_available = activation permitted; drs_enabled = currently active)
+
+  No DRS usage detected or DRS not available in this session
+
+AERODYNAMICS SETUP ANALYSIS:
+(pitch = chassis angle; ride_height = ground clearance; air_density affects downforce)
+
+
+
+OVERALL TIME ANALYSIS:
+  Best lap:  #1  2:00.00
+  Worst lap: #2  2:05.00
+  Delta: 5.00s
+
+============================================================
+RESPOND WITH EXACTLY THESE SECTIONS — BULLET POINTS ONLY:
+
+If a section has insufficient data, state that in one line and skip it.
+
+1. TOP 3 TIME-LOSS CORNERS (excluding any marked corrupt above)
+   For each: corner name | segment delta | one-sentence root cause.
+
+2. DRIVING TECHNIQUE  (5 bullets max)
+   Cover: brake onset/G/trail, turn-in timing, gas pickup, coasting.
+   Cite specific numbers (e.g. 'brake onset 0.18s later at Raidillon').
+
+3. CONSISTENCY  (3 bullets max)
+   Highest-variation corners and whether the cause is reference-point or commitment.
+
+4. CAR SETUP — Test Car
+   List only changes supported by the telemetry, in this format:
+   | Parameter | Current indication from data | Suggested change | Reason |
+   Cover: tyre pressures, alignment, ARBs, dampers, brake bias, aero.
+   Skip any category where the data gives no clear signal.
+
+5. TRACK NOTES — Test Track  (3 bullets max)
+   Add track-specific context confirmed by the data (e.g. 'Bus Stop — late apex: telemetry shows +0.4s lost here on exit').
+
+6. SINGLE BIGGEST GAIN
+   One sentence. Specific corner + specific action + expected time delta.
+
+Every bullet must be grounded in a number from the telemetry above.
+============================================================

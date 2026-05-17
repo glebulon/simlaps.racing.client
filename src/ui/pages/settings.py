@@ -289,7 +289,7 @@ class SettingsPage(ft.Container):
             padding=16,
             bgcolor="#1e1e2e",
             border_radius=12,
-            border=ft.border.all(1, "#3d3d5c"),
+            border=ft.Border.all(1, "#3d3d5c"),
         )
     
     def _build_switch_row(

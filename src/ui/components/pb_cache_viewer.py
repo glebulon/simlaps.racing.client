@@ -60,7 +60,7 @@ def show_pb_cache_dialog(page: ft.Page, pb_cache: PBCache):
                         height=300,
                         spacing=1,
                     ),
-                    border=ft.border.all(1, "#3d3d5c"),
+                    border=ft.Border.all(1, "#3d3d5c"),
                     border_radius=8,
                 ),
             ]),

@@ -1,6 +1,6 @@
 """Regression tests for HistoryPage timestamp parsing behavior."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.ui.pages.history import HistoryEntry, HistoryPage
 from src.utils.structured_logger import Component
@@ -56,3 +56,42 @@ def test_build_entry_row_unexpected_timestamp_error_is_logged() -> None:
     assert args[1] == "Unexpected error parsing history timestamp"
     assert isinstance(args[2], RuntimeError)
     assert kwargs["timestamp"] == entry.timestamp
+
+
+def test_build_entry_row_valid_timestamp_parses_correctly() -> None:
+    page = HistoryPage()
+    entry = _make_entry("2026-05-10T14:30:00")
+
+    row = page._build_entry_row(entry)
+    time_str, date_str = _extract_displayed_time_and_date(row)
+    assert time_str == "14:30"
+    assert date_str == "May 10"
+
+
+def test_add_entry_appends_and_updates() -> None:
+    page = HistoryPage()
+    entry = _make_entry("2026-05-10T12:00:00")
+
+    page.add_entry(entry)
+
+    assert len(page._entries) == 1
+    assert page._entries[0] is entry
+
+
+def test_set_entries_replaces_list() -> None:
+    page = HistoryPage()
+    entries = [_make_entry("2026-05-10T12:00:00"), _make_entry("2026-05-10T13:00:00")]
+
+    page.set_entries(entries)
+
+    assert len(page._entries) == 2
+    assert page._entries[0].timestamp == "2026-05-10T12:00:00"
+
+
+def test_clear_entries_removes_all() -> None:
+    page = HistoryPage()
+    page._entries = [_make_entry("2026-05-10T12:00:00")]
+
+    page.clear_entries()
+
+    assert len(page._entries) == 0

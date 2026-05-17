@@ -607,6 +607,13 @@ class SharedSessionManager:
             self._session_data.current_pos = graphics_data.get("current_pos")
             self._session_data.total_drivers = graphics_data.get("total_drivers")
 
+            # Car model from graphics SHM (authoritative, overrides logs fallback)
+            car_model = graphics_data.get("car_model")
+            if isinstance(car_model, str) and car_model.strip():
+                self._session_data.car = car_model.strip()
+                self._session_data.player_identification.car_model = car_model.strip()
+                self._mark_source("car", "shm_graphics")
+
             self._mark_source("session_summary", "shm_graphics")
 
         self.notify_observers()

@@ -105,3 +105,50 @@ def test_apply_restarts_monitoring_when_parser_was_running():
     app.page.run_task.assert_called_once_with(app.start_monitoring)
     assert app._log_parser is not old_parser
     app._home_page.update_config.assert_called_once_with(config)
+
+
+def test_apply_creates_discord_notifier_when_configured():
+    app = _make_app()
+    notifier = MagicMock()
+    create_discord_notifier = MagicMock(return_value=notifier)
+
+    service = SettingsService()
+    config = AppConfig(
+        server_url="https://simlaps.racing",
+        discord_enabled=True,
+        discord_webhook_url="https://discord.com/api/webhooks/123/abc",
+    )
+
+    service.apply(
+        app=app,
+        config=config,
+        create_discord_notifier=create_discord_notifier,
+        get_pb_cache_for_server=MagicMock(),
+        create_api_client=MagicMock(return_value=MagicMock()),
+        create_log_parser=MagicMock(return_value=MagicMock()),
+    )
+
+    create_discord_notifier.assert_called_once_with("https://discord.com/api/webhooks/123/abc")
+    assert app._discord_notifier is notifier
+
+
+def test_apply_updates_pb_cache_when_server_url_changes():
+    app = _make_app()
+    app._pb_cache.server_url = "https://old-server.com"
+    new_cache = MagicMock()
+    get_pb_cache_for_server = MagicMock(return_value=new_cache)
+
+    service = SettingsService()
+    config = AppConfig(server_url="https://new-server.com")
+
+    service.apply(
+        app=app,
+        config=config,
+        create_discord_notifier=MagicMock(),
+        get_pb_cache_for_server=get_pb_cache_for_server,
+        create_api_client=MagicMock(return_value=MagicMock()),
+        create_log_parser=MagicMock(return_value=MagicMock()),
+    )
+
+    get_pb_cache_for_server.assert_called_once_with("https://new-server.com")
+    assert app._pb_cache is new_cache

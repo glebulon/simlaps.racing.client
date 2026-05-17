@@ -116,7 +116,7 @@ class HistoryPage(ft.Container):
             padding=16,
             bgcolor="#1e1e2e",
             border_radius=12,
-            border=ft.border.all(1, "#3d3d5c"),
+            border=ft.Border.all(1, "#3d3d5c"),
         )
     
     def _build_stat(self, label: str, value: str, icon) -> ft.Column:
@@ -215,7 +215,7 @@ class HistoryPage(ft.Container):
             padding=12,
             bgcolor="#1e1e2e",
             border_radius=8,
-            border=ft.border.all(1, "#2d2d4a"),
+            border=ft.Border.all(1, "#2d2d4a"),
         )
     
     def _update_list_view(self):
@@ -255,8 +255,12 @@ class HistoryPage(ft.Container):
         self._entries.append(entry)
         self._update_list_view()
         self.content = self._build_content()
-        if self.page:
-            self.update()
+        try:
+            if self.page:
+                self.update()
+        except RuntimeError:
+            # Control not added to page yet, skip update
+            pass
     
     def set_entries(self, entries: List[HistoryEntry]):
         """Set all history entries."""
@@ -270,5 +274,9 @@ class HistoryPage(ft.Container):
         self._entries.clear()
         self._update_list_view()
         self.content = self._build_content()
-        if self.page:
-            self.update()
+        try:
+            if self.page:
+                self.update()
+        except RuntimeError:
+            # Control not added to page yet, skip update
+            pass

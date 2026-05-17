@@ -52,7 +52,7 @@ class LapCard(ft.Container):
             margin=ft.margin.only(bottom=8),
             border_radius=12,
             bgcolor=self._get_bgcolor(),
-            border=ft.border.all(1, self._get_border_color()),
+            border=ft.Border.all(1, self._get_border_color()),
             animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
         )
     
@@ -217,6 +217,6 @@ class LapCard(ft.Container):
         self.data.error_message = error_message
         self.content = self._build_content()
         self.bgcolor = self._get_bgcolor()
-        self.border = ft.border.all(1, self._get_border_color())
+        self.border = ft.Border.all(1, self._get_border_color())
         if self.page:
             self.update()
