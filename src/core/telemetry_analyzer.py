@@ -3354,53 +3354,89 @@ window.addEventListener('DOMContentLoaded', () => {
                 lines.append("  Consider shorter braking zones or adjusting brake bias to avoid fade.")
 
         lines.append("=" * 60)
-        lines.append("RESPOND WITH EXACTLY THESE SECTIONS — BULLET POINTS ONLY:")
+        lines.append("RESPONSE FORMAT — FOLLOW EXACTLY. NO DEVIATION.")
         lines.append("")
-        lines.append("If a section has insufficient data, state that in one line and skip it.")
+        lines.append("Output in clean Markdown. Use ## for section headers.")
+        lines.append("Use bullet points inside sections. Never use numbered lists inside bullets.")
+        lines.append("Every single bullet must contain at least one specific number from the data above.")
+        lines.append("No padding. No preamble. No 'Great question!' or 'Let me analyse...'")
+        lines.append("Do not repeat data the user already knows. Surface only conclusions.")
+        lines.append("Start your response directly with '## BMW M2 CS Racing — [Track Name] Debrief'")
         lines.append("")
-        lines.append(
-            "1. TOP 3 TIME-LOSS CORNERS (excluding any marked corrupt above)\n"
-            "   For each: corner name | segment delta | one-sentence root cause."
-        )
+        lines.append("---")
         lines.append("")
-        lines.append(
-            "2. DRIVING TECHNIQUE  (5 bullets max)\n"
-            "   Cover: brake onset/G/trail, turn-in timing, gas pickup, coasting.\n"
-            "   Cite specific numbers (e.g. 'brake onset 0.18s later at Raidillon')."
-        )
+        lines.append("## 1. TOP 3 TIME-LOSS CORNERS")
         lines.append("")
-        lines.append(
-            "3. CONSISTENCY  (3 bullets max)\n"
-            "   Highest-variation corners and whether the cause is reference-point "
-            "or commitment."
-        )
+        lines.append("Exclude any corners flagged as corrupt/capped in the data above.")
+        lines.append("Format each corner EXACTLY like this:")
+        lines.append("")
+        lines.append("- **[Corner Name]** | [segment delta]s | [one sentence: what the data shows is causing the loss]")
+        lines.append("")
+        lines.append("Root cause must reference entry/apex/exit speed delta, braking delta, or trail brake % — not generic advice.")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("## 2. DRIVING TECHNIQUE")
+        lines.append("")
+        lines.append("5 bullets maximum. Each bullet covers exactly one issue.")
+        lines.append("Structure: [Corner name]: [what the data shows] → [what to do instead].")
+        lines.append("Cover at least: brake timing, trail braking, throttle pickup, turn-in consistency.")
+        lines.append("Cite the exact number that proves the issue (e.g. 'brake onset 0.70s later', 'trail brake 41% vs 31%', '+26.7 km/h entry speed delta').")
+        lines.append("Do NOT say 'consider' or 'try' — be direct.")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("## 3. CONSISTENCY")
+        lines.append("")
+        lines.append("3 bullets maximum.")
+        lines.append("Rank the 3 highest-variation corners by apex speed range (km/h).")
+        lines.append("For each: state the range, then diagnose whether the cause is a missing reference point (braking marker) or commitment variance (same entry, different apex).")
+        lines.append("Cite the specific apex speed range number.")
+        lines.append("")
+        lines.append("---")
         lines.append("")
         if car_known:
-            lines.append(
-                f"4. CAR SETUP — {car_model}\n"
-                f"   List only changes supported by the telemetry, in this format:\n"
-                f"   | Parameter | Current indication from data | Suggested change | Reason |\n"
-                f"   Cover: tyre pressures, alignment, ARBs, dampers, brake bias, aero.\n"
-                f"   Skip any category where the data gives no clear signal."
-            )
+            lines.append(f"## 4. CAR SETUP — {car_model}")
+            lines.append("")
+            lines.append("Output a Markdown table with exactly these columns:")
+            lines.append("| Parameter | Current indication from data | Suggested change | Reason |")
+            lines.append("| --- | --- | --- | --- |")
+            lines.append("")
+            lines.append("Rules:")
+            lines.append("- Only include rows where the telemetry data gives a CLEAR signal.")
+            lines.append("- 'Current indication' must quote an actual number from the data (e.g. '0.67 front bias', '26.9 psi avg', '-0.0mm rake').")
+            lines.append("- 'Suggested change' must be specific and directional (e.g. 'move to 0.64–0.65', 'reduce 0.3–0.5 psi', 'raise rear ride height').")
+            lines.append("- 'Reason' must reference a telemetry observation (e.g. 'understeer balance hint at Eau Rouge apex both laps', 'peak brake temp 687C').")
+            lines.append(f"- If you have car-specific knowledge of the {car_model} in AC Evo, apply it. Otherwise skip that parameter row.")
+            lines.append("- Cover: brake bias, tyre pressures, rake/aero, springs if signalled. Skip alignment unless load/slip data supports it.")
+            lines.append("- Do NOT fabricate setup parameters not evidenced in the data.")
         else:
-            lines.append(
-                "4. CAR SETUP — SKIPPED\n"
-                "   Car identity unknown. No setup table. Limit advice to driving technique."
-            )
+            lines.append("## 4. CAR SETUP — SKIPPED")
+            lines.append("")
+            lines.append("Car identity unknown. Skip the setup table entirely. One line only: state data is insufficient.")
         lines.append("")
-        lines.append(
-            f"5. TRACK NOTES — {track_label}  (3 bullets max)\n"
-            f"   Add track-specific context confirmed by the data "
-            f"(e.g. 'Bus Stop — late apex: telemetry shows +0.4s lost here on exit')."
-        )
+        lines.append("---")
         lines.append("")
-        lines.append(
-            "6. SINGLE BIGGEST GAIN\n"
-            "   One sentence. Specific corner + specific action + expected time delta."
-        )
+        lines.append(f"## 5. TRACK NOTES — {track_label}")
         lines.append("")
-        lines.append("Every bullet must be grounded in a number from the telemetry above.")
+        lines.append("3 bullets maximum.")
+        lines.append("Each bullet must be a track-specific observation CONFIRMED by the data — not generic Spa knowledge.")
+        lines.append("Format: **[Corner/Section]:** [what the data shows] ([specific number]).")
+        lines.append("Example of the tone and specificity required:")
+        lines.append("  - **Blanchimont:** Both laps underutilise grip here — peak G only 0.77 vs session max 2.26, 1.50G headroom remaining. The car is capable of taking this flat.")
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("## 6. SINGLE BIGGEST GAIN")
+        lines.append("")
+        lines.append("Exactly one sentence. Must name: the specific corner + the specific input change + the expected time delta.")
+        lines.append("Example of required specificity:")
+        lines.append("  'Move the Pouhon 1 brake point 0.70s earlier (matching Lap 2 onset vs Lap 3) to recover the 9.3 km/h apex deficit, worth an estimated 0.5–0.8s.'")
+        lines.append("Do not hedge. Do not say 'this could' or 'potentially'.")
+        lines.append("")
+        lines.append("=" * 60)
+        lines.append("Every bullet must be grounded in a specific number from the telemetry above.")
+        lines.append("If a section genuinely has no actionable data, write one line saying so and move on.")
         lines.append("=" * 60)
 
         prompt = "\n".join(lines)
