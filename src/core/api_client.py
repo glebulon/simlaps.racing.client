@@ -239,6 +239,16 @@ class APIClient:
             if session.car and session.car != "Unknown"
             else (shared_player.car_model or session.car)
         )
+        effective_car_configuration_id = (
+            getattr(lap, "car_configuration_id", None)
+            or getattr(session, "car_configuration_id", None)
+            or shared_player.car_configuration_id
+        )
+        effective_car_configuration_label = (
+            getattr(lap, "car_configuration_label", None)
+            or getattr(session, "car_configuration_label", None)
+            or shared_player.car_configuration_label
+        )
         effective_session_id = session.session_id or session_metadata.session_id
         effective_session_type = (
             session.session_type
@@ -308,6 +318,10 @@ class APIClient:
             "tires": lap.tyre_compound,
             "valid": effective_is_valid,
         }
+        if effective_car_configuration_id:
+            payload["carConfigurationId"] = effective_car_configuration_id
+        if effective_car_configuration_label:
+            payload["carConfigurationLabel"] = effective_car_configuration_label
 
         sector_payload: Dict[str, Any] = {
             "sector1": lap.sector1_ms,
@@ -339,8 +353,9 @@ class APIClient:
             except (ValueError, TypeError):
                 pass
 
-        if session.setup_notes:
-            setup_notes = session.setup_notes.strip()
+        effective_setup_notes = getattr(lap, "setup_notes", None) or session.setup_notes
+        if effective_setup_notes:
+            setup_notes = effective_setup_notes.strip()
             if setup_notes:
                 payload["setupNotes"] = setup_notes
 

@@ -131,6 +131,10 @@ class LapProcessingService:
                     session.track,
                     session.car,
                     lap.lap_time_ms,
+                    car_configuration_id=(
+                        lap.car_configuration_id
+                        or session.car_configuration_id
+                    ),
                 )
                 log_debug(
                     Component.APP,
@@ -157,6 +161,12 @@ class LapProcessingService:
             timestamp=lap.timestamp,
             was_submitted=False,
             was_valid=lap.is_valid,
+            car_configuration_id=(
+                lap.car_configuration_id or session.car_configuration_id
+            ),
+            car_configuration_label=(
+                lap.car_configuration_label or session.car_configuration_label
+            ),
         )
         history_entries.append(history_entry)
 

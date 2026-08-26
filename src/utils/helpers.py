@@ -134,3 +134,17 @@ def format_car_name(car_id: str) -> str:
             words.append(word.capitalize())
     
     return " ".join(words)
+
+
+def format_car_with_configuration(
+    car_id: str,
+    configuration_label: Optional[str] = None,
+    configuration_id: Optional[str] = None,
+) -> str:
+    """Format a car and append its selected mechanical version when known."""
+
+    car_name = format_car_name(car_id)
+    configuration = configuration_label or configuration_id
+    if not configuration:
+        return car_name
+    return f"{car_name} ({configuration})"

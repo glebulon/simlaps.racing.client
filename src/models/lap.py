@@ -127,6 +127,11 @@ class LapData:
 
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     distance_hundredm: Optional[int] = None
+    # Frozen at the completion boundary so retries cannot pick up a setup or
+    # engine configuration selected for a later lap.
+    setup_notes: Optional[str] = None
+    car_configuration_id: Optional[str] = None
+    car_configuration_label: Optional[str] = None
 
     def to_dict(self) -> dict:
         return {
@@ -148,6 +153,9 @@ class LapData:
             "stint_number": self.stint_number,
             "timestamp": self.timestamp,
             "distance_hundredm": self.distance_hundredm,
+            "setup_notes": self.setup_notes,
+            "car_configuration_id": self.car_configuration_id,
+            "car_configuration_label": self.car_configuration_label,
         }
 
 
@@ -171,6 +179,8 @@ class SessionData:
     fuel_used_session: float = 0.0
     fuel_reliable: bool = True
     setup_notes: Optional[str] = None
+    car_configuration_id: Optional[str] = None
+    car_configuration_label: Optional[str] = None
     start_time: str = field(default_factory=lambda: datetime.now().isoformat())
     laps: list[LapData] = field(default_factory=list)
     stints: list[StintData] = field(default_factory=list)
@@ -202,6 +212,8 @@ class SessionData:
             "fuel_used_session": self.fuel_used_session,
             "fuel_reliable": self.fuel_reliable,
             "setup_notes": self.setup_notes,
+            "car_configuration_id": self.car_configuration_id,
+            "car_configuration_label": self.car_configuration_label,
             "start_time": self.start_time,
             "laps": [lap.to_dict() for lap in self.laps],
             "stints": [s.to_dict() for s in self.stints],

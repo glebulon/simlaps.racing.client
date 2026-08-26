@@ -7,7 +7,11 @@ from typing import Optional, Callable, List
 from dataclasses import dataclass
 from datetime import datetime
 
-from ...utils.helpers import format_lap_time, format_car_name, format_track_name
+from ...utils.helpers import (
+    format_lap_time,
+    format_car_with_configuration,
+    format_track_name,
+)
 
 
 @dataclass
@@ -19,6 +23,8 @@ class HistoryEntry:
     timestamp: str
     was_submitted: bool
     was_valid: bool
+    car_configuration_id: Optional[str] = None
+    car_configuration_label: Optional[str] = None
 
 
 class HistoryPage(ft.Container):
@@ -191,7 +197,11 @@ class HistoryPage(ft.Container):
                                 weight=ft.FontWeight.W_500,
                             ),
                             ft.Text(
-                                format_car_name(entry.car),
+                                format_car_with_configuration(
+                                    entry.car,
+                                    entry.car_configuration_label,
+                                    entry.car_configuration_id,
+                                ),
                                 size=12,
                                 color="#888888",
                             ),

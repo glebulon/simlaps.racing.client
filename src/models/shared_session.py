@@ -57,6 +57,27 @@ class LapCompletionData:
     timestamp: str
     observed_at: float
     source: str = "shm_graphics"
+    setup_notes: Optional[str] = None
+    car_configuration_id: Optional[str] = None
+    car_configuration_label: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class CarSetupSnapshot:
+    """Immutable active setup/configuration state at a lap boundary."""
+
+    values: tuple[tuple[str, str], ...] = ()
+    preset_name: Optional[str] = None
+    car_configuration_id: Optional[str] = None
+    car_configuration_label: Optional[str] = None
+
+    @property
+    def setup_notes(self) -> Optional[str]:
+        rows: list[str] = []
+        if self.preset_name:
+            rows.append(f"preset_name {self.preset_name}")
+        rows.extend(f"{key} {value}".rstrip() for key, value in self.values)
+        return "\n".join(rows) if rows else None
 
 
 @dataclass
@@ -78,6 +99,9 @@ class PlayerIdentificationData:
     player_name: Optional[str] = None
     car_uuid: Optional[str] = None
     car_model: Optional[str] = None
+    car_content_id: Optional[str] = None
+    car_configuration_id: Optional[str] = None
+    car_configuration_label: Optional[str] = None
     source: str = "logs"
 
 
@@ -150,6 +174,8 @@ class SharedSessionData:
     total_drivers: Optional[int] = None
 
     car_setup: Dict[str, Any] = field(default_factory=dict)
+    car_setup_sources: Dict[str, str] = field(default_factory=dict)
+    setup_preset_name: Optional[str] = None
     assists_state: Dict[str, Any] = field(default_factory=dict)
 
     max_speed: Optional[float] = None
@@ -173,6 +199,12 @@ class SharedSessionData:
 class SharedSessionManager:
     """Thread-safe manager for shared session data."""
 
+    _SETUP_SOURCE_PRIORITY = {
+        "shm_graphics": 10,
+        "shm_physics": 10,
+        "setup_file": 20,
+        "logs_manual": 30,
+    }
     def __init__(self) -> None:
         self._session_data = SharedSessionData()
         self._lock = threading.RLock()
@@ -264,6 +296,119 @@ class SharedSessionManager:
         with self._lock:
             return dict(self._session_data.car_setup)
 
+    @staticmethod
+    def _clean_setup_text(value: Any) -> str:
+        return " ".join(str(value).replace("\x00", "").splitlines()).strip()
+
+    def _car_setup_snapshot_locked(self) -> CarSetupSnapshot:
+        ident = self._session_data.player_identification
+        return CarSetupSnapshot(
+            values=tuple(
+                (str(key), self._clean_setup_text(value))
+                for key, value in self._session_data.car_setup.items()
+            ),
+            preset_name=self._session_data.setup_preset_name,
+            car_configuration_id=ident.car_configuration_id,
+            car_configuration_label=ident.car_configuration_label,
+        )
+
+    def get_car_setup_snapshot(self) -> CarSetupSnapshot:
+        with self._lock:
+            return self._car_setup_snapshot_locked()
+
+    def replace_car_setup_from_file(
+        self,
+        values: Dict[str, Any],
+        preset_name: Optional[str],
+    ) -> None:
+        """Replace the active baseline after ACE successfully loads a preset."""
+
+        with self._lock:
+            cleaned = {
+                str(key): self._clean_setup_text(value)
+                for key, value in values.items()
+                if str(key) and not str(key).lower().startswith("telemetry_")
+            }
+            self._session_data.car_setup = cleaned
+            self._session_data.car_setup_sources = {
+                key: "setup_file" for key in cleaned
+            }
+            clean_name = self._clean_setup_text(preset_name) if preset_name else ""
+            self._session_data.setup_preset_name = clean_name or None
+            self._mark_source("car_setup", "setup_file")
+
+    def update_car_setup_value(
+        self,
+        key: str,
+        value: Any,
+        *,
+        source: str = "logs_manual",
+    ) -> None:
+        """Overlay one setup value using explicit source precedence."""
+
+        clean_key = self._clean_setup_text(key)
+        if not clean_key or clean_key.lower().startswith("telemetry_"):
+            return
+        clean_value: Any = (
+            self._clean_setup_text(value) if isinstance(value, str) else value
+        )
+        with self._lock:
+            previous_source = self._session_data.car_setup_sources.get(clean_key)
+            if previous_source is not None and self._SETUP_SOURCE_PRIORITY.get(
+                previous_source, 0
+            ) > self._SETUP_SOURCE_PRIORITY.get(source, 0):
+                return
+            self._session_data.car_setup[clean_key] = clean_value
+            self._session_data.car_setup_sources[clean_key] = source
+            self._mark_source("car_setup", source)
+
+    def clear_car_setup(self) -> None:
+        with self._lock:
+            self._session_data.car_setup.clear()
+            self._session_data.car_setup_sources.clear()
+            self._session_data.setup_preset_name = None
+
+    def clear_car_configuration(self) -> None:
+        with self._lock:
+            ident = self._session_data.player_identification
+            ident.car_content_id = None
+            ident.car_configuration_id = None
+            ident.car_configuration_label = None
+
+    def update_car_configuration(
+        self,
+        car_content_id: Optional[str],
+        configuration_id: str,
+        configuration_label: str,
+        *,
+        fallback: bool = False,
+    ) -> bool:
+        """Set the selected mechanical preset and clear setup on a car switch."""
+
+        with self._lock:
+            ident = self._session_data.player_identification
+            if fallback and ident.car_configuration_id:
+                return False
+            normalized_car = car_content_id.lower() if car_content_id else None
+            normalized_configuration = configuration_id.lower()
+            changed = bool(
+                (ident.car_content_id and normalized_car and ident.car_content_id != normalized_car)
+                or (
+                    ident.car_configuration_id
+                    and ident.car_configuration_id != normalized_configuration
+                )
+            )
+            if changed:
+                self._session_data.car_setup.clear()
+                self._session_data.car_setup_sources.clear()
+                self._session_data.setup_preset_name = None
+            ident.car_content_id = normalized_car or ident.car_content_id
+            ident.car_configuration_id = normalized_configuration
+            ident.car_configuration_label = configuration_label
+            ident.source = "logs"
+            self._mark_source("car_configuration", "logs")
+            return True
+
     def get_car(self) -> str:
         with self._lock:
             return self._session_data.player_identification.car_model or "Unknown"
@@ -293,6 +438,8 @@ class SharedSessionManager:
                 "event_id": md.event_id,
                 "player_id": ident.steam_id,
                 "car_uuid": ident.car_uuid,
+                "car_configuration_id": ident.car_configuration_id,
+                "car_configuration_label": ident.car_configuration_label,
             }
 
     def get_best_lap_time(self) -> Optional[float]:
@@ -438,6 +585,15 @@ class SharedSessionManager:
             ident.player_name = player_data.get("player_name") or ident.player_name
             ident.car_uuid = player_data.get("car_uuid") or ident.car_uuid
             ident.car_model = player_data.get("car_model") or ident.car_model
+            ident.car_content_id = player_data.get("car_content_id") or ident.car_content_id
+            ident.car_configuration_id = (
+                player_data.get("car_configuration_id")
+                or ident.car_configuration_id
+            )
+            ident.car_configuration_label = (
+                player_data.get("car_configuration_label")
+                or ident.car_configuration_label
+            )
             ident.source = "logs"
 
             self._mark_source("player_id", "logs")
@@ -567,6 +723,8 @@ class SharedSessionManager:
                 "player_name": session_data.player_name,
                 "car_uuid": session_data.car_uuid,
                 "car_model": session_data.car,
+                "car_configuration_id": session_data.car_configuration_id,
+                "car_configuration_label": session_data.car_configuration_label,
             }
         )
 
@@ -625,6 +783,7 @@ class SharedSessionManager:
                     and now_mono - latest.observed_at < 10.0
                 )
                 if not duplicate_transition:
+                    setup_snapshot = self._car_setup_snapshot_locked()
                     completion = LapCompletionData(
                         completed_laps=max(
                             completed_laps,
@@ -635,6 +794,9 @@ class SharedSessionManager:
                         is_valid=self._session_data.active_lap_is_valid,
                         timestamp=datetime.now(timezone.utc).isoformat(),
                         observed_at=now_mono,
+                        setup_notes=setup_snapshot.setup_notes,
+                        car_configuration_id=setup_snapshot.car_configuration_id,
+                        car_configuration_label=setup_snapshot.car_configuration_label,
                     )
                     self._session_data.latest_lap_completion = completion
                     self._session_data.lap_completions.append(completion)
@@ -741,6 +903,43 @@ class SharedSessionManager:
 
         self.update_fuel_from_graphics_shm(graphics_data)
 
+        # The setup file is the baseline; live graphics fields only supplement
+        # values that the file did not carry.  Negative int8 sentinels and the
+        # pit-limiter runtime switch are intentionally excluded.
+        for source_key, setup_key in (
+            ("electronics_tc_level", "traction_control"),
+            ("electronics_abs_level", "abs"),
+            ("electronics_engine_map", "engine_map"),
+            ("electronics_perf_mode", "performance_mode"),
+            ("electronics_diff_power", "differential_power"),
+            ("electronics_diff_coast", "differential_coast"),
+        ):
+            value = graphics_data.get(source_key)
+            is_modifiable = graphics_data.get(f"{source_key}_modifiable")
+            if (
+                is_modifiable is True
+                and isinstance(value, (int, float))
+                and value >= 0
+            ):
+                self.update_car_setup_value(
+                    setup_key,
+                    value,
+                    source="shm_graphics",
+                )
+        brake_bias = graphics_data.get("electronics_brake_bias")
+        if (
+            graphics_data.get("electronics_brake_bias_modifiable") is True
+            and isinstance(brake_bias, (int, float))
+            and 0 <= brake_bias <= 100
+        ):
+            if brake_bias <= 1:
+                brake_bias *= 100
+            self.update_car_setup_value(
+                "brakesfront_bias",
+                f"{brake_bias:.3f}".rstrip("0").rstrip("."),
+                source="shm_graphics",
+            )
+
         with self._lock:
             self._session_data.total_laps = graphics_data.get("total_lap_count")
             self._session_data.current_lap = graphics_data.get("session_current_lap")
@@ -771,9 +970,6 @@ class SharedSessionManager:
                 else:
                     self._session_data.max_speed = max(self._session_data.max_speed, float(speed_kmh))
 
-            car_setup = physics_data.get("car_setup")
-            if isinstance(car_setup, dict):
-                self._session_data.car_setup.update(car_setup)
             assists_state = physics_data.get("assists_state")
             if isinstance(assists_state, dict):
                 self._session_data.assists_state.update(assists_state)
@@ -782,6 +978,11 @@ class SharedSessionManager:
 
             self._mark_source("max_speed", "shm_physics")
             self._mark_source("car_setup", "shm_physics")
+
+        car_setup = physics_data.get("car_setup")
+        if isinstance(car_setup, dict):
+            for key, value in car_setup.items():
+                self.update_car_setup_value(key, value, source="shm_physics")
 
     def update_from_telemetry(self, telemetry_data: Dict[str, Any]) -> None:
         with self._lock:
@@ -809,17 +1010,24 @@ class SharedSessionManager:
 
         Call this when a new game session starts so stale lap validity, timing,
         and fuel data from the previous session cannot bleed into the new one.
-        Player identification is intentionally preserved across resets because the
-        same driver is still logged in.
+        Player identification and the selected setup are intentionally
+        preserved because ACE can start a new session without logging either
+        one again.
         """
         with self._lock:
             old_timing_count = len(self._session_data.lap_timing)
             old_validity_count = len(self._session_data.lap_validity)
             old_ident = self._session_data.player_identification
+            old_setup = dict(self._session_data.car_setup)
+            old_setup_sources = dict(self._session_data.car_setup_sources)
+            old_preset_name = self._session_data.setup_preset_name
             self._session_data = SharedSessionData()
             # Re-attach player identification — Steam ID / car UUID don't change
             # between sessions and must not be wiped.
             self._session_data.player_identification = old_ident
+            self._session_data.car_setup = old_setup
+            self._session_data.car_setup_sources = old_setup_sources
+            self._session_data.setup_preset_name = old_preset_name
             from ..utils.structured_logger import log_debug, Component
             log_debug(Component.SHARED_SESSION,
                 f"[RESET] Cleared shared session: dropped {old_timing_count} timing entries, "

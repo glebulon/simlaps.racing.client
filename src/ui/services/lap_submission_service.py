@@ -164,6 +164,14 @@ class LapSubmissionService:
                 sector_times_ms=sector_times,
                 fuel_used_liters=lap.fuel_used,
                 tire_compound=lap.tyre_compound if lap.tyre_compound != "Unknown" else None,
+                car_configuration_id=(
+                    getattr(lap, "car_configuration_id", None)
+                    or getattr(session, "car_configuration_id", None)
+                ),
+                car_configuration_label=(
+                    getattr(lap, "car_configuration_label", None)
+                    or getattr(session, "car_configuration_label", None)
+                ),
             )
 
             log_debug(Component.APP, "Posting lap to Discord webhook")

@@ -9,7 +9,12 @@ from enum import Enum
 
 from ...models import LapData, SessionData
 from ...core.api_client import SubmissionStatus
-from ...utils.helpers import format_lap_time, format_sector_time, format_car_name, format_track_name
+from ...utils.helpers import (
+    format_lap_time,
+    format_sector_time,
+    format_car_with_configuration,
+    format_track_name,
+)
 from ...utils.structured_logger import log_error, Component
 
 
@@ -112,7 +117,13 @@ class LapCard(ft.Container):
                             color="#ffffff",
                         ),
                         ft.Text(
-                            format_car_name(session.car),
+                            format_car_with_configuration(
+                                session.car,
+                                lap.car_configuration_label
+                                or session.car_configuration_label,
+                                lap.car_configuration_id
+                                or session.car_configuration_id,
+                            ),
                             size=12,
                             color="#888888",
                         ),
@@ -154,6 +165,18 @@ class LapCard(ft.Container):
             ft.Text(f"Lap #{self.data.lap_number}", size=11, color="#666666"),
             ft.Text(f"Tires: {lap.tyre_compound}", size=11, color="#666666"),
         ]
+        if lap.setup_notes:
+            first_line = lap.setup_notes.splitlines()[0]
+            if first_line.startswith("preset_name "):
+                preset_name = first_line.removeprefix("preset_name ").strip()
+                if preset_name:
+                    footer_items.append(
+                        ft.Text(
+                            f"Setup: {preset_name}",
+                            size=11,
+                            color="#666666",
+                        )
+                    )
         
         if not lap.is_valid:
             footer_items.append(

@@ -31,7 +31,7 @@ class PBCache:
     """
     In-memory cache for personal best lap times.
     
-    Key: (track_id, car_id) tuple
+    Key: (track_id, car_id[::mechanical_configuration]) tuple
     Value: PersonalBest with fastest lap time
     """
     
@@ -49,19 +49,30 @@ class PBCache:
         self._steam_id: Optional[str] = None
         self._loaded = False
     
-    def _normalize_key(self, track_id: str, car_id: str) -> Tuple[str, str]:
+    def _normalize_key(
+        self,
+        track_id: str,
+        car_id: str,
+        car_configuration_id: Optional[str] = None,
+    ) -> Tuple[str, str]:
         """
         Normalize track and car IDs for consistent key generation.
         
         Args:
             track_id: Track identifier
             car_id: Car identifier
+            car_configuration_id: Optional mechanical preset identifier
             
         Returns:
             Normalized key tuple
         """
         # Convert to lowercase and strip whitespace for consistency
-        return (track_id.lower().strip(), car_id.lower().strip())
+        normalized_car = car_id.lower().strip()
+        if car_configuration_id:
+            normalized_car = (
+                f"{normalized_car}::{car_configuration_id.lower().strip()}"
+            )
+        return (track_id.lower().strip(), normalized_car)
     
     async def preload_from_api(self, steam_id: str) -> bool:
         """
@@ -100,13 +111,18 @@ class PBCache:
                 for pb in personal_bests:
                     track_id = pb.get("trackId", "")
                     car_id = pb.get("carId", "")
+                    car_configuration_id = pb.get("carConfigurationId")
                     best_time = pb.get("bestTime", 0)
                     set_at = pb.get("setAt")
 
                     if not track_id or not car_id or best_time <= 0:
                         continue
 
-                    key = self._normalize_key(track_id, car_id)
+                    key = self._normalize_key(
+                        track_id,
+                        car_id,
+                        car_configuration_id,
+                    )
 
                     # Parse timestamp if available
                     updated_at = None
@@ -137,7 +153,13 @@ class PBCache:
             log_error(Component.PB_CACHE, "Unexpected error during PB preload", error=str(e))
             return False
     
-    def check_and_update_pb(self, track_id: str, car_id: str, lap_time_ms: int) -> bool:
+    def check_and_update_pb(
+        self,
+        track_id: str,
+        car_id: str,
+        lap_time_ms: int,
+        car_configuration_id: Optional[str] = None,
+    ) -> bool:
         """
         Check if a lap time is a new personal best and update cache if so.
         
@@ -145,13 +167,14 @@ class PBCache:
             track_id: Track identifier
             car_id: Car identifier
             lap_time_ms: Lap time in milliseconds
+            car_configuration_id: Optional mechanical preset identifier
             
         Returns:
             True if this is a new personal best, False otherwise
         """
         log_debug(Component.PB_CACHE, "Checking PB", track=track_id, car=car_id, time_ms=lap_time_ms)
         
-        key = self._normalize_key(track_id, car_id)
+        key = self._normalize_key(track_id, car_id, car_configuration_id)
         current = self._cache.get(key)
         
         # If no existing PB or new time is faster, update and return True
@@ -164,13 +187,19 @@ class PBCache:
         log_debug(Component.PB_CACHE, "Not a PB", current_ms=current.best_time_ms, new_ms=lap_time_ms)
         return False
     
-    def get_personal_best(self, track_id: str, car_id: str) -> Optional[PersonalBest]:
+    def get_personal_best(
+        self,
+        track_id: str,
+        car_id: str,
+        car_configuration_id: Optional[str] = None,
+    ) -> Optional[PersonalBest]:
         """
         Get current personal best for a track+car combination.
         
         Args:
             track_id: Track identifier
             car_id: Car identifier
+            car_configuration_id: Optional mechanical preset identifier
             
         Returns:
             PersonalBest entry or None if not found
@@ -178,7 +207,7 @@ class PBCache:
         if not self._loaded:
             return None
         
-        key = self._normalize_key(track_id, car_id)
+        key = self._normalize_key(track_id, car_id, car_configuration_id)
         return self._cache.get(key)
     
     def get_cache_stats(self) -> Dict[str, Any]:

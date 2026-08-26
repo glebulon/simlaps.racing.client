@@ -14,6 +14,13 @@ from datetime import datetime
 from typing import AsyncIterator, Optional, Callable, Awaitable, TextIO
 from pathlib import Path
 
+from .ace_setup import (
+    DEFAULT_SETUP_ROOT,
+    CarSetupDecodeError,
+    get_car_configuration_label,
+    load_car_setup_file,
+)
+
 # Import data models from the models module
 from ..models import (
     LapState,
@@ -74,7 +81,6 @@ class LogParser:
     # cut widget shown) and again when the recovery deadline expires
     # (~3-11s later). Events within this window are treated as duplicates.
     PENALTY_ADDED_DEDUP_SECONDS = 15.0
-
     @staticmethod
     def _find_latest_log(log_dir: Path) -> Optional[Path]:
         """Return the most recently modified .txt file in log_dir, or None."""
@@ -98,6 +104,7 @@ class LogParser:
         on_session_end: Optional[SessionEndCallback] = None,
         on_session_restart: Optional[SessionRestartCallback] = None,
         session_manager: Optional[SharedSessionManager] = None,
+        setup_root: Optional[str] = None,
     ) -> None:
         _path = Path(log_path) if log_path else self.DEFAULT_LOG_DIR
         if _path.is_dir() or (not _path.suffix and not _path.is_file()):
@@ -116,6 +123,8 @@ class LogParser:
         self.on_session_end = on_session_end
         self.on_session_restart = on_session_restart
         self._session_manager = session_manager or SharedSessionManager()
+        self._setup_root = Path(setup_root) if setup_root else DEFAULT_SETUP_ROOT
+        self._pending_setup_name: Optional[str] = None
 
         # Track last emitted game status to prevent duplicate events
         self._last_emitted_game_status: Optional[bool] = None
@@ -209,6 +218,12 @@ class LogParser:
             ),
             "connecting_gamecar": re.compile(
                 r"connecting gamecar ([a-f0-9\-]+) \((.+)\)"
+            ),
+            "set_current_car": re.compile(
+                r"onSetPlayerCurrentCarCommand: Set new car ([a-f0-9\-]+) "
+                r"content[\\/]+cars[\\/]+([^\\/]+)[\\/]+presets[\\/]+"
+                r"([^\\/]+)\.mechanicalcarpreset",
+                re.IGNORECASE,
             ),
 
             # Full pipe-delimited Game Started line
@@ -307,6 +322,11 @@ class LogParser:
             ),
             "setup_group": re.compile(
                 r"KS-SETUP-GROUP\s+(.+)$"
+            ),
+            "load_setup_preset": re.compile(r"\bLoad preset\s+(.+?)\s*$"),
+            "open_setup_file": re.compile(
+                r'Opening non-packed file\s+"(.+?\.carsetup)"',
+                re.IGNORECASE,
             ),
         }
 
@@ -839,12 +859,106 @@ class LogParser:
                 self.current_session.weather = suffix
 
     def _serialize_setup_notes(self) -> Optional[str]:
-        if not self.context.setup_values:
-            return None
-        rows: list[str] = []
-        for key, value in self.context.setup_values.items():
-            rows.append(f"{key} {value}".strip())
-        return "\n".join(rows)
+        return self._session_manager.get_car_setup_snapshot().setup_notes
+
+    def _apply_active_setup_to_session(self) -> None:
+        """Copy the manager's current immutable view onto the UI session."""
+
+        if not self.current_session:
+            return
+        snapshot = self._session_manager.get_car_setup_snapshot()
+        self.current_session.setup_notes = snapshot.setup_notes
+        self.current_session.car_configuration_id = snapshot.car_configuration_id
+        self.current_session.car_configuration_label = snapshot.car_configuration_label
+
+    def _handle_car_configuration(self, line: str) -> None:
+        """Capture the canonical mechanical preset from ACE's car command."""
+
+        if "mechanicalcarpreset" not in line or "Set new car" not in line:
+            return
+        match = self._pats["set_current_car"].search(line)
+        if not match:
+            return
+        car_uuid, car_id, configuration_id = match.groups()
+        car_id = car_id.lower()
+        configuration_id = configuration_id.lower()
+        # A car-selection command supersedes any incomplete preset-open pair
+        # left behind by the previous car.
+        self._pending_setup_name = None
+        label = get_car_configuration_label(car_id, configuration_id)
+        self._session_manager.update_car_configuration(
+            car_id,
+            configuration_id,
+            label,
+        )
+        self.context.car_uuid = car_uuid
+        self.context.player_car_uuids.add(car_uuid)
+        self._apply_active_setup_to_session()
+        log_debug(
+            Component.LOG_PARSER,
+            f"[CAR_CONFIG] car={car_id} configuration={configuration_id} "
+            f"label={label}",
+        )
+
+    def _handle_loaded_setup(self, line: str) -> None:
+        """Load the full setup snapshot named by consecutive ACE log lines."""
+
+        preset_match = self._pats["load_setup_preset"].search(line)
+        if preset_match:
+            name = " ".join(preset_match.group(1).split())
+            self._pending_setup_name = name or None
+            return
+
+        file_match = self._pats["open_setup_file"].search(line)
+        if not file_match:
+            return
+        preset_name = self._pending_setup_name
+        self._pending_setup_name = None
+        try:
+            decoded = load_car_setup_file(file_match.group(1), self._setup_root)
+        except CarSetupDecodeError as exc:
+            log_debug(Component.LOG_PARSER, f"[SETUP] Ignored loaded setup: {exc}")
+            return
+
+        if decoded.car_configuration_id:
+            identification = self._session_manager.get_player_identification()
+            configuration_mismatch = bool(
+                identification.car_configuration_id
+                and identification.car_configuration_id
+                != decoded.car_configuration_id
+            )
+            car_mismatch = bool(
+                identification.car_content_id
+                and decoded.car_id
+                and identification.car_content_id != decoded.car_id
+            )
+            if configuration_mismatch or car_mismatch:
+                if not preset_name:
+                    log_debug(
+                        Component.LOG_PARSER,
+                        "[SETUP] Ignored delayed setup for a previous car configuration",
+                    )
+                    return
+            car_id = decoded.car_id or ""
+            label = get_car_configuration_label(
+                car_id, decoded.car_configuration_id
+            )
+            self._session_manager.update_car_configuration(
+                decoded.car_id,
+                decoded.car_configuration_id,
+                label,
+                fallback=not (configuration_mismatch or car_mismatch),
+            )
+        self._session_manager.replace_car_setup_from_file(
+            decoded.values,
+            preset_name,
+        )
+        self._apply_active_setup_to_session()
+        log_debug(
+            Component.LOG_PARSER,
+            f"[SETUP] Loaded preset={preset_name or 'unnamed'} "
+            f"values={len(decoded.values)}",
+        )
 
     def _handle_setup_group(self, line: str) -> None:
         if "KS-SETUP-GROUP" not in line:
@@ -861,11 +975,12 @@ class LogParser:
         key = parts[0]
         value = parts[1].strip() if len(parts) > 1 else ""
 
-        # Keep only the latest value for each setup key.
-        self.context.setup_values[key] = value
-
-        if self.current_session:
-            self.current_session.setup_notes = self._serialize_setup_notes()
+        self._session_manager.update_car_setup_value(
+            key,
+            value,
+            source="logs_manual",
+        )
+        self._apply_active_setup_to_session()
 
         log_debug(Component.LOG_PARSER, f"[SETUP] {key}={value!r}")
 
@@ -925,12 +1040,11 @@ class LogParser:
         ers, kers = self._get_shm_hybrid_flags()
         self.context.car_is_hybrid = is_hybrid_car(has_ers_from_shm=ers, has_kers_from_shm=kers)
 
-        # Preserve setup values across session reset
-        preserved_setup_values = self.context.setup_values.copy()
         self.context.reset_for_new_session()
-        self.context.setup_values = preserved_setup_values
         self._last_setup_car_uuid = None
         self._pending_compound_source_car_uuid = None
+
+        setup_snapshot = self._session_manager.get_car_setup_snapshot()
 
         tm = self._pats["date"].match(line)
         start_time = tm.group(1) if tm else datetime.now().isoformat()
@@ -945,13 +1059,11 @@ class LogParser:
             car_uuid=self.context.car_uuid,
             weather=raw_weather,
             fuel_reliable=not self.context.car_is_hybrid,
+            setup_notes=setup_snapshot.setup_notes,
+            car_configuration_id=setup_snapshot.car_configuration_id,
+            car_configuration_label=setup_snapshot.car_configuration_label,
             start_time=start_time,
         )
-        
-        # Apply any setup values that were captured before this session started
-        if self.context.setup_values:
-            self.current_session.setup_notes = self._serialize_setup_notes()
-            log_debug(Component.LOG_PARSER, f"[SESSION] Applied {len(self.context.setup_values)} setup values to new session")
         
         self._reset_in_progress()
         self._finalise_stints()
@@ -1366,6 +1478,7 @@ class LogParser:
             stint_number = self._current_stint.stint_number if self._current_stint else 1
 
         # ── Build LapData ─────────────────────────────────────────────────────
+        setup_snapshot = self._session_manager.get_car_setup_snapshot()
         completed_lap = LapData(
             lap_number=lap_number,
             physics_lap_number=physics_lap_number,
@@ -1384,6 +1497,9 @@ class LogParser:
             stint_number=stint_number,
             timestamp=timestamp,
             distance_hundredm=ip.distance_hundredm,
+            setup_notes=setup_snapshot.setup_notes,
+            car_configuration_id=setup_snapshot.car_configuration_id,
+            car_configuration_label=setup_snapshot.car_configuration_label,
         )
 
         log_debug(Component.LOG_PARSER,
@@ -1753,6 +1869,9 @@ class LogParser:
             tyre_compound=compound,
             stint_number=stint.stint_number,
             timestamp=completion.timestamp,
+            setup_notes=completion.setup_notes,
+            car_configuration_id=completion.car_configuration_id,
+            car_configuration_label=completion.car_configuration_label,
         )
         self.current_session.laps.append(lap)
         self._shm_emitted_laps.append(lap)
@@ -1790,6 +1909,7 @@ class LogParser:
         compound = self.context.tyre.compound_name
         lap_number = ip.physics_lap_num or (len(self.current_session.laps) + 1)
 
+        setup_snapshot = self._session_manager.get_car_setup_snapshot()
         aborted = LapData(
             lap_number=lap_number,
             physics_lap_number=ip.physics_lap_num,
@@ -1807,6 +1927,9 @@ class LogParser:
             tyre_compound=compound,
             stint_number=self._current_stint.stint_number if self._current_stint else 1,
             distance_hundredm=ip.distance_hundredm,
+            setup_notes=setup_snapshot.setup_notes,
+            car_configuration_id=setup_snapshot.car_configuration_id,
+            car_configuration_label=setup_snapshot.car_configuration_label,
         )
 
         self.current_session.laps.append(aborted)
@@ -1824,6 +1947,7 @@ class LogParser:
         self.context.reset_for_new_session()
         self._last_setup_car_uuid = None
         self._pending_compound_source_car_uuid = None
+        setup_snapshot = self._session_manager.get_car_setup_snapshot()
         self.current_session = SessionData(
             session_type=SESSION_TYPE_MAP.get(session_type, session_type),
             game_version=self.context.game_version,
@@ -1834,6 +1958,9 @@ class LogParser:
             car_uuid=self.context.car_uuid,
             weather=self.context.weather,
             fuel_reliable=not self.context.car_is_hybrid,
+            setup_notes=setup_snapshot.setup_notes,
+            car_configuration_id=setup_snapshot.car_configuration_id,
+            car_configuration_label=setup_snapshot.car_configuration_label,
         )
         self._reset_in_progress()
         self._finalise_stints()
@@ -1934,6 +2061,7 @@ class LogParser:
         self._handle_connect(line)
         self._handle_driver(line)
         self._handle_gamecar_meta(line)
+        self._handle_car_configuration(line)
         self._handle_car_teleport(line)
         self._handle_compound(line)
         self._handle_weather(line)
@@ -1949,7 +2077,8 @@ class LogParser:
         return False
 
     def _process_setup(self, line: str) -> None:
-        """Handle setup group values (captured regardless of session state)."""
+        """Handle loaded baselines and manual changes regardless of session state."""
+        self._handle_loaded_setup(line)
         self._handle_setup_group(line)
 
     def _process_session_events(self, line: str) -> None:
@@ -2217,6 +2346,9 @@ class LogParser:
                             if self._last_emitted_game_status is not False:
                                 await self._emit_game_status(False, trigger="new log file detected")
                             self.context = LogContext()
+                            self._session_manager.clear_car_setup()
+                            self._session_manager.clear_car_configuration()
+                            self._pending_setup_name = None
                             self.current_session = None
                             self._emit_callbacks = True
                             self._last_emitted_game_status = None
@@ -2237,6 +2369,9 @@ class LogParser:
                         if self._last_emitted_game_status is not False:
                             await self._emit_game_status(False, trigger="log file truncated")
                         self.context = LogContext()
+                        self._session_manager.clear_car_setup()
+                        self._session_manager.clear_car_configuration()
+                        self._pending_setup_name = None
                         self.current_session = None
                         self._emit_callbacks = True
                         self._last_emitted_game_status = None

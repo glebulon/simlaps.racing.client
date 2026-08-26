@@ -28,6 +28,8 @@ class DiscordLapPayload:
     sector_times_ms: Optional[list[int]] = None  # [sector1, sector2, sector3] in ms
     fuel_used_liters: Optional[float] = None
     tire_compound: Optional[str] = None  # SC, SS, etc.
+    car_configuration_id: Optional[str] = None
+    car_configuration_label: Optional[str] = None
 
 
 class DiscordNotifier:
@@ -69,7 +71,12 @@ class DiscordNotifier:
         # Title with PB indicator (now included in field)
         title = "Lap Time Recorded"
         
-        from src.utils.helpers import format_lap_time
+        from src.utils.helpers import format_car_with_configuration, format_lap_time
+        car_display = format_car_with_configuration(
+            lap_data.car_name,
+            lap_data.car_configuration_label,
+            lap_data.car_configuration_id,
+        )
         
         # Format sectors as code block
         sectors_code = ""
@@ -92,7 +99,7 @@ class DiscordNotifier:
         field_name = "🫙 New PB" if lap_data.is_personal_best else "Lap Recorded"
         fields.append({
             "name": field_name,
-            "value": f"**Driver:** {lap_data.steam_name or 'Unknown'}\n🏎️ **Car:** {lap_data.car_name.replace('_', ' ').replace('ks_', '').title()} • 🏁 **Track:** {lap_data.track_name.replace('_', ' ').title()} • ⏱️ **Lap Time:** {format_lap_time(lap_data.lap_time_ms)}",
+            "value": f"**Driver:** {lap_data.steam_name or 'Unknown'}\n🏎️ **Car:** {car_display} • 🏁 **Track:** {lap_data.track_name.replace('_', ' ').title()} • ⏱️ **Lap Time:** {format_lap_time(lap_data.lap_time_ms)}",
             "inline": False
         })
         
