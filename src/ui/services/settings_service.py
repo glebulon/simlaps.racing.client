@@ -7,6 +7,7 @@ and parser restart behavior.
 from typing import Callable, TYPE_CHECKING
 
 from src.core.analyzer import TelemetryAnalyzer
+from src.core.discord_notifier import DiscordNotifier
 from src.core.track_catalog import TRACK_CATALOG
 from src.utils.structured_logger import Component, log_info
 from src.utils.config import AppConfig
@@ -35,6 +36,15 @@ class SettingsService:
     ) -> None:
         """Apply new config and reconcile dependent runtime services."""
         previous = app._config
+
+        # Validate the enabled webhook before constructing or persisting any
+        # replacement state. Disabled integrations may retain an old value,
+        # but enabling Discord must never save a URL the notifier would reject.
+        if config.discord_enabled and not DiscordNotifier.validate_webhook_url(
+            config.discord_webhook_url
+        ):
+            raise ValueError("Invalid Discord webhook URL")
+
         server_changed = previous.server_url != config.server_url
         log_path_changed = previous.log_path != config.log_path
         telemetry_output_changed = (

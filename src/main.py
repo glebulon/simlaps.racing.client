@@ -5,7 +5,6 @@ A desktop application that monitors ACE game logs and automatically
 submits lap times to the SimLaps server.
 """
 
-import asyncio
 import sys
 import os
 
@@ -26,7 +25,6 @@ else:
 from src.ui.app import run_app
 from src.utils.structured_logger import (
     Component,
-    log_error,
     log_exception,
     log_info,
 )
@@ -35,19 +33,6 @@ from src.utils.structured_logger import (
 def main():
     """Main entry point for the application."""
     try:
-        # Set up global exception handler for asyncio tasks
-        def handle_asyncio_exception(loop, context):
-            msg = context.get("message", "Unhandled exception in asyncio task")
-            exception = context.get("exception")
-            if exception:
-                log_exception(Component.APP, msg, exception)
-            else:
-                log_error(Component.APP, msg)
-        
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.set_exception_handler(handle_asyncio_exception)
-        
         run_app()
     except KeyboardInterrupt:
         log_info(Component.APP, "Shutting down")

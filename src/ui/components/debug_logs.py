@@ -14,6 +14,7 @@ from datetime import datetime
 import flet as ft
 
 from .feedback import show_snackbar
+from .mount_safe import safe_update
 
 
 class SimpleLogCapture:
@@ -105,7 +106,7 @@ class DebugLogsViewer:
         """Clear logs."""
         _log_capture.clear_logs()
         self.logs_text.value = "Logs cleared."
-        self.logs_text.update()
+        safe_update(self.logs_text)
 
     def _export_game_logs(self, e=None):
         """Export game logs to file."""

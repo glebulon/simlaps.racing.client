@@ -5,6 +5,7 @@ Tests shared memory region reading, capture loop, error handling, and metadata.
 """
 
 import pytest
+import struct
 from unittest.mock import Mock, MagicMock, patch
 from src.core.telemetry_capture import (
     RegionReader,
@@ -15,6 +16,25 @@ from src.core.telemetry_capture import (
 )
 from src.models import SharedSessionManager
 from datetime import datetime, timezone
+
+
+def _graphics_lap_buffer(*, current_lap_time_ms: int, total_lap_count: int,
+                         last_laptime_ms: int, is_valid_lap: bool) -> bytes:
+    """Build a graphics mapping with the stable live-lap fields populated."""
+    from src.core.telemetry_decoder import (
+        _PEEK_CURRENT_LAP_TIME,
+        _PEEK_TOTAL_LAP_COUNT,
+        _PEEK_LAST_LAPTIME,
+        _PEEK_IS_VALID_LAP,
+    )
+
+    data = bytearray(b"\x00" * REGIONS["graphics"][1])
+    struct.pack_into("<i", data, 4, 2)  # AC_LIVE, not mapping teardown
+    struct.pack_into("<i", data, _PEEK_CURRENT_LAP_TIME, current_lap_time_ms)
+    struct.pack_into("<i", data, _PEEK_TOTAL_LAP_COUNT, total_lap_count)
+    struct.pack_into("<i", data, _PEEK_LAST_LAPTIME, last_laptime_ms)
+    data[_PEEK_IS_VALID_LAP] = int(is_valid_lap)
+    return bytes(data)
 
 
 class TestRegionReader:
@@ -201,6 +221,7 @@ class TestTelemetryCapture:
         """Decoded SHM frame data is forwarded into the shared session manager."""
         mock_decode_physics.return_value = {"speed_kmh": 255.0}
         mock_decode_graphics.return_value = {
+            "status_name": "AC_LIVE",
             "session_current_lap": 4,
             "current_lap_time_ms": 70000,
             "last_laptime_ms": 121111,

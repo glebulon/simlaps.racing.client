@@ -64,11 +64,24 @@ If you want to test real submissions, copy `.env.example` to `.env` and set a re
 
 ## Testing
 
-All changes should keep the existing test suite green. Run the full test suite before opening a PR:
+All changes should keep the existing test suite green. Default local runs exclude
+the slower wheel build/install check:
 
 ```powershell
 venv-sim-laps-client\Scripts\python.exe -m pytest tests/ -q
 ```
+
+Before opening a PR or preparing a release, also run the opt-in packaging check
+and verify the environment dependencies:
+
+```powershell
+venv-sim-laps-client\Scripts\python.exe -m pytest tests/test_packaging.py -q -m packaging
+venv-sim-laps-client\Scripts\python.exe -m pip check
+```
+
+The explicit `-m packaging` overrides the default marker selection. This check
+builds and installs the wheel in an isolated temporary directory and verifies its
+resources and console entry point.
 
 For a coverage report:
 

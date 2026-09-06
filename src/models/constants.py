@@ -22,6 +22,11 @@ TRACK_LIMIT_INVALIDATION_THRESHOLD_M: float = 2.0
 # indicates sector/lap desync corruption.
 SECTOR_SUM_TOLERANCE_MS: int = 50
 
+# Log and graphics-SHM lap timers are independently rounded to milliseconds.
+# A tiny tolerance reconciles that representation drift without allowing a
+# genuinely different lap to consume the completion.
+LAP_TIME_RECONCILIATION_TOLERANCE_MS: int = 2
+
 # Minimum reasonable lap distance in hundredmeters to flag a lap as aborted.
 # Spa-GP is ~69. Setting low because track length varies; callers can filter.
 MIN_FULL_LAP_HUNDREDM: int = 20

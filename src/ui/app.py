@@ -5,11 +5,14 @@ Simplified: No authentication required. Uses signed payloads and
 detects user from game logs automatically.
 """
 
-import flet as ft
+import asyncio
 import os
 import sys
+import weakref
 from typing import Optional
 from enum import Enum
+
+import flet as ft
 
 from .pages.home import HomePage
 from .pages.settings import SettingsPage
@@ -30,12 +33,19 @@ from src.core.log_parser import LogParser
 from src.models import SessionData, LapData, SharedSessionManager
 from src.core.api_client import APIClient
 from src.core.security import get_steam_user
-from src.core.discord_notifier import DiscordNotifier
+from src.core.discord_notifier import DiscordNotifier, create_discord_notifier
 from src.core.pb_cache import PBCache
 from src.core.telemetry_capture import TelemetryCapture
 from src.core.track_catalog import TRACK_CATALOG
 from src.core.analyzer import TelemetryAnalyzer
-from src.utils.structured_logger import log_debug, log_info, log_warning, log_exception, Component
+from src.utils.structured_logger import (
+    log_debug,
+    log_error,
+    log_exception,
+    log_info,
+    log_warning,
+    Component,
+)
 from src.utils.config import AppConfig, ConfigManager
 
 
@@ -105,6 +115,12 @@ class SimLapsApp:
         # History tracking
         log_debug(Component.APP, "Setting up history tracking")
         self._history_entries: list[HistoryEntry] = []
+        # ACE lap numbers are scoped to a game session and can therefore be
+        # reused.  Keep the application-history association by object
+        # identity instead of treating ``LapData.lap_number`` as a global
+        # ordinal.  Weak references keep delayed-callback bookkeeping from
+        # retaining completed sessions or trimmed entries.
+        self._history_entry_by_lap_id: dict[int, tuple[object, object]] = {}
         
         # Initialize
         log_info(Component.APP, "Starting initialization")
@@ -138,9 +154,17 @@ class SimLapsApp:
         self.page.spacing = 0
         log_debug(Component.APP, "Flet page properties set")
 
-        # Window close handler
-        self.page.on_close = self._on_window_close
-        log_debug(Component.APP, "Window close handler set")
+        # Flet 0.86.5 reports native desktop close requests through the
+        # Window control.  Intercept the request until asynchronous cleanup
+        # (including telemetry analysis) has completed.
+        self.page.window.prevent_close = True
+        self.page.window.on_event = self._on_window_event
+        # Page callbacks are best-effort fallbacks. Flet awaits disconnect
+        # dispatch, but schedules close dispatch after session expiration;
+        # neither replaces the native close interception above.
+        self.page.on_disconnect = self._on_page_disconnect
+        self.page.on_close = self._on_page_close
+        log_debug(Component.APP, "Window and page lifecycle handlers set")
 
         # Window icon (best-effort — icon file is optional)
         icon_path = self._get_icon_path()
@@ -383,19 +407,76 @@ class SimLapsApp:
             self._history_page.set_entries(self._history_entries)
             self.page.add(self._history_page)
 
-    def _get_history_entry_for_lap_number(self, lap_number: int) -> Optional[HistoryEntry]:
-        """Resolve a history entry from a lap card's absolute lap number."""
-        index = lap_number - 1
-        if 0 <= index < len(self._history_entries):
-            return self._history_entries[index]
-        return None
+    def _prune_history_entry_bindings(self) -> None:
+        """Drop bindings whose history entries are no longer retained."""
+        bindings = getattr(self, "_history_entry_by_lap_id", None)
+        if not bindings:
+            return
+
+        retained_entry_ids = {id(entry) for entry in self._history_entries}
+        for lap_id, (_lap_ref, entry_ref) in list(bindings.items()):
+            entry = entry_ref() if callable(entry_ref) else entry_ref
+            if entry is None or id(entry) not in retained_entry_ids:
+                bindings.pop(lap_id, None)
+
+    def _bind_history_entry_to_lap(self, lap: LapData, entry: HistoryEntry) -> None:
+        """Remember the exact history entry created for ``lap``.
+
+        The weak references are paired with an identity check when resolving,
+        so an ``id`` reused by Python cannot accidentally target a different
+        lap object.
+        """
+        bindings = getattr(self, "_history_entry_by_lap_id", None)
+        if bindings is None:
+            bindings = self._history_entry_by_lap_id = {}
+
+        lap_id = id(lap)
+
+        def _remove_if_current(_ref) -> None:
+            current = bindings.get(lap_id)
+            if current is not None and (
+                current[0] is _ref or current[1] is _ref
+            ):
+                bindings.pop(lap_id, None)
+
+        try:
+            lap_ref = weakref.ref(lap, _remove_if_current)
+        except TypeError:
+            # LapData is weak-referenceable in production.  Keep this small
+            # fallback for test doubles/custom callbacks that are not.
+            lap_ref = lambda: lap
+
+        try:
+            entry_ref = weakref.ref(entry, _remove_if_current)
+        except TypeError:
+            entry_ref = lambda: entry
+
+        bindings[lap_id] = (lap_ref, entry_ref)
+
+    def _get_history_entry_for_lap(self, lap: LapData) -> Optional[HistoryEntry]:
+        """Resolve the retained history entry originating from ``lap``."""
+        self._prune_history_entry_bindings()
+        bindings = getattr(self, "_history_entry_by_lap_id", None) or {}
+        binding = bindings.get(id(lap))
+        if binding is None:
+            return None
+
+        lap_ref, entry_ref = binding
+        bound_lap = lap_ref() if callable(lap_ref) else lap_ref
+        entry = entry_ref() if callable(entry_ref) else entry_ref
+        if bound_lap is not lap or entry is None or not any(
+            retained is entry for retained in self._history_entries
+        ):
+            bindings.pop(id(lap), None)
+            return None
+        return entry
 
     def _on_retry_lap(self, card: LapCard):
         """Retry submission for a failed lap card."""
         if not card.data.lap.is_valid and not self._config.submit_invalid_laps:
             return
 
-        history_entry = self._get_history_entry_for_lap_number(card.data.lap_number)
+        history_entry = self._get_history_entry_for_lap(card.data.lap)
         if history_entry is None:
             card.update_status(LapCardStatus.FAILED, "Retry unavailable: history entry missing")
             return
@@ -418,6 +499,8 @@ class SimLapsApp:
             lap_number=lap.lap_number,
         )
         try:
+            self._prune_history_entry_bindings()
+            existing_entry_ids = {id(entry) for entry in self._history_entries}
             updated_track = await self._lap_processing_service.handle_lap_complete(
                 session=session,
                 lap=lap,
@@ -430,6 +513,17 @@ class SimLapsApp:
                 schedule_submission=self._schedule_lap_submission,
                 create_history_entry=HistoryEntry,
             )
+            # LapProcessingService appends exactly one entry for a presented
+            # timed lap.  Capture the object it appended before any later
+            # session can reuse ACE's lap number.
+            new_entries = [
+                entry
+                for entry in self._history_entries
+                if id(entry) not in existing_entry_ids
+            ]
+            if len(new_entries) == 1:
+                self._bind_history_entry_to_lap(lap, new_entries[0])
+            self._prune_history_entry_bindings()
             if updated_track is not None:
                 self._current_track_name = updated_track
         except Exception as e:
@@ -439,7 +533,7 @@ class SimLapsApp:
         """Refresh a SHM-first lap after ACE eventually flushes its log data."""
         if self._home_page:
             self._home_page.refresh_lap(lap)
-        history_entry = self._get_history_entry_for_lap_number(lap.lap_number)
+        history_entry = self._get_history_entry_for_lap(lap)
         if history_entry is not None:
             history_entry.lap_time_ms = lap.lap_time_ms
             history_entry.timestamp = lap.timestamp
@@ -509,15 +603,24 @@ class SimLapsApp:
     
     async def _on_car_removed(self):
         """Delegate the player-car removal boundary."""
-        await self._session_lifecycle_service.handle_car_removed()
+        try:
+            await self._session_lifecycle_service.handle_car_removed()
+        finally:
+            self._prune_history_entry_bindings()
 
     async def _on_session_restart(self):
         """Delegate the pause-menu restart boundary."""
-        await self._session_lifecycle_service.handle_session_restart()
+        try:
+            await self._session_lifecycle_service.handle_session_restart()
+        finally:
+            self._prune_history_entry_bindings()
 
     async def _on_game_status_change(self, is_running: bool):
         """Handle game running status change."""
-        await self._session_lifecycle_service.handle_game_status_change(is_running)
+        try:
+            await self._session_lifecycle_service.handle_game_status_change(is_running)
+        finally:
+            self._prune_history_entry_bindings()
     
     async def _start_telemetry_capture(self):
         """Start telemetry capture when game session begins."""
@@ -561,7 +664,7 @@ class SimLapsApp:
             app=self,
             steam_id=steam_id,
             player_name=player_name,
-            create_discord_notifier=DiscordNotifier,
+            create_discord_notifier=create_discord_notifier,
         )
 
     async def _bootstrap_startup_user(self, steam_id: Optional[str], steam_name: Optional[str]) -> None:
@@ -570,7 +673,7 @@ class SimLapsApp:
             app=self,
             steam_id=steam_id,
             steam_name=steam_name,
-            create_discord_notifier=DiscordNotifier,
+            create_discord_notifier=create_discord_notifier,
         )
     
     async def _on_game_version(self, version: str):
@@ -578,9 +681,23 @@ class SimLapsApp:
         if self._home_page:
             self._home_page.set_game_version(version)
     
-    def _on_window_close(self, e):
-        """Handle window close."""
-        self._cleanup()
+    async def _on_window_event(self, e):
+        """Handle native desktop window events."""
+        event_type = getattr(e, "type", None)
+        if event_type in (ft.WindowEventType.CLOSE, ft.WindowEventType.CLOSE.value):
+            await self._cleanup()
+
+    async def _on_page_disconnect(self, e=None):
+        """Best-effort cleanup when the page session disconnects."""
+        await self._cleanup()
+
+    async def _on_page_close(self, e=None):
+        """Best-effort cleanup scheduled when a page session expires."""
+        await self._cleanup()
+
+    async def _on_window_close(self, e=None):
+        """Backward-compatible alias for the native close callback."""
+        await self._cleanup()
     
     async def start_monitoring(self):
         """Start monitoring the log file."""
@@ -606,7 +723,7 @@ class SimLapsApp:
         self._settings_service.apply(
             app=self,
             config=config,
-            create_discord_notifier=DiscordNotifier,
+            create_discord_notifier=create_discord_notifier,
             get_pb_cache_for_server=lambda url: PBCache(url),
             create_api_client=APIClient,
             create_log_parser=self._create_log_parser,
@@ -614,16 +731,34 @@ class SimLapsApp:
     
     async def _test_discord_webhook(self, webhook_url: str) -> tuple[bool, str]:
         """Test Discord webhook connection."""
-        if self._discord_notifier:
-            success = await self._discord_notifier.send_test_message()
-            if success:
-                show_snackbar(self.page, "Test message sent successfully!", "#51cf66")
-                return True, "Test message sent successfully"
-            else:
-                show_snackbar(self.page, "Failed to send test message", "#ff6b6b")
-                return False, "Failed to send test message"
-        else:
-            return False, "Discord notifier not initialized"
+        # Settings fields are intentionally transactional. Build a short-lived
+        # notifier from the value currently in the form rather than using the
+        # saved runtime notifier, which may point at an entirely different
+        # webhook (or not exist yet).
+        try:
+            notifier = create_discord_notifier(webhook_url)
+        except Exception:
+            # Keep malformed/custom factory failures generic too. In
+            # particular, never put a webhook token into an error string.
+            log_error(Component.DISCORD, "Discord webhook test failed")
+            return False, "Invalid Discord webhook URL"
+        if notifier is None:
+            return False, "Invalid Discord webhook URL"
+
+        try:
+            success = await notifier.send_test_message()
+        except Exception:
+            # Never surface exception text: HTTP errors can contain the full
+            # webhook URL and its token.
+            log_error(Component.DISCORD, "Discord webhook test failed")
+            success = False
+
+        if success:
+            show_snackbar(self.page, "Test message sent successfully!", "#51cf66")
+            return True, "Test message sent successfully"
+
+        show_snackbar(self.page, "Failed to send test message", "#ff6b6b")
+        return False, "Failed to send test message"
     
     def _show_pb_cache_viewer(self, e=None):
         """Show the PB cache viewer dialog."""
@@ -641,13 +776,28 @@ class SimLapsApp:
         async with APIClient(server_url=server_url) as test_client:
             return await test_client.test_connection()
     
-    def _cleanup(self):
+    async def _cleanup(self):
         """Cleanup resources before exit."""
-        self._app_lifecycle_service.cleanup(app=self)
+        await self._app_lifecycle_service.cleanup(app=self)
 
 
 async def main(page: ft.Page):
     """Application entry point for Flet."""
+    # Flet owns the event loop used by this callback. Install the handler on
+    # that running loop so exceptions from application background tasks are
+    # routed to the structured logger.
+    loop = asyncio.get_running_loop()
+
+    def handle_asyncio_exception(loop, context):
+        msg = context.get("message", "Unhandled exception in asyncio task")
+        exception = context.get("exception")
+        if exception:
+            log_exception(Component.APP, msg, exception)
+        else:
+            log_error(Component.APP, msg)
+
+    loop.set_exception_handler(handle_asyncio_exception)
+
     # Start log capture early
     from .components.debug_logs import start_log_capture
     start_log_capture()

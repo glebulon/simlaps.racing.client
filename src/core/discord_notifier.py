@@ -7,11 +7,22 @@ and error handling.
 
 import httpx
 import asyncio
+import re
+from urllib.parse import urlsplit
 from datetime import datetime
 from dataclasses import dataclass
 from typing import Optional, Dict, Any
 
 from ..utils.structured_logger import log_debug, log_error, log_warning, Component
+
+
+# Discord supports both hostnames for webhook URLs.  Keep this allowlist
+# deliberately exact: the notifier must never become a generic HTTP client.
+_DISCORD_WEBHOOK_HOSTS = frozenset({"discord.com", "discordapp.com"})
+_WEBHOOK_ID_RE = re.compile(r"^[0-9]+$")
+_WEBHOOK_TOKEN_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+_WEBHOOK_PATH_PREFIX = "/api/webhooks/"
+_INVALID_WEBHOOK_URL = "Invalid Discord webhook URL"
 
 
 @dataclass
@@ -45,7 +56,12 @@ class DiscordNotifier:
             webhook_url: Discord webhook URL
             timeout: Request timeout in seconds
         """
-        self.webhook_url = webhook_url
+        if not self.validate_webhook_url(webhook_url):
+            # Do not include the URL in this error. Webhook tokens are
+            # credentials and may otherwise be exposed by UI/log handling.
+            raise ValueError(_INVALID_WEBHOOK_URL)
+
+        self.webhook_url = webhook_url.strip()
         self.timeout = timeout
     
     def create_lap_embed(self, lap_data: DiscordLapPayload) -> Dict[str, Any]:
@@ -158,11 +174,13 @@ class DiscordNotifier:
         except httpx.TimeoutException:
             log_warning(Component.DISCORD, "Discord webhook request timed out")
             return False
-        except httpx.RequestError as e:
-            log_error(Component.DISCORD, f"Discord webhook request failed: {e}")
+        except httpx.RequestError:
+            # httpx exception text can include the full request URL, including
+            # the webhook token. Keep diagnostics useful without leaking it.
+            log_error(Component.DISCORD, "Discord webhook request failed")
             return False
-        except (RuntimeError, ValueError, TypeError) as e:
-            log_error(Component.DISCORD, f"Unexpected error posting to Discord: {e}")
+        except (RuntimeError, ValueError, TypeError):
+            log_error(Component.DISCORD, "Unexpected error posting to Discord")
             return False
     
     async def send_test_message(self) -> bool:
@@ -202,11 +220,41 @@ class DiscordNotifier:
             return False
         
         url = url.strip()
-        
-        # Basic Discord webhook URL pattern
-        # Format: https://discord.com/api/webhooks/{id}/{token}
-        # Minimum valid URL has id and token after the prefix
-        return url.startswith("https://discord.com/api/webhooks/") and len(url) > len("https://discord.com/api/webhooks/") + 3
+        if not url or any(character.isspace() for character in url):
+            return False
+
+        try:
+            parsed = urlsplit(url)
+            hostname = parsed.hostname
+            # A webhook URL is an HTTPS URL to one of Discord's exact hosts.
+            # Reject credentials, ports, query/fragment suffixes, and all
+            # other hosts so this notifier cannot be used for SSRF.
+            if (
+                parsed.scheme.lower() != "https"
+                or hostname is None
+                or hostname.lower() not in _DISCORD_WEBHOOK_HOSTS
+                or parsed.username is not None
+                or parsed.password is not None
+                or parsed.port is not None
+                or parsed.query
+                or parsed.fragment
+            ):
+                return False
+        except ValueError:
+            return False
+
+        if not parsed.path.startswith(_WEBHOOK_PATH_PREFIX):
+            return False
+
+        components = parsed.path[len(_WEBHOOK_PATH_PREFIX):].split("/")
+        if len(components) != 2:
+            return False
+
+        webhook_id, token = components
+        return bool(
+            _WEBHOOK_ID_RE.fullmatch(webhook_id)
+            and _WEBHOOK_TOKEN_RE.fullmatch(token)
+        )
 
 
 def create_discord_notifier(webhook_url: str) -> Optional[DiscordNotifier]:
@@ -219,7 +267,9 @@ def create_discord_notifier(webhook_url: str) -> Optional[DiscordNotifier]:
     Returns:
         DiscordNotifier instance or None if invalid URL
     """
-    if not DiscordNotifier.validate_webhook_url(webhook_url):
+    # Keep the factory's invalid-input contract (None) even though the class
+    # constructor independently enforces the same security boundary.
+    try:
+        return DiscordNotifier(webhook_url)
+    except ValueError:
         return None
-    
-    return DiscordNotifier(webhook_url)

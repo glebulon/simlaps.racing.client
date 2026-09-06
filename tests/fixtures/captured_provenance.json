@@ -1,0 +1,62 @@
+{
+  "source_commit": "2fadd7f1a9d938dc031580bfa77069093ba9d8d2",
+  "source_directory": "tests/fixtures",
+  "telemetry_frame_range_inclusive": [
+    0,
+    1930
+  ],
+  "log_line_range_inclusive": [
+    1,
+    14672
+  ],
+  "graphics_redaction_spans": [
+    [
+      3020,
+      3053
+    ],
+    [
+      3053,
+      3086
+    ]
+  ],
+  "capture_reported_versions": {
+    "sample_telemetry.jsonl": "ACE 0.8.0.1, SHM 1.0 (populated static buffers)",
+    "sample_log.txt": "ACE 0.5.4 (Build release line)",
+    "ac_evo_static_frame.txt": "ACE 0.6.2, SHM 1.0",
+    "ac_evo_graphics_frame.txt": "Unknown: no version encoded in graphics region"
+  },
+  "timestamp_redaction": {
+    "sample_telemetry.jsonl": "One constant shift to 2000-01-01T00:00:00+00:00; original elapsed intervals retained",
+    "sample_log.txt": "One constant shift of line-prefix timestamps to 2000-01-01 00:00:00.000; game/build dates unchanged"
+  },
+  "log_redactions": [
+    "Human names from graphics and log identity fields become consistent FixtureDriverNN aliases; whitespace-only fields are not names",
+    "Numeric Steam identity becomes 76561198000000000; car/driver UUID relationships use deterministic aaaaaaaa prefixes",
+    "Windows user-directory prefixes become C:\\Fixtures\\User; public application/development paths remain",
+    "Complete WebSocket handshake payloads become <redacted-handshake>",
+    "Original line ordering, mixed UTF-8 bytes, channels, event names, lap times and source line count are preserved"
+  ],
+  "signal_preservation": "All physics/static bytes unchanged; graphics bytes outside name/surname spans unchanged; no frames removed or synthesized",
+  "files": {
+    "sample_telemetry.jsonl": {
+      "sha256": "4c36ff1f437ab7aa1f4874893092c898ae43a3c0cbff06012e1f3bf15bb7bddf",
+      "bytes": 27930798
+    },
+    "ac_evo_graphics_frame.txt": {
+      "sha256": "f215f499e2ab7ac9cb3649325e085eed3403c3c85babfb8891307a339affc4d8",
+      "bytes": 8193
+    },
+    "ac_evo_graphics_frame_physics.json": {
+      "sha256": "ce8162dd75d6613f7e55d5b2f698a9548cdf8f362ae9a9ae3aa9f9d999a051d3",
+      "bytes": 208
+    },
+    "ac_evo_static_frame.txt": {
+      "sha256": "e99efb5626cfd9f8b1c9f404cb8bfd17750989658564b93425870c56c1dfffad",
+      "bytes": 4096
+    },
+    "sample_log.txt": {
+      "sha256": "56415227e0986e9426a60a52891fc89eed7cbbb229a92365aa218428ba653daa",
+      "bytes": 1306026
+    }
+  }
+}

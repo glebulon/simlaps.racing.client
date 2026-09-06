@@ -2,6 +2,7 @@
 
 import json
 import os
+from importlib import resources
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -12,11 +13,18 @@ _CATALOG_PATH = Path(__file__).parent / "data" / "track_catalog.json"
 
 def _load_catalog() -> dict:
     """Load track catalog from JSON file with schema validation."""
-    if not _CATALOG_PATH.exists():
-        raise FileNotFoundError(f"Track catalog not found at {_CATALOG_PATH}")
-    
-    with open(_CATALOG_PATH, "r", encoding="utf-8") as f:
-        catalog = json.load(f)
+    try:
+        catalog_text = resources.files("src.core").joinpath(
+            "data", "track_catalog.json"
+        ).read_text(encoding="utf-8")
+    except (FileNotFoundError, ModuleNotFoundError, OSError, TypeError):
+        # Keep source checkouts and PyInstaller bundles working when the
+        # package resource loader is not available for the active importer.
+        if not _CATALOG_PATH.exists():
+            raise FileNotFoundError(f"Track catalog not found at {_CATALOG_PATH}")
+        catalog_text = _CATALOG_PATH.read_text(encoding="utf-8")
+
+    catalog = json.loads(catalog_text)
     
     # Schema validation
     _validate_catalog(catalog)

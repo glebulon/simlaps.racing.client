@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -100,6 +101,62 @@ async def test_game_stopped_preserves_delay_and_stop_reason(capturing):
         sleep.assert_awaited_once_with(2.0)
     else:
         sleep.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_delayed_game_stop_cannot_stop_capture_started_by_new_game_status():
+    """A reordered game-status callback must leave the new run capturing."""
+    service, _, _, capture, start, stop = _make_service(capturing=True)
+    delay_started = asyncio.Event()
+    release_delay = asyncio.Event()
+
+    async def blocked_sleep(seconds):
+        assert seconds == 2.0
+        delay_started.set()
+        await release_delay.wait()
+
+    with patch(
+        "src.ui.services.session_lifecycle_service.asyncio.sleep",
+        side_effect=blocked_sleep,
+    ):
+        stale_stop = asyncio.create_task(service.handle_game_status_change(False))
+        await delay_started.wait()
+
+        await service.handle_game_status_change(True)
+        release_delay.set()
+        await stale_stop
+
+    stop.assert_not_awaited()
+    start.assert_awaited_once_with()
+    assert capture.is_capturing()
+
+
+@pytest.mark.asyncio
+async def test_delayed_car_removed_stop_cannot_stop_capture_started_by_restart():
+    """A reordered car-removal callback must leave the restarted run capturing."""
+    service, _, _, capture, start, stop = _make_service(capturing=True)
+    delay_started = asyncio.Event()
+    release_delay = asyncio.Event()
+
+    async def blocked_sleep(seconds):
+        assert seconds == 1.0
+        delay_started.set()
+        await release_delay.wait()
+
+    with patch(
+        "src.ui.services.session_lifecycle_service.asyncio.sleep",
+        side_effect=blocked_sleep,
+    ):
+        stale_stop = asyncio.create_task(service.handle_car_removed())
+        await delay_started.wait()
+
+        await service.handle_session_restart()
+        release_delay.set()
+        await stale_stop
+
+    stop.assert_awaited_once_with("session_restart", discard=True)
+    start.assert_awaited_once_with()
+    assert capture.is_capturing()
 
 
 @pytest.mark.asyncio

@@ -14,6 +14,7 @@ from ..components.lap_card import LapCard, LapCardData, LapCardStatus
 from ..components.status_bar import StatusBar, ConnectionStatus
 from ..components.telemetry_status import TelemetryStatusIndicator, TelemetryStatus
 from ..components.feedback import show_snackbar
+from ..components.mount_safe import mounted_page, safe_update
 from ...models import SessionData, LapData
 from ...core.api_client import SubmissionStatus
 from ...utils.config import AppConfig
@@ -243,8 +244,7 @@ class HomePage(ft.Column):
         # Update counter text
         if hasattr(self, '_lap_count_text'):
             self._lap_count_text.value = f"({self._lap_count} total)"
-            if self.page:
-                self._lap_count_text.update()
+            safe_update(self._lap_count_text)
     
     def _build_controls(self) -> list:
         """Build the page controls."""
@@ -391,19 +391,20 @@ class HomePage(ft.Column):
                     result = await client.check_for_updates()
                     if result.get("available"):
                         self._update_banner.visible = True
-                        if self.page:
-                            self._update_banner.update()
+                        safe_update(self._update_banner)
             except Exception as e:
                 log_warning(Component.HOME, f"Update check failed: {e}")
 
         # Run in background if page is available
-        if self.page:
-            self.page.run_task(check)
+        page = mounted_page(self)
+        if page is not None:
+            page.run_task(check)
 
     async def _open_update_url(self, _=None):
         """Open browser to download update."""
-        if self.page:
-            await self.page.launch_url(UPDATE_DOWNLOAD_URL)
+        page = mounted_page(self)
+        if page is not None:
+            await page.launch_url(UPDATE_DOWNLOAD_URL)
     
     def _handle_settings_click(self, e):
         """Handle Settings button click."""
@@ -430,9 +431,10 @@ class HomePage(ft.Column):
         else:
             log_debug(Component.HOME, "No callback registered for PB Cache")
             # Show a message to user if no callback is set
-            if self.page:
+            page = mounted_page(self)
+            if page is not None:
                 show_snackbar(
-                    self.page,
+                    page,
                     "PB Cache view is not configured yet",
                     "#7c3aed",
                 )
@@ -442,7 +444,9 @@ class HomePage(ft.Column):
         log_info(Component.HOME, "Logs button clicked")
         try:
             from ..components.debug_logs import show_debug_logs
-            show_debug_logs(self.page)
+            page = mounted_page(self)
+            if page:
+                show_debug_logs(page)
             log_info(Component.HOME, "Debug logs dialog shown")
         except Exception as ex:
             log_exception(Component.HOME, "Error showing debug logs", ex)
@@ -454,8 +458,7 @@ class HomePage(ft.Column):
     def set_status(self, message: str):
         """Update the status message."""
         self._status_text.value = message
-        if self.page:
-            self._status_text.update()
+        safe_update(self._status_text)
     
     def set_connection_status(self, status: ConnectionStatus, message: str):
         """Update the connection status bar."""
@@ -466,8 +469,7 @@ class HomePage(ft.Column):
         if self._game_running != is_running:
             self._game_running = is_running
             self._update_game_status_ui()
-            if self.page:
-                self._game_status_container.update()
+            safe_update(self._game_status_container)
     
     def set_detected_user(self, steam_id: Optional[str], player_name: Optional[str] = None):
         """Update detected user information."""
@@ -476,16 +478,14 @@ class HomePage(ft.Column):
             self._detected_steam_id = steam_id
             self._detected_player_name = player_name
             self._update_game_status_ui()
-            if self.page:
-                self._game_status_container.update()
+            safe_update(self._game_status_container)
     
     def set_game_version(self, version: str):
         """Update the detected game version."""
         if self._game_version != version:
             self._game_version = version
             self._game_version_text.value = f"{GAME_DISPLAY_NAME} {version}"
-            if self.page:
-                self._game_version_text.update()
+            safe_update(self._game_version_text)
     
     def add_lap(
         self,
@@ -510,8 +510,7 @@ class HomePage(ft.Column):
         self._lap_cards.appendleft(card)
         
         self._update_laps_ui()
-        if self.page:
-            self._laps_column.update()
+        safe_update(self._laps_column)
         
         return card
 
@@ -539,8 +538,7 @@ class HomePage(ft.Column):
         self._lap_cards.clear()
         self._lap_count = 0
         self._update_laps_ui()
-        if self.page:
-            self._laps_column.update()
+        safe_update(self._laps_column)
     
     def get_status_bar(self) -> StatusBar:
         """Get the status bar component."""
@@ -569,8 +567,4 @@ class HomePage(ft.Column):
                 padding=ft.Padding.only(left=20, right=20, bottom=8),
                 bgcolor="#0f0f1a",
             )
-        try:
-            if self.page:
-                self._telemetry_button_container.update()
-        except RuntimeError:
-            pass
+        safe_update(self._telemetry_button_container)

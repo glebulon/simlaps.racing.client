@@ -1,19 +1,22 @@
 """Regressions from the 1.3.21 live telemetry audit."""
 
+import json
+import re
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.core.analyzer._util import _trend_direction
 from src.core.analyzer.build_track import build_track
-from src.core.analyzer.html_renderer import render_html
+from src.core.analyzer.html_renderer import build_html_template, render_html
 from src.core.analyzer.metrics import analyze_suspension
 from src.core.telemetry_analyzer import TelemetryAnalyzer
 from src.core.telemetry_capture import FrameData
 from src.models import LapData, SessionData
-from src.ui.services.lap_processing_service import LapProcessingService
 from src.ui.app import SimLapsApp
+from src.ui.services.lap_processing_service import LapProcessingService
 from src.utils.config import AppConfig
 
 
@@ -301,6 +304,80 @@ async def test_html_report_is_self_contained_and_handles_no_valid_best(tmp_path)
     assert "https://cdnjs.cloudflare.com" not in html
     assert "https://cdn.jsdelivr.net" not in html
     assert "Best Lap', value: bestLap ? bestLap.lap_time_str : 'N/A'" in html
+
+
+@pytest.mark.asyncio
+async def test_html_report_escapes_hostile_data_and_renders_it_as_text(tmp_path):
+    hostile = "</script><script>alert('x')</script> & < > \u2028\u2029"
+    corner = _corner()
+    corner["name"] = hostile
+    lap = _lap(1, valid=True, lap_time=61.0, max_speed=123.0)
+    lap["corners"] = [corner]
+    data = {
+        "meta": {"driver": hostile},
+        "hz": 10.0,
+        "track_key": "hostile-track",
+        "track_name": hostile,
+        "config_key": "gp",
+        "config_name": hostile,
+        "track_label": hostile,
+        "laps": [lap],
+        "best_lap_num": 1,
+        "reference_lap_num": 1,
+        "comparison_lap_num": None,
+        "comparison_available": False,
+        "valid_lap_nums": [1],
+        "ref_corners": [corner],
+        "corner_data": {1: {1: {"apex": 80.0}}},
+        "corner_speeds": {1: {1: 80.0}},
+        "analysis_mode": "full",
+        "analysis_confidence": "high",
+        "analysis_notes": [hostile],
+    }
+
+    await render_html(data, str(tmp_path), "hostile")
+    html = (tmp_path / "telemetry_hostile.html").read_text(encoding="utf-8")
+
+    class ScriptCounter(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.script_count = 0
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "script":
+                self.script_count += 1
+
+    parser = ScriptCounter()
+    parser.feed(html)
+    assert parser.script_count == 3
+    assert hostile not in html
+    assert r"\u003c/script\u003e" in html
+    assert r"\u0026" in html
+    assert r"\u003e" in html
+    assert r"\u2028" in html
+    assert r"\u2029" in html
+    assert "innerHTML" not in html
+
+    data_match = re.search(r"const DATA = (.*);\nconst LAP_COLORS", html)
+    assert data_match is not None
+    recovered = json.loads(data_match.group(1))
+    assert recovered["meta"]["driver"] == hostile
+    assert recovered["track_name"] == hostile
+    assert recovered["analysis_notes"] == [hostile]
+    assert recovered["ref_corners"][0]["name"] == hostile
+
+
+def test_html_template_substitutes_trusted_scripts_before_report_data():
+    html = build_html_template(
+        '{"value":"__CHART_JS__"}',
+        chart_js="trusted-chart __DATA__",
+        annotation_js="trusted-annotation __CHART_JS__",
+    )
+
+    assert "<script>trusted-chart __DATA__</script>" in html
+    assert "<script>trusted-annotation __CHART_JS__</script>" in html
+    assert 'const DATA = {"value":"__CHART_JS__"};' in html
+    assert html.count('trusted-chart') == 1
 
 
 @pytest.mark.asyncio

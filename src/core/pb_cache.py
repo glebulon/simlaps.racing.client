@@ -5,10 +5,11 @@ Manages in-memory cache of personal best lap times for Discord integration.
 Preloads from API and provides fast PB detection for new laps.
 """
 
-import httpx
 from dataclasses import dataclass
-from typing import Any, Dict, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Tuple
+
+import httpx
 
 from src.utils.structured_logger import (
     Component,
@@ -25,6 +26,16 @@ class PersonalBest:
     best_time_ms: int
     last_lap_id: Optional[str] = None
     updated_at: Optional[datetime] = None
+
+    def __post_init__(self) -> None:
+        """Keep timestamps comparable by storing them as UTC-aware values."""
+        if self.updated_at is None:
+            return
+
+        if self.updated_at.tzinfo is None:
+            self.updated_at = self.updated_at.replace(tzinfo=timezone.utc)
+        else:
+            self.updated_at = self.updated_at.astimezone(timezone.utc)
 
 
 class PBCache:
@@ -112,8 +123,10 @@ class PBCache:
                     updated_at = None
                     if set_at:
                         try:
-                            updated_at = datetime.fromisoformat(set_at.replace("Z", "+00:00"))
-                        except ValueError:
+                            if set_at.endswith("Z"):
+                                set_at = f"{set_at[:-1]}+00:00"
+                            updated_at = datetime.fromisoformat(set_at)
+                        except (TypeError, ValueError):
                             pass
 
                     self._cache[key] = PersonalBest(
@@ -156,7 +169,10 @@ class PBCache:
         
         # If no existing PB or new time is faster, update and return True
         if current is None or lap_time_ms < current.best_time_ms:
-            new_pb = PersonalBest(best_time_ms=lap_time_ms, updated_at=datetime.now())
+            new_pb = PersonalBest(
+                best_time_ms=lap_time_ms,
+                updated_at=datetime.now(timezone.utc),
+            )
             self._cache[key] = new_pb
             log_info(Component.PB_CACHE, "New personal best!", track=track_id, car=car_id, time_ms=lap_time_ms)
             return True

@@ -2,7 +2,7 @@
 Tests for telemetry decoder using real telemetry dump data.
 
 Tests decoding of raw physics data from actual ACE telemetry captures.
-Graphics and static data are not decoded as they don't match known formats.
+Graphics and static buffers exercise the ACE decoder dispatch paths.
 """
 
 import json

@@ -1,29 +1,22 @@
-"""Coverage tests for src.main entrypoint behavior."""
+"""Coverage tests for the application entrypoints."""
 
-from unittest.mock import MagicMock, patch
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 import src.main as main_mod
+import src.ui.app as app_mod
 
 
-@patch("src.main.run_app")
-@patch("src.main.asyncio.set_event_loop")
-@patch("src.main.asyncio.new_event_loop")
-def test_main_runs_app_successfully(
-    mock_new_loop,
-    mock_set_loop,
-    mock_run_app,
-) -> None:
-    loop = MagicMock()
-    mock_new_loop.return_value = loop
+def test_main_runs_app_without_creating_an_event_loop() -> None:
+    with patch("src.main.run_app") as run_app, patch(
+        "asyncio.new_event_loop", side_effect=AssertionError("unexpected loop")
+    ) as new_event_loop:
+        main_mod.main()
 
-    main_mod.main()
-
-    mock_new_loop.assert_called_once()
-    mock_set_loop.assert_called_once_with(loop)
-    loop.set_exception_handler.assert_called_once()
-    mock_run_app.assert_called_once()
+    run_app.assert_called_once()
+    new_event_loop.assert_not_called()
 
 
 @patch("src.main.run_app", side_effect=KeyboardInterrupt)
@@ -54,7 +47,9 @@ def test_main_exception_exits_one(mock_exit, _mock_run_app) -> None:
 @patch("src.main.run_app", side_effect=RuntimeError("fatal"))
 @patch("src.main.sys.exit")
 @patch("builtins.input")
-def test_main_exception_frozen_prompts_user(mock_input, mock_exit, _mock_run_app) -> None:
+def test_main_exception_frozen_prompts_user(
+    mock_input, mock_exit, _mock_run_app
+) -> None:
     with patch.object(main_mod.sys, "frozen", True, create=True):
         with patch.object(main_mod.sys, "_MEIPASS", "C:\\fake", create=True):
             main_mod.main()
@@ -68,34 +63,92 @@ def test_frozen_path_setup() -> None:
             with patch.object(main_mod.sys, "path", []):
                 # Re-import to trigger path setup
                 import importlib
+
                 importlib.reload(main_mod)
                 assert "C:\\fake" in main_mod.sys.path
 
 
-def test_async_exception_handler_with_exception() -> None:
-    loop = MagicMock()
-    with patch("src.main.asyncio.new_event_loop", return_value=loop):
-        with patch("src.main.asyncio.set_event_loop"):
-            with patch("src.main.run_app"):
-                main_mod.main()
+def _configure_mock_app(app_class):
+    app = app_class.return_value
+    app._config = MagicMock(
+        server_url="https://example.test",
+        discord_enabled=False,
+        discord_webhook_url=None,
+        discord_pb_only=False,
+    )
+    app._pb_cache.is_loaded.return_value = False
+    app._bootstrap_startup_user = AsyncMock()
+    app.start_monitoring = AsyncMock()
 
-    handler = loop.set_exception_handler.call_args[0][0]
-    error = RuntimeError("boom")
-    with patch("src.main.log_exception") as log_exception:
+
+@pytest.mark.asyncio
+async def test_flet_entrypoint_installs_handler_on_running_loop() -> None:
+    loop = MagicMock()
+    page = MagicMock()
+
+    with patch("src.ui.app.asyncio.get_running_loop", return_value=loop), patch(
+        "src.ui.components.debug_logs.start_log_capture"
+    ), patch.object(app_mod, "SimLapsApp") as app_class, patch(
+        "src.ui.app.get_steam_user", return_value=(None, None)
+    ):
+        _configure_mock_app(app_class)
+        await app_mod.main(page)
+
+    loop.set_exception_handler.assert_called_once()
+
+    handler = loop.set_exception_handler.call_args.args[0]
+    error = RuntimeError("background failure")
+    with patch("src.ui.app.log_exception") as log_exception:
         handler(loop, {"message": "task failed", "exception": error})
 
-    log_exception.assert_called_once_with(main_mod.Component.APP, "task failed", error)
+    log_exception.assert_called_once_with(app_mod.Component.APP, "task failed", error)
 
 
-def test_async_exception_handler_without_exception() -> None:
+@pytest.mark.asyncio
+async def test_background_exception_routes_to_structured_logger() -> None:
+    loop = asyncio.get_running_loop()
+    previous_handler = loop.get_exception_handler()
+    page = MagicMock()
+
+    try:
+        with patch("src.ui.components.debug_logs.start_log_capture"), patch.object(
+            app_mod, "SimLapsApp"
+        ) as app_class, patch(
+            "src.ui.app.get_steam_user", return_value=(None, None)
+        ), patch("src.ui.app.log_exception") as log_exception:
+            _configure_mock_app(app_class)
+            await app_mod.main(page)
+
+            async def fail_in_background():
+                raise RuntimeError("background failure")
+
+            task = asyncio.create_task(fail_in_background())
+            await asyncio.sleep(0)
+            error = task.exception()
+            loop.call_exception_handler({"message": "task failed", "exception": error})
+
+            log_exception.assert_called_once_with(
+                app_mod.Component.APP, "task failed", error
+            )
+    finally:
+        loop.set_exception_handler(previous_handler)
+
+
+@pytest.mark.asyncio
+async def test_async_exception_handler_without_exception() -> None:
     loop = MagicMock()
-    with patch("src.main.asyncio.new_event_loop", return_value=loop):
-        with patch("src.main.asyncio.set_event_loop"):
-            with patch("src.main.run_app"):
-                main_mod.main()
+    page = MagicMock()
 
-    handler = loop.set_exception_handler.call_args[0][0]
-    with patch("src.main.log_error") as log_error:
+    with patch("src.ui.app.asyncio.get_running_loop", return_value=loop), patch(
+        "src.ui.components.debug_logs.start_log_capture"
+    ), patch.object(app_mod, "SimLapsApp") as app_class, patch(
+        "src.ui.app.get_steam_user", return_value=(None, None)
+    ):
+        _configure_mock_app(app_class)
+        await app_mod.main(page)
+
+    handler = loop.set_exception_handler.call_args.args[0]
+    with patch("src.ui.app.log_error") as log_error:
         handler(loop, {"message": "task failed"})
 
-    log_error.assert_called_once_with(main_mod.Component.APP, "task failed")
+    log_error.assert_called_once_with(app_mod.Component.APP, "task failed")

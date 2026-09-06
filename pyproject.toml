@@ -51,6 +51,7 @@ include = ["src*"]
 version = {attr = "src.version.VERSION"}
 
 [tool.setuptools.package-data]
+"src.core" = ["data/*.json"]
 "src.core.analyzer" = ["vendor/*.js", "vendor/*.md"]
 
 [tool.ruff]

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ...utils.helpers import format_lap_time, format_car_name, format_track_name
+from ..components.mount_safe import safe_update
 
 
 @dataclass
@@ -255,12 +256,7 @@ class HistoryPage(ft.Container):
         self._entries.append(entry)
         self._update_list_view()
         self.content = self._build_content()
-        try:
-            if self.page:
-                self.update()
-        except RuntimeError:
-            # Control not added to page yet, skip update
-            pass
+        safe_update(self)
     
     def set_entries(self, entries: List[HistoryEntry]):
         """Set all history entries."""
@@ -274,9 +270,4 @@ class HistoryPage(ft.Container):
         self._entries.clear()
         self._update_list_view()
         self.content = self._build_content()
-        try:
-            if self.page:
-                self.update()
-        except RuntimeError:
-            # Control not added to page yet, skip update
-            pass
+        safe_update(self)

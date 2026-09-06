@@ -1,29 +1,38 @@
-"""Tests for ``decode_graphics_evo`` against a real captured frame.
+"""Tests for ``decode_graphics_evo`` against a redacted captured protocol frame.
 
 Fixture
 -------
-``tests/fixtures/ac_evo_graphics_frame.txt`` contains the full hex of the
-graphics SHM region for one frame from the user's lap on Spa-Francorchamps
-in a Dallara EXP. The companion ``ac_evo_graphics_frame_physics.json``
-records the physics decoder's view of the same frame so we can
-cross-validate that graphics fields agree with physics where they should.
+``tests/fixtures/ac_evo_graphics_frame.txt`` contains a deterministic
+captured graphics SHM region. The companion JSON records the physics
+decoder's view of the same frame so we can cross-validate fields that
+should agree between the two sources.
 
-The original physics dead-reckoning ``normalized_car_position`` for this
-frame was ``0.0`` (broken — the car is clearly mid-lap at 154 km/h in 5th
-gear). The graphics ``npos`` field is the authoritative source the AI
-prompt's coaching depends on, so this fixture is the regression backstop
-for the graphics decoder.
+The captured physics dead-reckoning ``normalized_car_position`` is ``0.0``
+while graphics ``npos`` is non-zero. The graphics field is the authoritative
+source the AI prompt's coaching depends on, so this fixture is the regression
+backstop for the graphics decoder.
 """
 from __future__ import annotations
 
 import json
 import math
+import struct
 from pathlib import Path
 
 import pytest
 
 from src.core.telemetry_decoder import (
     GRAPHICS_EVO_MIN_SIZE,
+    _GE_TIMING_BEST_LAPTIME,
+    _GE_TIMING_CURRENT_LAPTIME,
+    _GE_TIMING_DELTA_CURRENT,
+    _GE_TIMING_DELTA_CURRENT_P,
+    _GE_TIMING_DELTA_LAST,
+    _GE_TIMING_DELTA_LAST_P,
+    _GE_TIMING_IDEAL_LAPTIME,
+    _GE_TIMING_IS_INVALID,
+    _GE_TIMING_LAST_LAPTIME,
+    _GE_TIMING_TOTAL_TIME,
     decode_graphics,
     decode_graphics_evo,
 )
@@ -35,15 +44,11 @@ PHYSICS_JSON = FIXTURE_DIR / "ac_evo_graphics_frame_physics.json"
 
 @pytest.fixture(scope="module")
 def graphics_bytes() -> bytes:
-    if not GRAPHICS_HEX.exists():
-        pytest.skip(f"fixture {GRAPHICS_HEX} not present")
     return bytes.fromhex(GRAPHICS_HEX.read_text().strip())
 
 
 @pytest.fixture(scope="module")
 def physics() -> dict:
-    if not PHYSICS_JSON.exists():
-        pytest.skip(f"fixture {PHYSICS_JSON} not present")
     return json.loads(PHYSICS_JSON.read_text())
 
 
@@ -104,17 +109,15 @@ class TestDecodeGraphicsEvoFieldValues:
         assert result["normalized_car_position"] == result["npos"]
         assert result["normalized_position_source"] == "graphics_npos"
 
-    def test_npos_disagrees_with_broken_physics_dead_reckoning(self, graphics_bytes, physics):
-        """Documents *why* the graphics decoder matters: in this captured
-        frame the car is at 154 km/h in 5th gear, but physics
-        dead-reckoning collapsed to ``0.0``. Graphics ``npos`` carries
-        the real value."""
+    def test_npos_is_authoritative_over_physics_dead_reckoning(self, graphics_bytes, physics):
+        """Graphics progress remains available when physics has no position."""
         result = decode_graphics_evo(graphics_bytes)
 
-        assert physics["normalized_car_position"] == 0.0  # broken physics
-        assert result["npos"] > 0.001  # real progress
+        assert physics["normalized_car_position"] == 0.0  # no physics position
+        assert result["npos"] > 0.001  # authoritative graphics progress
 
     def test_gear_matches_physics(self, graphics_bytes, physics):
+        """The captured graphics and physics fixtures describe one frame."""
         result = decode_graphics_evo(graphics_bytes)
 
         assert result["gear_int"] == physics["gear"]
@@ -139,18 +142,15 @@ class TestDecodeGraphicsEvoFieldValues:
         assert abs(result["g_forces_y"] - acc_g["y"]) < 0.5
         assert abs(result["g_forces_z"] - acc_g["z"]) < 0.5
 
-    def test_known_strings_present(self, graphics_bytes):
-        """``driver_name`` and ``car_model`` were validated against the
-        user's session ('Glebulon' / 'Dallara EXP'). Anchoring the test
-        to substrings avoids brittleness if the surname trims differently
-        across runs."""
+    def test_redacted_identity_strings_present(self, graphics_bytes):
+        """The redacted fixture contains redacted human identity values and the actual car model."""
         result = decode_graphics_evo(graphics_bytes)
 
-        assert "Glebulon" in result["driver_name"]
-        assert "Dallara" in result["car_model"]
+        assert result["driver_name"] == "Fixture Driver"
+        assert result["car_model"] == "Dallara EXP"
 
     def test_car_location_is_on_track(self, graphics_bytes):
-        """ACEVO_TRACK = 4. Captured frame is mid-lap at 154 km/h."""
+        """ACEVO_TRACK = 4 and the captured car is not in the pits."""
         result = decode_graphics_evo(graphics_bytes)
 
         assert result["car_location"] == 4
@@ -179,6 +179,46 @@ class TestDecodeGraphicsEvoFieldValues:
         assert result["completed_laps"] == result["total_lap_count"]
         assert result["position"] == result["current_pos"]
         assert result["is_in_pit"] == result["is_in_pit_box"]
+
+    def test_session_offsets_match_fixture(self, graphics_bytes):
+        result = decode_graphics_evo(graphics_bytes)
+
+        assert result["session_total_laps"] == 3
+        assert result["session_current_lap"] == 1
+        assert result["session_time_left_ms"] == 1_043_230
+
+    def test_timing_substructure_uses_aligned_non_overlapping_fields(self, graphics_bytes):
+        """Each timing field has a distinct documented ``_pack_=4`` slot."""
+        data = bytearray(graphics_bytes)
+
+        def put_string(offset, value):
+            encoded = value.encode("ascii")
+            assert len(encoded) <= 15
+            data[offset:offset + 15] = encoded.ljust(15, b"\x00")
+
+        put_string(_GE_TIMING_CURRENT_LAPTIME, "CURRENT")
+        put_string(_GE_TIMING_DELTA_CURRENT, "CUR_DELTA")
+        put_string(_GE_TIMING_LAST_LAPTIME, "LAST")
+        put_string(_GE_TIMING_DELTA_LAST, "LAST_DELTA")
+        put_string(_GE_TIMING_BEST_LAPTIME, "BEST")
+        put_string(_GE_TIMING_IDEAL_LAPTIME, "IDEAL")
+        put_string(_GE_TIMING_TOTAL_TIME, "TOTAL")
+        struct.pack_into("<i", data, _GE_TIMING_DELTA_CURRENT_P, -101)
+        struct.pack_into("<i", data, _GE_TIMING_DELTA_LAST_P, 202)
+        data[_GE_TIMING_IS_INVALID] = 1
+
+        result = decode_graphics_evo(bytes(data))
+
+        assert result["timing_current_laptime"] == "CURRENT"
+        assert result["timing_delta_current"] == "CUR_DELTA"
+        assert result["timing_delta_current_p"] == -101
+        assert result["timing_last_laptime"] == "LAST"
+        assert result["timing_delta_last"] == "LAST_DELTA"
+        assert result["timing_delta_last_p"] == 202
+        assert result["timing_best_laptime"] == "BEST"
+        assert result["timing_ideal_laptime"] == "IDEAL"
+        assert result["timing_total_time"] == "TOTAL"
+        assert result["timing_is_invalid"] is True
 
 
 class TestDecodeGraphicsDispatch:

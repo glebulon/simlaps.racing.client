@@ -285,6 +285,14 @@
 
 *Server-side session lifecycle information.*
 
+This structure uses 4-byte packing. Offsets below are relative to the start
+of the structure; `int32_t` and `float` fields are aligned to 4-byte
+boundaries after the fixed-width character arrays. The complete structure is
+padded to 256 bytes. The field offsets are: `phase_name` 0, `time_left` 33,
+`time_left_ms` 48, `wait_time` 52, `total_lap` 68, `current_lap` 72,
+`lights_on` 76, `lights_mode` 80, `lap_length_km` 84, `end_session_flag` 88,
+`time_to_next_session` 92, and the six boolean fields 107 through 112.
+
 | Type | Field | Meaning |
 | :---- | :---- | :---- |
 | char\[33\] | phase\_name | Name of the current session phase (e.g. 'Race', 'Qualify') |
@@ -308,6 +316,13 @@
 ## **SMEvoTimingState \[256 bytes\]**
 
 *Lap timing and delta values displayed on the HUD.*
+
+This structure also uses 4-byte packing. Offsets are relative to the start of
+the structure. The field offsets are: `current_laptime` 0, `delta_current` 15,
+`delta_current_p` 32, `last_laptime` 36, `delta_last` 51, `delta_last_p` 68,
+`best_laptime` 72, `ideal_laptime` 87, `total_time` 102, and `is_invalid`
+117. The two delta-sign fields are aligned `int32_t` values; the complete
+structure is padded to 256 bytes.
 
 | Type | Field | Meaning |
 | :---- | :---- | :---- |

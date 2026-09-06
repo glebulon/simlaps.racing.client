@@ -32,23 +32,24 @@ except ImportError:
 
 
 # =============================================================================
-# APP SECRET - Load from environment
+# APP SECRET - Load runtime dotenv without packaging it
 # =============================================================================
-# Load .env file if it exists (for development)
-# When running as PyInstaller executable, .env is in _MEIPASS directory
-if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
-    # Running as compiled executable - .env is bundled in _MEIPASS
-    env_path = os.path.join(sys._MEIPASS, '.env')
-    if os.path.exists(env_path):
-        load_dotenv(env_path)
-    else:
-        # Fallback: try loading from executable directory
-        env_path = os.path.join(os.path.dirname(sys.executable), '.env')
-        if os.path.exists(env_path):
-            load_dotenv(env_path)
-else:
-    # Running as script - load from project root
-    load_dotenv()
+def _load_runtime_dotenv() -> None:
+    """Load runtime configuration without overriding process environment.
+
+    Source runs use python-dotenv discovery. Frozen clients only check for an
+    external sidecar beside the executable; the PyInstaller extraction
+    directory is never treated as a configuration source.
+    """
+    if getattr(sys, "frozen", False):
+        env_path = os.path.join(os.path.dirname(sys.executable), ".env")
+        if os.path.isfile(env_path):
+            load_dotenv(env_path, override=False)
+        return
+    load_dotenv(override=False)
+
+
+_load_runtime_dotenv()
 
 # The old .env.example placeholder. Treated as absent so a copied template
 # cannot mask a real embedded secret or accidentally enable submissions.
