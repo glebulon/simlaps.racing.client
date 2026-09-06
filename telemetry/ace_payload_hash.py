@@ -1,26 +1,42 @@
+"""Hash and optionally submit an ACE Career Mode payload.
+
+The payload hash is kept compatible with the ACE web client's object-hash
+representation. Submission is an opt-in operation: callers must provide a
+token explicitly, and the command-line entry point reads it from the
+environment rather than storing credentials in source control.
+"""
+
+import argparse
 import hashlib
 import json
+import os
+from pathlib import Path
+from typing import Any, Sequence
 
-import requests
+import httpx
 
 # Fixed prefix that object-hash injects for a plain object with respectType=true
 _META = (
     "string:9:prototype:Undefined,"
     "string:9:__proto__:object:3:"
-        "string:9:prototype:Undefined,"
-        "string:9:__proto__:Null,"
-        "string:11:constructor:fn:"
-            "string:8:[native]"
-            "string:20:function-name:Object"
-        "object:0:,,"
+    "string:9:prototype:Undefined,"
+    "string:9:__proto__:Null,"
     "string:11:constructor:fn:"
-        "string:8:[native]"
-        "string:20:function-name:Object"
+    "string:8:[native]"
+    "string:20:function-name:Object"
+    "object:0:,,"
+    "string:11:constructor:fn:"
+    "string:8:[native]"
+    "string:20:function-name:Object"
     "string:12:[CIRCULAR:2],"
 )
 
+SUBMIT_URL = "https://app.acecareermode.com/functions/licenses/submitLicenseResult"
+REQUEST_TIMEOUT_SECONDS = 15.0
+TOKEN_ENVIRONMENT_VARIABLE = "ACE_CAREER_MODE_TOKEN"  # noqa: S105
 
-def _serialize_value(v):
+
+def _serialize_value(v: Any) -> str:
     if isinstance(v, str):
         return f"string:{len(v)}:{v}"
     if isinstance(v, int):
@@ -48,61 +64,117 @@ def compute_payload_hash(payload: dict) -> str:
         parts.append(_serialize_value(core_fields[k]))
         parts.append(",")
     serialized = "".join(parts)
-    return hashlib.sha1(serialized.encode("utf-8")).hexdigest()
+    # SHA-1 is part of ACE's existing payload-hash protocol.
+    return hashlib.sha1(serialized.encode("utf-8")).hexdigest()  # noqa: S324
 
 
-def submit_payload(payload: dict, token: str) -> dict:
-    """Submit the license result to the ACE Career Mode server."""
+def _response_result(response: httpx.Response) -> dict:
+    """Return a bounded, dictionary-shaped result for any HTTP response."""
+    if not 200 <= response.status_code < 300:
+        try:
+            body = response.json()
+        except (ValueError, TypeError):
+            return {
+                "error": "http_error",
+                "status_code": response.status_code,
+                "text": response.text[:500],
+            }
+        if isinstance(body, dict):
+            return {
+                "error": "http_error",
+                "status_code": response.status_code,
+                "response": body,
+            }
+        return {
+            "error": "http_error",
+            "status_code": response.status_code,
+            "response": body,
+        }
+    try:
+        result = response.json()
+    except (ValueError, TypeError):
+        return {
+            "status_code": response.status_code,
+            "text": response.text[:500],
+        }
+    if isinstance(result, dict):
+        return result
+    return {"status_code": response.status_code, "error": "invalid_response"}
+
+
+def submit_payload(payload: dict, token: str | None) -> dict:
+    """Submit a payload using a caller-provided bearer token.
+
+    Missing credentials are rejected before hashing or network access. The
+    return value is always a dictionary with stable local error codes for
+    transport failures.
+    """
+    if not isinstance(token, str) or not token.strip():
+        return {"error": "missing_token"}
+
     full = {**payload, "payloadHash": compute_payload_hash(payload)}
+    test_id = payload["testID"]
 
     headers = {
         "accept": "*/*",
-        "accept-language": "en-US,en;q=0.9",
         "authorization": f"Bearer {token}",
         "content-type": "application/json",
         "origin": "https://app.acecareermode.com",
-        "priority": "u=1, i",
-        "referer": f"https://app.acecareermode.com/licenses/{payload['testID'].split('-')[0]}/{payload['testID']}",
-        "sec-ch-ua": '"Chromium";v="148", "Brave";v="148", "Not/A)Brand";v="99"',
-        "sec-ch-ua-mobile": "?1",
-        "sec-ch-ua-platform": '"Android"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "sec-gpc": "1",
-        "user-agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36",
+        "referer": f"https://app.acecareermode.com/licenses/{test_id.split('-')[0]}/{test_id}",
     }
 
-    resp = requests.post(
-        "https://app.acecareermode.com/functions/licenses/submitLicenseResult",
-        headers=headers,
-        json=full,
-        verify=False,
-    )
     try:
-        return resp.json()
-    except Exception:
-        return {"status_code": resp.status_code, "text": resp.text}
+        response = httpx.post(
+            SUBMIT_URL,
+            headers=headers,
+            json=full,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+            verify=True,
+        )
+    except httpx.TimeoutException:
+        return {"error": "request_timeout"}
+    except httpx.RequestError:
+        return {"error": "network_error"}
+
+    return _response_result(response)
 
 
-# ==================== PASTE YOUR PAYLOAD & TOKEN HERE ====================
+def _load_payload(path: Path) -> dict:
+    with path.open(encoding="utf-8") as payload_file:
+        payload = json.load(payload_file)
+    if not isinstance(payload, dict):
+        raise ValueError("payload JSON must contain an object")
+    return payload
 
-payload = {
-    "testID": "A-4",
-    "replayDate": "2026-06-11",
-    "replayTime": "21:38:30",
-    "carID": "ks_ferrari_f40_lm",
-    "carPreset": "preset_f40lm_mech_3",
-    "trackID": "ks_imola",
-    "layout": "gp",
-    "bestTimeMs": 112040,
-    "steamId": "76561198321627695"
-}
 
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2ZDExNzhhZi03OTg0LTRlN2EtYjlhYS0xYmI5YWU2MWU4NGEiLCJpYXQiOjE3ODAyNzc5NDN9.LbhbQVtr6ti-agr9mDZGh_ojymtObbZeChO2LIjhgyI"
+def main(argv: Sequence[str] | None = None) -> int:
+    """Submit a payload JSON file using a token from an environment variable."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "payload", type=Path, help="JSON file containing the ACE payload"
+    )
+    parser.add_argument(
+        "--token-env",
+        default=TOKEN_ENVIRONMENT_VARIABLE,
+        help=(
+            "environment variable containing the bearer token "
+            f"(default: {TOKEN_ENVIRONMENT_VARIABLE})"
+        ),
+    )
+    args = parser.parse_args(argv)
 
-# ======================================================================
+    token = os.environ.get(args.token_env)
+    if not token:
+        parser.error(f"environment variable {args.token_env} is not set")
+
+    try:
+        payload = _load_payload(args.payload)
+    except (OSError, ValueError) as exc:
+        parser.error(f"unable to read payload JSON: {exc}")
+
+    result = submit_payload(payload, token)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if "error" not in result else 1
 
 if __name__ == "__main__":
-    result = submit_payload(payload, TOKEN)
-    print(json.dumps(result, indent=2))
+    raise SystemExit(main())

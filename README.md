@@ -254,7 +254,7 @@ sim-laps-client/
 │   └── test_version_sync.py
 ├── telemetry/
 │   ├── ACE_SharedFileOut_Documentation_v1.md  # ACE shared memory documentation
-│   └── ace_payload_hash.py                    # FNV hash utility for ACE payloads
+│   └── ace_payload_hash.py                    # ACE payload hash and opt-in submit helper
 ├── tools/
 │   ├── generate_car_tuning_catalog.py  # Car tuning catalog generator
 │   ├── parse_all_logs.py               # Batch log parsing utility
@@ -341,6 +341,11 @@ Laps are submitted to `/api/submit` with signed payloads:
   "_signature": "a1b2c3..."
 }
 ```
+
+The standalone ACE payload helper does not contain credentials or a sample
+submission. To use it, provide a payload JSON file and set
+`ACE_CAREER_MODE_TOKEN` in the environment before running
+`python -m telemetry.ace_payload_hash payload.json`.
 
 ## Troubleshooting
 
