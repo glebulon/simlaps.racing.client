@@ -57,7 +57,27 @@ class LapProcessingService:
         # Record lap boundary so the analyzer can use authoritative lap splits.
         # Fuel per lap is owned entirely by the log parser (Physics SHM + spike
         # detection) and is already set on lap.fuel_used before this point.
-        if telemetry_capture and telemetry_capture.is_capturing():
+        active_session_id = session_manager.get_active_session_id()
+        capture_owner_check = getattr(telemetry_capture, "owns_session", None)
+        capture_ownership = (
+            capture_owner_check(session.session_id)
+            if callable(capture_owner_check)
+            else None
+        ) if telemetry_capture is not None else None
+        if isinstance(capture_ownership, bool):
+            owns_capture_boundary = capture_ownership
+        else:
+            # Legacy capture implementations do not expose immutable origin
+            # ownership; retain the manager-id guard for those embedders.
+            owns_capture_boundary = (
+                not isinstance(active_session_id, str)
+                or active_session_id == session.session_id
+            )
+        if (
+            telemetry_capture
+            and telemetry_capture.is_capturing()
+            and owns_capture_boundary
+        ):
             lap_type = getattr(lap, "lap_type", None) or getattr(getattr(lap, "lap_state", None), "value", None)
             telemetry_capture.record_lap_boundary(
                 lap.lap_time_ms,

@@ -132,6 +132,8 @@ class TelemetryLifecycleService:
                         track_name=current_track_name,
                         output_prefix=telemetry_capture.get_output_prefix(),
                         game_lap_boundaries=lap_boundaries,
+                        capture_origin=telemetry_capture.get_capture_origin(),
+                        capture_track_name=telemetry_capture.get_capture_track_name(),
                     )
 
                     log_info(
@@ -226,6 +228,8 @@ class TelemetryLifecycleService:
                     track_name=current_track_name,
                     output_prefix=output_prefix,
                     game_lap_boundaries=lap_boundaries,
+                    capture_origin=telemetry_capture.get_capture_origin(),
+                    capture_track_name=telemetry_capture.get_capture_track_name(),
                 )
 
                 log_info(

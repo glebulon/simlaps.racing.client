@@ -23,6 +23,68 @@ _TERMINAL_SESSION_PHASES = frozenset({
     "disqualified",
     "teardown",
 })
+_BASELINE_SESSION_PHASES = frozenset({
+    "start_spawn_on_position",
+    "start_countdown_lights_on",
+    "start_countdown_lights_off",
+    "waiting_for_start",
+    "waiting_for_pitbox",
+})
+
+
+def _car_identity(value: Optional[str]) -> str:
+    """Compare log ids and graphics display labels without cross-source drift."""
+    if not value:
+        return ""
+    normalized = "".join(ch for ch in str(value).casefold() if ch.isalnum())
+    return normalized[2:] if normalized.startswith("ks") else normalized
+
+
+# ACE's log and graphics sources use different names for a small number of
+# cars.  Keep this bridge explicit: accepting a fuzzy token overlap here would
+# make a real cross-car transition look like the current origin.
+# The M3 pair is an ACE 0.9.1 observed log-id/display-label pair; this table is
+# deliberately not a claim that every catalog alias is covered.
+_CAR_IDENTITY_ALIASES = frozenset(
+    {
+        frozenset(
+            {
+                "bmwm3e30evoiii",
+                "bmwm3e30sportevoevolutioniii",
+            }
+        ),
+    }
+)
+
+
+def car_models_match(expected: Optional[str], current: Optional[str]) -> bool:
+    """Return whether two source-specific car names identify one car.
+
+    Empty values remain compatible with the existing origin contract: a
+    missing source cannot disprove ownership.  Non-empty values require exact
+    normalized equality or an explicitly verified source alias.
+    """
+    if not expected or not current:
+        return True
+    expected_key = _car_identity(expected)
+    current_key = _car_identity(current)
+    return (
+        expected_key == current_key
+        or frozenset({expected_key, current_key}) in _CAR_IDENTITY_ALIASES
+    )
+
+
+@dataclass(frozen=True)
+class SessionOriginSnapshot:
+    epoch: int
+    session_id: Optional[str]
+    graphics_car_model: Optional[str]
+    car_uuid: Optional[str]
+    graphics_ready: bool
+
+    @property
+    def ready(self) -> bool:
+        return self.graphics_ready
 
 
 def _is_terminal_graphics_state(
@@ -81,6 +143,12 @@ class LapCompletionData:
     timestamp: str
     observed_at: float
     source: str = "shm_graphics"
+    # Completion ownership is captured at the instant the SHM transition is
+    # observed.  Defaults keep older callers and fixtures source compatible.
+    origin_epoch: Optional[int] = None
+    session_id: Optional[str] = None
+    car_model: Optional[str] = None
+    car_uuid: Optional[str] = None
 
 
 @dataclass
@@ -210,11 +278,227 @@ class SharedSessionManager:
     def __init__(self) -> None:
         self._session_data = SharedSessionData()
         self._lock = threading.RLock()
+        # Session ownership is deliberately separate from the merged log
+        # identity.  SHM can lag a log/session transition by several seconds.
+        self._session_epoch = 0
+        self._active_session_id: Optional[str] = None
+        self._active_car_model: Optional[str] = None
+        self._active_car_uuid: Optional[str] = None
+        self._graphics_car_model: Optional[str] = None
+        self._graphics_status_name: Optional[str] = None
+        self._graphics_timing_active = False
+        self._graphics_origin_pending = False
+        self._anonymous_origin_pending = False
+        self._graphics_transaction_epoch: Optional[int] = None
+        self._completion_bindings: dict[float, tuple[Optional[int], Optional[str], Optional[str], Optional[str]]] = {}
+
+    def get_session_epoch(self) -> int:
+        with self._lock:
+            return self._session_epoch
+
+    def get_active_session_id(self) -> Optional[str]:
+        with self._lock:
+            return self._active_session_id
+
+    def is_active_session(self, session_id: Optional[str]) -> bool:
+        with self._lock:
+            return bool(session_id and session_id == self._active_session_id)
+
+    def get_session_origin(self) -> SessionOriginSnapshot:
+        """Return the immutable origin used by capture and completion code."""
+        with self._lock:
+            return SessionOriginSnapshot(
+                epoch=self._session_epoch,
+                session_id=self._active_session_id,
+                graphics_car_model=self._graphics_car_model,
+                car_uuid=self._active_car_uuid,
+                graphics_ready=not self._graphics_origin_pending,
+            )
+
+    def get_origin_snapshot(self) -> SessionOriginSnapshot:
+        """Compatibility alias for the capture origin API."""
+        return self.get_session_origin()
+
+    def begin_session(
+        self,
+        session_id: str,
+        *,
+        car_model: Optional[str] = None,
+        car_uuid: Optional[str] = None,
+    ) -> int:
+        """Atomically establish the owner used by subsequent SHM samples."""
+        with self._lock:
+            prior_graphics_car = self._graphics_car_model
+            anonymous_mismatch = bool(
+                self._anonymous_origin_pending
+                and prior_graphics_car
+                and car_model
+                and not car_models_match(prior_graphics_car, car_model)
+            )
+            if not self._anonymous_origin_pending or anonymous_mismatch:
+                self._session_epoch += 1
+            if anonymous_mismatch:
+                # A parser identity that contradicts an anonymous graphics
+                # epoch starts a new epoch. The old capture/completions must
+                # never resume when that graphics model later appears.
+                self._anonymous_origin_pending = False
+            self._active_session_id = session_id
+            self._active_car_model = car_model or None
+            self._active_car_uuid = car_uuid or None
+            prior_hybrid_uuid = self._session_data.hybrid_flags_car_uuid
+            self._graphics_origin_pending = bool(
+                prior_graphics_car
+                and car_model
+                and not car_models_match(prior_graphics_car, car_model)
+            )
+            self._replace_session_data_locked(preserve_identity=True)
+            ident = self._session_data.player_identification
+            ident.car_model = car_model or None
+            ident.car_uuid = car_uuid or None
+            if (
+                not car_uuid
+                or not prior_hybrid_uuid
+                or str(prior_hybrid_uuid).casefold() != str(car_uuid).casefold()
+            ):
+                self._session_data.has_ers = None
+                self._session_data.has_kers = None
+                self._session_data.hybrid_flags_car_uuid = None
+            self._session_data.session_metadata.session_id = session_id
+            anonymous_matches_graphics = bool(
+                not self._graphics_origin_pending
+                and (
+                    not prior_graphics_car
+                    or not car_model
+                    or car_models_match(prior_graphics_car, car_model)
+                )
+            )
+            if self._anonymous_origin_pending and anonymous_matches_graphics:
+                self.bind_session_identity(
+                    session_id=session_id,
+                    car_model=car_model,
+                    car_uuid=car_uuid,
+                )
+                self._anonymous_origin_pending = False
+            return self._session_epoch
+
+    def bind_session_identity(
+        self,
+        *,
+        car_model: Optional[str] = None,
+        car_uuid: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> None:
+        """Bind delayed log identity within the already-open epoch.
+
+        Only completions created in this epoch while identity was unknown are
+        adopted.  This prevents an unowned completion from a prior run being
+        assigned to an arbitrary later session.
+        """
+        with self._lock:
+            if (
+                self._graphics_origin_pending
+                and self._graphics_car_model
+                and car_model
+                and not car_models_match(self._graphics_car_model, car_model)
+            ):
+                # A parser identity that disagrees with the still-visible
+                # graphics car cannot bind an anonymous completion. Wait for
+                # the matching graphics episode or a later explicit boundary.
+                return
+            if session_id is not None:
+                self._active_session_id = session_id
+                self._session_data.session_metadata.session_id = session_id
+            if car_model:
+                self._active_car_model = car_model
+                self._session_data.player_identification.car_model = car_model
+            if car_uuid:
+                self._active_car_uuid = car_uuid
+                self._session_data.player_identification.car_uuid = car_uuid
+            for completion in self._session_data.lap_completions:
+                if (
+                    (
+                        completion.origin_epoch == self._session_epoch
+                    )
+                    and (
+                        completion.session_id is None
+                        or completion.session_id == self._active_session_id
+                    )
+                    and (completion.car_uuid is None or car_uuid is None)
+                    and self._active_session_id
+                ):
+                    # Keep the frozen completion object stable for consumers
+                    # that already hold a reference. Ownership is an atomic
+                    # manager-side binding keyed by its observation identity.
+                    self._completion_bindings[completion.observed_at] = (
+                        self._session_epoch,
+                        self._active_session_id,
+                        self._active_car_model,
+                        self._active_car_uuid,
+                    )
+
+    def get_lap_completion_owner(
+        self, completion: LapCompletionData
+    ) -> tuple[Optional[int], Optional[str], Optional[str], Optional[str]]:
+        with self._lock:
+            return self._completion_bindings.get(
+                completion.observed_at,
+                (
+                    completion.origin_epoch,
+                    completion.session_id,
+                    completion.car_model,
+                    completion.car_uuid,
+                ),
+            )
+
+    def end_session(self, session_id: Optional[str] = None) -> None:
+        """Close ownership for a session without discarding queued completions."""
+        with self._lock:
+            if session_id is None or session_id == self._active_session_id:
+                self._active_session_id = None
+                self._active_car_model = None
+                self._active_car_uuid = None
+            self._graphics_timing_active = False
+            self._graphics_status_name = None
+
+    def _replace_session_data_locked(self, *, preserve_identity: bool) -> None:
+        old = self._session_data
+        old_ident = old.player_identification if preserve_identity else PlayerIdentificationData()
+        old_has_ers = old.has_ers
+        old_has_kers = old.has_kers
+        old_hybrid_uuid = old.hybrid_flags_car_uuid
+        self._session_data = SharedSessionData()
+        self._session_data.player_identification = old_ident
+        # Delayed SHM completions are an ordered cross-boundary queue. They
+        # retain their immutable origin and are pruned after consumption.
+        self._session_data.lap_completions = list(old.lap_completions)
+        self._session_data.latest_lap_completion = old.latest_lap_completion
+        self._session_data.consumed_lap_completion_times = set(
+            old.consumed_lap_completion_times
+        )
+        self._completion_bindings = dict(self._completion_bindings)
+        if (
+            old_ident.car_uuid
+            and old_hybrid_uuid
+            and str(old_ident.car_uuid).casefold() == str(old_hybrid_uuid).casefold()
+        ):
+            self._session_data.has_ers = old_has_ers
+            self._session_data.has_kers = old_has_kers
+            self._session_data.hybrid_flags_car_uuid = old_hybrid_uuid
 
     def _mark_source(self, field_name: str, source: str) -> None:
         if field_name not in self._session_data.data_sources:
             self._session_data.data_sources[field_name] = set()
         self._session_data.data_sources[field_name].add(source)
+
+    def _session_update_is_owned_locked(self, session_id: str) -> bool:
+        if self._active_session_id == session_id:
+            return True
+        if self._active_session_id is not None:
+            return False
+        # A provenance-capable manager with an opened epoch or graphics car
+        # is in an anonymous/end window. Do not treat that as a legacy
+        # invitation for an arbitrary delayed session to write shared state.
+        return self._session_epoch == 0 and self._graphics_car_model is None
 
     # New shared object access
     def get_lap_validity_data(self, lap_num: int) -> Optional[LapValidityData]:
@@ -241,6 +525,43 @@ class SharedSessionManager:
                     not in self._session_data.consumed_lap_completion_times
                 )
             ]
+
+    def get_lap_completions_for_session_after(
+        self,
+        observed_at: float,
+        *,
+        session_id: Optional[str],
+        origin_epoch: Optional[int] = None,
+    ) -> list[LapCompletionData]:
+        """Return only completions owned by the requested session epoch."""
+        with self._lock:
+            return [
+                completion
+                for completion in self._session_data.lap_completions
+                if (
+                    completion.observed_at > observed_at
+                    and completion.observed_at
+                    not in self._session_data.consumed_lap_completion_times
+                    and self._completion_owner_locked(completion)[1] == session_id
+                    and (
+                        origin_epoch is None
+                        or self._completion_owner_locked(completion)[0] == origin_epoch
+                    )
+                )
+            ]
+
+    def _completion_owner_locked(
+        self, completion: LapCompletionData
+    ) -> tuple[Optional[int], Optional[str], Optional[str], Optional[str]]:
+        return self._completion_bindings.get(
+            completion.observed_at,
+            (
+                completion.origin_epoch,
+                completion.session_id,
+                completion.car_model,
+                completion.car_uuid,
+            ),
+        )
 
     def get_lap_completion_by_time(
         self,
@@ -403,6 +724,11 @@ class SharedSessionManager:
     # New shared object updates
     def update_lap_validity_from_graphics_shm(self, lap_num: int, is_invalid: bool) -> None:
         with self._lock:
+            if (
+                self._graphics_transaction_epoch is not None
+                and self._graphics_transaction_epoch != self._session_epoch
+            ):
+                return
             current = self._session_data.lap_validity.get(lap_num)
             lap_state = "INVALID_GAME" if is_invalid else "VALID"
 
@@ -429,6 +755,11 @@ class SharedSessionManager:
         completed_lap_num: Optional[int] = None,
     ) -> None:
         with self._lock:
+            if (
+                self._graphics_transaction_epoch is not None
+                and self._graphics_transaction_epoch != self._session_epoch
+            ):
+                return
             current = self._session_data.lap_timing.get(lap_num)
             if current is None:
                 current = LapTimingData(lap_number=lap_num)
@@ -478,6 +809,11 @@ class SharedSessionManager:
 
     def update_fuel_from_graphics_shm(self, fuel_data: Dict[str, Any]) -> None:
         with self._lock:
+            if (
+                self._graphics_transaction_epoch is not None
+                and self._graphics_transaction_epoch != self._session_epoch
+            ):
+                return
             current_fuel = fuel_data.get("fuel_liter_current_quantity")
             fuel_rate = fuel_data.get("fuel_liter_per_km")
             fuel_economy = fuel_data.get("km_per_fuel_liter")
@@ -513,6 +849,10 @@ class SharedSessionManager:
             ident.player_name = player_data.get("player_name") or ident.player_name
             ident.car_uuid = incoming_car_uuid or ident.car_uuid
             ident.car_model = player_data.get("car_model") or ident.car_model
+            if ident.car_model and self._active_session_id:
+                self._active_car_model = ident.car_model
+            if incoming_car_uuid and self._active_session_id:
+                self._active_car_uuid = str(incoming_car_uuid)
             ident.source = "logs"
             if ident.car_uuid and self._session_data.hybrid_flags_car_uuid is None:
                 self._session_data.hybrid_flags_car_uuid = ident.car_uuid
@@ -545,6 +885,8 @@ class SharedSessionManager:
 
     def update_session_metadata_from_static_shm(self, metadata: Dict[str, Any]) -> None:
         with self._lock:
+            if not self._secondary_graphics_origin_is_current_locked():
+                return
             md = self._session_data.session_metadata
             md.game_version = metadata.get("ac_evo_version", md.game_version)
             md.session_type = str(metadata.get("session", md.session_type))
@@ -590,6 +932,9 @@ class SharedSessionManager:
     # Legacy update entry points
     def update_lap_from_logs(self, lap_data: LapData, session_data: Optional[SessionData] = None) -> None:
         if session_data is not None:
+            with self._lock:
+                if not self._session_update_is_owned_locked(session_data.session_id):
+                    return
             self.update_session_metadata_from_logs(session_data)
 
         self.update_sector_splits_from_logs(
@@ -638,6 +983,11 @@ class SharedSessionManager:
         before any laps have been parsed.
         """
         with self._lock:
+            if not self._session_update_is_owned_locked(session_data.session_id):
+                # A delayed outgoing-session completion may still be emitted
+                # to its frozen SessionData. Do not let it overwrite the
+                # active session's coordination state.
+                return
             md = self._session_data.session_metadata
             md.session_id = session_data.session_id
             md.game_version = session_data.game_version
@@ -659,15 +1009,71 @@ class SharedSessionManager:
         )
 
     def update_from_logs(self, log_session_data: SessionData) -> None:
+        with self._lock:
+            if not self._session_update_is_owned_locked(log_session_data.session_id):
+                return
         self.update_session_metadata_from_logs(log_session_data)
 
         for lap in log_session_data.laps:
             self.update_lap_from_logs(lap)
 
-    def update_from_static_shm(self, static_data: Dict[str, Any]) -> None:
-        self.update_session_metadata_from_static_shm(static_data)
+    def _origin_snapshot_matches_locked(
+        self, expected_origin: Optional[SessionOriginSnapshot]
+    ) -> bool:
+        """Check a secondary SHM write against its graphics transaction."""
+        if expected_origin is None:
+            return True
+        current = SessionOriginSnapshot(
+            epoch=self._session_epoch,
+            session_id=self._active_session_id,
+            graphics_car_model=self._graphics_car_model,
+            car_uuid=self._active_car_uuid,
+            graphics_ready=not self._graphics_origin_pending,
+        )
+        return current == expected_origin
+
+    def update_from_static_shm(
+        self,
+        static_data: Dict[str, Any],
+        *,
+        expected_origin: Optional[SessionOriginSnapshot] = None,
+    ) -> bool:
+        with self._lock:
+            if not self._origin_snapshot_matches_locked(expected_origin):
+                return False
+            if not self._secondary_graphics_origin_is_current_locked():
+                return False
+            self.update_session_metadata_from_static_shm(static_data)
+            return True
+
+    def _secondary_graphics_origin_is_current_locked(self) -> bool:
+        """Reject static/physics from a graphics sample's old epoch."""
+        if self._graphics_origin_pending:
+            return False
+        if (
+            self._active_car_model
+            and self._graphics_car_model
+            and not car_models_match(
+                self._active_car_model,
+                self._graphics_car_model,
+            )
+        ):
+            return False
+        return True
 
     def update_from_graphics_shm(self, graphics_data: Dict[str, Any]) -> None:
+        """Apply one graphics sample as an atomic origin/data transaction."""
+        with self._lock:
+            prior_transaction_epoch = self._graphics_transaction_epoch
+            self._graphics_transaction_epoch = self._session_epoch
+            try:
+                self._update_from_graphics_shm_locked(graphics_data)
+            finally:
+                self._graphics_transaction_epoch = prior_transaction_epoch
+
+    def _update_from_graphics_shm_locked(
+        self, graphics_data: Dict[str, Any]
+    ) -> None:
         # ── Determine current lap number ────────────────────────────────
         # session_current_lap (from SMEvoSessionState.current_lap) has a
         # fragile offset that reads 0 on AC Evo 0.8.0.1.  total_lap_count
@@ -678,8 +1084,16 @@ class SharedSessionManager:
         shm_current_lap = int(graphics_data.get("session_current_lap") or 0)
         completed_laps = int(graphics_data.get("total_lap_count") or 0)
         current_lap_time_ms = int(graphics_data.get("current_lap_time_ms") or 0)
+        raw_current_lap_time_ms = current_lap_time_ms
         last_laptime_ms = int(graphics_data.get("last_laptime_ms") or 0)
         is_valid_lap = graphics_data.get("is_valid_lap")
+        incoming_car_model = graphics_data.get("car_model")
+        if isinstance(incoming_car_model, str):
+            incoming_car_model = incoming_car_model.strip() or None
+        incoming_status = graphics_data.get("status_name")
+        incoming_status_name = (
+            str(incoming_status).strip().upper() if incoming_status is not None else None
+        )
 
         # Capture the boundary before current-lap validity is updated. ACE can
         # reset the live timer and validity several seconds before advancing
@@ -699,8 +1113,100 @@ class SharedSessionManager:
                 graphics_data,
                 self._session_data.session_phase,
             )
-            previous_completed = self._session_data.total_laps
-            previous_lap_time_ms = int(self._session_data.current_lap_time_ms or 0)
+            previous_car_model = self._graphics_car_model
+            car_changed = bool(
+                incoming_car_model
+                and previous_car_model
+                and not car_models_match(incoming_car_model, previous_car_model)
+            )
+            confirms_pending_origin = bool(
+                car_changed
+                and self._graphics_origin_pending
+                and incoming_car_model
+                and self._active_car_model
+                and car_models_match(incoming_car_model, self._active_car_model)
+            )
+            if car_changed:
+                # Graphics can expose the replacement car before logs provide
+                # a matching session identity. Start a clean merged-data
+                # episode immediately, while _replace_session_data_locked
+                # retains the immutable cross-boundary completion queue and
+                # the driver's Steam identity.
+                self._replace_session_data_locked(preserve_identity=True)
+                ident = self._session_data.player_identification
+                ident.car_uuid = None
+                ident.car_model = None
+                self._session_data.has_ers = None
+                self._session_data.has_kers = None
+                self._session_data.hybrid_flags_car_uuid = None
+                self._session_data.session_metadata.session_id = (
+                    self._active_session_id
+                    or self._session_data.session_metadata.session_id
+                )
+            if confirms_pending_origin:
+                self._graphics_origin_pending = False
+            phase_name = str(incoming_phase or "").strip().casefold()
+            baseline_phase = phase_name in _BASELINE_SESSION_PHASES
+            status_supplied = incoming_status_name is not None
+            active_status = (
+                not status_supplied
+                or (
+                    self._graphics_status_name == "AC_LIVE"
+                    and incoming_status_name == "AC_LIVE"
+                    and self._graphics_timing_active
+                )
+            )
+            baseline_reset = (
+                terminal_state
+                or car_changed
+                or baseline_phase
+                or self._graphics_origin_pending
+            )
+            previous_completed = (
+                None if baseline_reset else self._session_data.total_laps
+            )
+            previous_lap_time_ms = (
+                0
+                if baseline_reset
+                else int(self._session_data.current_lap_time_ms or 0)
+            )
+            if baseline_reset:
+                # A model/phase transition is a new timing episode. Clear
+                # the old baseline before looking at the incoming ``last``
+                # value; ACE may leave the previous car's time in the mapping.
+                self._session_data.current_lap_time_ms = 0
+                self._session_data.last_lap_time_ms = 0
+                self._session_data.active_lap_is_valid = None
+                self._session_data.pending_counter_echo = False
+                self._session_data.pending_counter_echo_lap = None
+                self._session_data.pending_counter_echo_time_ms = None
+                last_laptime_ms = 0
+                if not terminal_state:
+                    completed_laps = 0
+                    shm_current_lap = 0
+                current_lap_time_ms = 0
+                graphics_data = dict(graphics_data)
+                graphics_data.update(
+                    {
+                        "total_lap_count": completed_laps,
+                        "session_current_lap": shm_current_lap,
+                        "current_lap_time_ms": 0,
+                        "last_laptime_ms": 0,
+                    }
+                )
+            if car_changed and not confirms_pending_origin:
+                    # The new graphics model has not yet been paired with a
+                    # log connect UUID. Keep the outgoing UUID only on its
+                    # already-frozen completions.
+                    self._active_car_uuid = None
+                    self._session_data.player_identification.car_uuid = None
+                    # SHM can expose the next car before the log parser has
+                    # opened its session. Completions from this new episode
+                    # must remain anonymous until that same epoch is bound.
+                    self._session_epoch += 1
+                    self._active_session_id = None
+                    self._active_car_model = None
+                    self._anonymous_origin_pending = True
             lap_timer_reset = (
                 previous_lap_time_ms >= 5_000
                 and 0 <= current_lap_time_ms <= 1_000
@@ -728,6 +1234,8 @@ class SharedSessionManager:
             )
             if (
                 not terminal_state
+                and not baseline_reset
+                and active_status
                 and (completed_timer_reset or counter_advanced)
                 and last_laptime_ms > 0
             ):
@@ -743,6 +1251,14 @@ class SharedSessionManager:
                         is_valid=self._session_data.active_lap_is_valid,
                         timestamp=datetime.now(timezone.utc).isoformat(),
                         observed_at=now_mono,
+                        origin_epoch=self._session_epoch,
+                        session_id=self._active_session_id,
+                        car_model=(
+                            incoming_car_model
+                            or previous_car_model
+                            or self._active_car_model
+                        ),
+                        car_uuid=self._active_car_uuid,
                     )
                     self._session_data.latest_lap_completion = completion
                     self._session_data.lap_completions.append(completion)
@@ -750,7 +1266,13 @@ class SharedSessionManager:
                     # outstanding callbacks. Bound retained history while
                     # preserving enough delayed-log context for long races.
                     if len(self._session_data.lap_completions) > 512:
+                        dropped = self._session_data.lap_completions[:-512]
                         del self._session_data.lap_completions[:-512]
+                        for item in dropped:
+                            self._completion_bindings.pop(item.observed_at, None)
+                            self._session_data.consumed_lap_completion_times.discard(
+                                item.observed_at
+                            )
                 if completed_timer_reset:
                     self._session_data.pending_counter_echo = not counter_advanced
                     self._session_data.pending_counter_echo_lap = (
@@ -800,6 +1322,15 @@ class SharedSessionManager:
                         # until its timer resets. The finish-line frame may
                         # already carry the next lap's valid=True value.
                         self._session_data.active_lap_is_valid = False
+            if incoming_car_model:
+                self._graphics_car_model = incoming_car_model
+            if incoming_status_name is not None:
+                self._graphics_status_name = incoming_status_name
+            self._graphics_timing_active = (
+                raw_current_lap_time_ms > 1_000
+                and not terminal_state
+                and (not status_supplied or incoming_status_name == "AC_LIVE")
+            )
         if shm_current_lap > 0:
             current_lap = shm_current_lap
         else:
@@ -848,6 +1379,11 @@ class SharedSessionManager:
                 ),
                 completed_lap_num=completed_laps if completed_laps > 0 else None,
             )
+            if (
+                self._graphics_transaction_epoch is not None
+                and self._graphics_transaction_epoch != self._session_epoch
+            ):
+                return
 
             # ── Wire SHM validity flags into shared session ──────────────
             # Priority 1: is_valid_lap (SPageFileGraphicEvo at offset 3121)
@@ -886,8 +1422,19 @@ class SharedSessionManager:
             if is_invalid is not None:
                 is_invalid_bool = bool(is_invalid)
                 self.update_lap_validity_from_graphics_shm(current_lap, is_invalid_bool)
+                if (
+                    self._graphics_transaction_epoch is not None
+                    and self._graphics_transaction_epoch != self._session_epoch
+                ):
+                    return
 
         self.update_fuel_from_graphics_shm(graphics_data)
+
+        if (
+            self._graphics_transaction_epoch is not None
+            and self._graphics_transaction_epoch != self._session_epoch
+        ):
+            return
 
         with self._lock:
             self._session_data.total_laps = graphics_data.get("total_lap_count")
@@ -911,8 +1458,17 @@ class SharedSessionManager:
 
             self._mark_source("session_summary", "shm_graphics")
 
-    def update_from_physics_shm(self, physics_data: Dict[str, Any]) -> None:
+    def update_from_physics_shm(
+        self,
+        physics_data: Dict[str, Any],
+        *,
+        expected_origin: Optional[SessionOriginSnapshot] = None,
+    ) -> bool:
         with self._lock:
+            if not self._origin_snapshot_matches_locked(expected_origin):
+                return False
+            if not self._secondary_graphics_origin_is_current_locked():
+                return False
             speed_kmh = physics_data.get("speed_kmh")
             if isinstance(speed_kmh, (int, float)):
                 if self._session_data.max_speed is None:
@@ -931,9 +1487,17 @@ class SharedSessionManager:
 
             self._mark_source("max_speed", "shm_physics")
             self._mark_source("car_setup", "shm_physics")
+            return True
 
-    def update_from_telemetry(self, telemetry_data: Dict[str, Any]) -> None:
+    def update_from_telemetry(
+        self,
+        telemetry_data: Dict[str, Any],
+        *,
+        expected_origin: Optional[SessionOriginSnapshot] = None,
+    ) -> bool:
         with self._lock:
+            if not self._origin_snapshot_matches_locked(expected_origin):
+                return False
             max_speed = telemetry_data.get("max_speed")
             if isinstance(max_speed, (int, float)):
                 self._session_data.max_speed = float(max_speed)
@@ -947,13 +1511,36 @@ class SharedSessionManager:
                 self._session_data.tyre_compound = tyre_compound
 
             self._mark_source("telemetry_summary", "calculated")
+            return True
 
     def get_data_sources(self) -> Dict[str, Set[str]]:
         """Return a snapshot of data source tracking (thread-safe)."""
         with self._lock:
             return {k: set(v) for k, v in self._session_data.data_sources.items()}
 
-    def reset(self) -> None:
+    def get_data(self) -> SharedSessionData:
+        """Return the shared object for legacy read-only embedders."""
+        with self._lock:
+            return self._session_data
+
+    def get_data_for_origin(
+        self,
+        expected_origin: SessionOriginSnapshot,
+        *,
+        session_id: Optional[str] = None,
+    ) -> Optional[SharedSessionData]:
+        """Copy merged data only when the requested origin is still current."""
+        with self._lock:
+            if not self._origin_snapshot_matches_locked(expected_origin):
+                return None
+            if (
+                session_id is not None
+                and expected_origin.session_id != session_id
+            ):
+                return None
+            return deepcopy(self._session_data)
+
+    def reset(self, *, preserve_completions: bool = False) -> None:
         """Replace session data with a fresh instance, preserving observers and lock.
 
         Call this when a new game session starts so stale lap validity, timing,
@@ -965,13 +1552,36 @@ class SharedSessionManager:
             old_timing_count = len(self._session_data.lap_timing)
             old_validity_count = len(self._session_data.lap_validity)
             old_ident = self._session_data.player_identification
+            old_completions = list(self._session_data.lap_completions)
+            old_latest_completion = self._session_data.latest_lap_completion
+            old_consumed = set(self._session_data.consumed_lap_completion_times)
+            old_bindings = dict(self._completion_bindings)
             old_has_ers = self._session_data.has_ers
             old_has_kers = self._session_data.has_kers
             old_hybrid_car_uuid = self._session_data.hybrid_flags_car_uuid
+            old_anonymous_origin_pending = self._anonymous_origin_pending
+            old_graphics_car_model = self._graphics_car_model
+            old_graphics_status_name = self._graphics_status_name
+            old_graphics_timing_active = self._graphics_timing_active
+            old_graphics_origin_pending = self._graphics_origin_pending
             self._session_data = SharedSessionData()
             # Re-attach player identification — Steam ID / car UUID don't change
             # between sessions and must not be wiped.
             self._session_data.player_identification = old_ident
+            if preserve_completions:
+                self._session_data.lap_completions = old_completions
+                self._session_data.latest_lap_completion = old_latest_completion
+                self._session_data.consumed_lap_completion_times = old_consumed
+                self._completion_bindings = old_bindings
+            else:
+                self._completion_bindings.clear()
+            self._graphics_car_model = old_graphics_car_model if preserve_completions else None
+            self._graphics_status_name = old_graphics_status_name if preserve_completions else None
+            self._graphics_timing_active = old_graphics_timing_active if preserve_completions else False
+            self._graphics_origin_pending = old_graphics_origin_pending if preserve_completions else False
+            self._anonymous_origin_pending = (
+                old_anonymous_origin_pending if preserve_completions else False
+            )
             same_identified_car = bool(
                 old_ident.car_uuid
                 and old_hybrid_car_uuid

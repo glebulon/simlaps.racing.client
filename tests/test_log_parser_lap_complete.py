@@ -829,6 +829,12 @@ def test_unmatched_validity_broadcast_preserves_pending_lap() -> None:
 def test_equal_time_completions_keep_their_lap_associations() -> None:
     """A delayed first log line cannot consume the second SHM completion."""
     manager = SharedSessionManager()
+    session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE", car_uuid="abc123"
+    )
+    manager.begin_session(
+        session.session_id, car_model=session.car, car_uuid=session.car_uuid
+    )
     for completed_laps, lap_time_ms in ((1, 100_000), (2, 100_001)):
         manager.update_from_graphics_shm(
             {
@@ -850,10 +856,9 @@ def test_equal_time_completions_keep_their_lap_associations() -> None:
     parser = LogParser(session_manager=manager)
     parser.PENDING_VALIDITY_GRACE_SECONDS = 0
     parser._last_shm_completion_observed_at = 0
-    parser.current_session = SessionData(
-        track="spa", car="porsche", session_type="PRACTICE"
-    )
-    parser.context.car_uuid = "abc123"
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
+    parser.context.car_uuid = session.car_uuid
 
     assert parser._handle_lap_complete(
         "[2026-08-26 12:00:00.000] [gameplay] [info] "
@@ -1036,6 +1041,8 @@ def test_shm_completion_waits_for_log_session_identity() -> None:
     from src.models import SharedSessionManager
 
     manager = SharedSessionManager()
+    session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
+    manager.begin_session(session.session_id, car_model=session.car)
     manager.update_from_graphics_shm(
         {"total_lap_count": 0, "current_lap_time_ms": 100_000}
     )
@@ -1053,9 +1060,8 @@ def test_shm_completion_waits_for_log_session_identity() -> None:
     assert parser._take_ready_shm_lap() is None
     assert manager.get_lap_completions_after(0)
 
-    parser.current_session = SessionData(
-        track="spa", car="porsche", session_type="PRACTICE"
-    )
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
     lap = parser._take_ready_shm_lap()
     assert lap is not None
     assert lap.lap_time_ms == 100_000

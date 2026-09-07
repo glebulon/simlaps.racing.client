@@ -15,7 +15,7 @@ from src.core.analyzer.ai_prompt import generate_ai_prompt
 from src.core.analyzer.html_renderer import render_html
 from src.core.telemetry_capture import CaptureMetadata, FrameData
 from src.core.track_catalog import select_track_profile
-from src.models import SharedSessionManager
+from src.models import SessionOriginSnapshot, SharedSessionManager
 from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
 
 # ── Constants used directly in TelemetryAnalyzer.analyze()
@@ -216,6 +216,8 @@ class TelemetryAnalyzer:
         track_name: Optional[str] = None,
         output_prefix: Optional[str] = None,
         game_lap_boundaries: Optional[List] = None,  # Can be List[int] or List[Tuple[int, Optional[float], Optional[int]]]
+        capture_origin: Optional[SessionOriginSnapshot] = None,
+        capture_track_name: Optional[str] = None,
     ) -> AnalysisResult:
         """Run full analysis pipeline and generate outputs."""
         log_info(Component.ANALYZER, "Starting analysis", frames=len(frames), hz=hz, track=track_name, prefix=output_prefix)
@@ -225,8 +227,44 @@ class TelemetryAnalyzer:
             return await self._generate_empty_result(output_prefix)
 
         static_track_name, static_config_name = _read_static_track_config(frames)
+        current_origin = self._session_manager.get_session_origin()
+        shared_snapshot = None
+        get_origin_data = getattr(self._session_manager, "get_data_for_origin", None)
+        if callable(get_origin_data):
+            shared_snapshot = get_origin_data(current_origin)
+        closed_origin = False
+        if capture_origin is not None:
+            closed_metadata = (
+                shared_snapshot.session_metadata if shared_snapshot is not None else None
+            )
+            closed_origin = bool(
+                current_origin.epoch == capture_origin.epoch
+                and current_origin.graphics_ready
+                and capture_origin.session_id is not None
+                and current_origin.session_id is None
+                and closed_metadata is not None
+                and closed_metadata.session_id == capture_origin.session_id
+            )
+        same_origin = (
+            capture_origin is None
+            or (
+                shared_snapshot is not None
+                and current_origin.epoch == capture_origin.epoch
+                and current_origin.graphics_ready
+                and (
+                    capture_origin.session_id is None
+                    or current_origin.session_id == capture_origin.session_id
+                    or closed_origin
+                )
+            )
+        )
+        analysis_track_name = (
+            static_track_name
+            or capture_track_name
+            or (track_name if same_origin else "Unknown")
+        )
         track_key, track_profile = _select_track_profile_for_analysis(
-            static_track_name or track_name, static_config_name
+            analysis_track_name, static_config_name
         )
         if track_profile:
             log_info(Component.ANALYZER, "Track profile selected", profile=track_profile['display_name'])
@@ -552,8 +590,27 @@ class TelemetryAnalyzer:
 
         # Prefer authoritative lap data already merged into the shared session
         # state (e.g. log parser + graphics SHM) when available.
-        shared_lap_times = self._session_manager.get_all_lap_times()
-        shared_lap_validity = self._session_manager.get_all_lap_validity()
+        if same_origin and shared_snapshot is not None:
+            shared_lap_times = {
+                lap_num: timing.completed_lap_time
+                for lap_num, timing in shared_snapshot.lap_timing.items()
+                if timing.completed_lap_time is not None
+            }
+            shared_lap_validity = {
+                lap_num: validity.is_valid
+                for lap_num, validity in shared_snapshot.lap_validity.items()
+            }
+        elif same_origin:
+            shared_lap_times = self._session_manager.get_all_lap_times()
+            shared_lap_validity = self._session_manager.get_all_lap_validity()
+        else:
+            shared_lap_times = {}
+            shared_lap_validity = {}
+        if capture_origin is not None and not same_origin:
+            analysis_notes.append(
+                "Live session timing and validity were excluded because the "
+                "capture belongs to an earlier session origin."
+            )
         if shared_lap_times and laps:
             try:
                 max_shared_lap = max(int(k) for k in shared_lap_times.keys())
@@ -590,6 +647,23 @@ class TelemetryAnalyzer:
         if profile_sanity_notes:
             analysis_mode = "diagnostic"
             analysis_notes.extend(profile_sanity_notes)
+
+        report_car = (
+            shared_snapshot.player_identification.car_model
+            if shared_snapshot is not None and same_origin
+            else self._session_manager.get_car()
+        )
+        if capture_origin is not None and (
+            not report_car or not same_origin or closed_origin
+        ):
+            report_car = capture_origin.graphics_car_model or next(
+                (
+                    frame.car_model
+                    for frame in frames
+                    if isinstance(frame.car_model, str) and frame.car_model
+                ),
+                "Unknown",
+            )
 
         best_lap = min(valid_laps, key=lambda lap: lap["lap_time_s"]) if valid_laps else None
         laps_with_corners = [lap for lap in valid_laps if lap.get("corners")]
@@ -662,11 +736,11 @@ class TelemetryAnalyzer:
             "meta": metadata.to_dict() if metadata else {},
             "hz": hz,
             "track_key": track_key,
-            "track_name": track_profile["track_name"] if track_profile else track_name,
+            "track_name": track_profile["track_name"] if track_profile else analysis_track_name,
             "config_key": track_profile["config_key"] if track_profile else None,
             "config_name": track_profile["config_name"] if track_profile else None,
-            "track_label": track_profile["display_name"] if track_profile else track_name,
-            "car": self._session_manager.get_car(),
+            "track_label": track_profile["display_name"] if track_profile else analysis_track_name,
+            "car": report_car,
             "laps": laps,
             "best_lap_num": best_lap["lap_num"] if best_lap else None,
             "reference_lap_num": ref_lap["lap_num"] if ref_lap else None,
@@ -722,14 +796,20 @@ class TelemetryAnalyzer:
                 _avg_fuel,
             )
 
-        if valid_laps:
+        if valid_laps and same_origin:
             telemetry_summary = {
                 "max_speed": max(
                     (lap.get("max_speed") or 0.0) for lap in valid_laps
                 ),
                 "stint_number": 1,
             }
-            self._session_manager.update_from_telemetry(telemetry_summary)
+            if callable(get_origin_data):
+                self._session_manager.update_from_telemetry(
+                    telemetry_summary,
+                    expected_origin=current_origin,
+                )
+            else:
+                self._session_manager.update_from_telemetry(telemetry_summary)
 
         log_info(Component.ANALYZER, "Generating outputs", prefix=output_prefix)
         html_path = await self._generate_html(data, output_prefix)

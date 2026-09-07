@@ -135,6 +135,10 @@ class TestSubmitLap:
         sample_lap.fuel_used = None
 
         manager = SharedSessionManager()
+        manager.begin_session(
+            sample_session.session_id,
+            car_model="ferrari_296_gt3",
+        )
         manager.update_player_identification_from_logs(
             {
                 "steam_id": "76561198000000001",
@@ -860,3 +864,57 @@ class TestNoSecret:
         assert success is False
         assert "offline" in message.lower()
         mock_get.assert_not_called()
+
+
+def test_submission_overlay_snapshot_is_discarded_if_origin_changes_mid_build():
+    """A replacement epoch cannot contribute BMW submission overlays."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW", car_uuid="bmw")
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW",
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "current_lap_time_ms": 12_000,
+            "total_lap_count": 0,
+        }
+    )
+    manager.update_sector_splits_from_logs(
+        1, {"sector1_ms": 111, "sector2_ms": 222, "sector3_ms": 333}
+    )
+    manager.update_fuel_from_graphics_shm({"fuel_liter_per_lap": 9.0})
+    original = manager.get_data_for_origin
+
+    def interleave(expected_origin, *, session_id=None):
+        manager.begin_session("alfa-session", car_model="Alfa", car_uuid="alfa")
+        return original(expected_origin, session_id=session_id)
+
+    manager.get_data_for_origin = interleave
+    session = SessionData(
+        session_id="bmw-session",
+        track="bmw-track",
+        car="ks_bmw_m2_coupe",
+        session_type="PRACTICE",
+    )
+    lap = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=108_315,
+        lap_time_str="01:48.315",
+        is_valid=True,
+    )
+
+    payload, error = APIClient(session_manager=manager)._build_submission_payload(
+        session=session,
+        lap=lap,
+        final_user_id="76561198321627695",
+        shared_player=manager.get_player_identification(),
+        effective_is_valid=True,
+    )
+
+    assert error is None
+    assert payload is not None
+    assert "sector1" not in payload
+    assert "sector2" not in payload
+    assert "sector3" not in payload
+    assert "fuelUsed" not in payload

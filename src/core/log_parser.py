@@ -122,8 +122,17 @@ class LogParser:
         # Track last emitted game status to prevent duplicate events
         self._last_emitted_game_status: Optional[bool] = None
         self._session_active_from_logs: bool = False
+        # A player-car connect can be the only boundary emitted by a log
+        # build.  Keep the lifecycle notification separate from the
+        # synchronous line handlers so follow() can roll capture after the
+        # replacement parser session has been established.
+        self._pending_connect_rollover = False
 
         self.sessions: list[SessionData] = []
+        # Retain finalized session objects so delayed SHM completions can be
+        # routed to their immutable origin after a new session opens.
+        self._sessions_by_id: dict[str, SessionData] = {}
+        self._pending_outgoing_validity: Optional[tuple[LapData, SessionData]] = None
         self.current_session: Optional[SessionData] = None
         self.context = LogContext()
 
@@ -366,6 +375,31 @@ class LogParser:
     def _normalize_car_uuid(car_uuid: Optional[str]) -> str:
         return (car_uuid or "").replace("-", "").lower()
 
+    @staticmethod
+    def _normalize_car_model(car_model: Optional[str]) -> str:
+        """Normalize log/display labels for connect-only car boundaries."""
+        normalized = "".join(ch for ch in str(car_model or "").casefold() if ch.isalnum())
+        return normalized[2:] if normalized.startswith("ks") else normalized
+
+    def _connect_is_same_car(self, car: str, car_uuid: str) -> bool:
+        """Return whether a connect line enriches the owned session."""
+        if not self.current_session:
+            return False
+        current_uuid = self._normalize_car_uuid(self.current_session.car_uuid)
+        incoming_uuid = self._normalize_car_uuid(car_uuid)
+        if current_uuid and incoming_uuid and current_uuid == incoming_uuid:
+            return True
+        current_model = self._normalize_car_model(self.current_session.car)
+        incoming_model = self._normalize_car_model(car)
+        if current_model and incoming_model:
+            # A reconnect can allocate a new UUID for the same model. The
+            # model boundary is the session signal; UUID equality remains a
+            # fast path for display-label aliases.
+            return current_model == incoming_model
+        if current_uuid and incoming_uuid:
+            return current_uuid == incoming_uuid
+        return False
+
     def _is_player_car(self, car_uuid: str) -> bool:
         normalized = self._normalize_car_uuid(car_uuid)
         return (
@@ -374,6 +408,21 @@ class LogParser:
                 self._normalize_car_uuid(uuid)
                 for uuid in self.context.player_car_uuids
             }
+        )
+
+    def _is_current_session_car(self, car_uuid: str) -> bool:
+        """Reject positively identified lines from a finalized car session."""
+        if not self.current_session or not self._is_player_car(car_uuid):
+            return False
+        normalized = self._normalize_car_uuid(car_uuid)
+        current_uuid = self._normalize_car_uuid(self.current_session.car_uuid)
+        if current_uuid:
+            return normalized == current_uuid
+        return not any(
+            session is not self.current_session
+            and session.car_uuid
+            and self._normalize_car_uuid(session.car_uuid) == normalized
+            for session in self._sessions_by_id.values()
         )
 
     def _line_mentions_player_car(self, line: str) -> bool:
@@ -464,7 +513,13 @@ class LogParser:
         self._pending_lap = None
         self._pending_lap_since = None
         self._reconciled_lap = None
-        self._shm_emitted_laps.clear()
+        self._pending_connect_rollover = False
+        if not finalize_current_session:
+            # A finalized session may still receive delayed New-lap/validity
+            # metadata. Ownership filtering keeps those objects isolated from
+            # the replacement session; rotated input streams have no such
+            # relationship and can discard them.
+            self._shm_emitted_laps.clear()
         self._lap_completion_by_lap_id.clear()
         self._last_penalty_added_ts = None
         self._current_stint = None
@@ -477,11 +532,12 @@ class LogParser:
         # Reset after finalisation so the old session can be synced first, but
         # before the caller creates/syncs the new session.  Seed the cursor
         # from the fresh manager so old SHM completions cannot be consumed.
-        self._session_manager.reset()
-        latest_completion = self._session_manager.get_latest_lap_completion()
-        self._last_shm_completion_observed_at = (
-            latest_completion.observed_at if latest_completion else 0.0
-        )
+        # Keep queued completions long enough for their originating session
+        # to drain after a log/session boundary. The manager's default reset
+        # remains destructive for unrelated callers.
+        prior_completion_cursor = self._last_shm_completion_observed_at
+        self._session_manager.reset(preserve_completions=True)
+        self._last_shm_completion_observed_at = prior_completion_cursor
 
         log_debug(
             Component.LOG_PARSER,
@@ -586,9 +642,51 @@ class LogParser:
             return
         self._session_manager.update_session_metadata_from_logs(session)
 
-    async def _emit_game_status(self, is_running: bool, trigger: str = "unknown") -> None:
+    def _establish_session_ownership(self, session: SessionData) -> None:
+        """Bind parser and SHM state before capture/lap callbacks begin."""
+        self._sessions_by_id[session.session_id] = session
+        # Retain enough finalized sessions for delayed SHM/log reconciliation,
+        # while bounding parser-side provenance state. Unconsumed completion
+        # owners are protected until their queue entries drain.
+        if len(self._sessions_by_id) > 512:
+            protected_ids = {session.session_id}
+            queued = self._session_manager.get_lap_completions_after(float("-inf"))
+            if isinstance(queued, list):
+                for completion in queued:
+                    owner = self._session_manager.get_lap_completion_owner(completion)
+                    if isinstance(owner, tuple) and len(owner) == 4 and owner[1]:
+                        protected_ids.add(owner[1])
+            for old_id in list(self._sessions_by_id):
+                if len(self._sessions_by_id) <= 512:
+                    break
+                if old_id not in protected_ids:
+                    self._sessions_by_id.pop(old_id, None)
+        had_active_owner = self._session_manager.get_active_session_id()
+        if had_active_owner != session.session_id:
+            self._session_manager.begin_session(
+                session.session_id,
+                car_model=session.car,
+                car_uuid=session.car_uuid,
+            )
+            if had_active_owner is None:
+                # A direct parser embedder may have populated SHM before
+                # supplying its SessionData. This is explicit parser
+                # ownership, rather than arbitrary adoption by the manager.
+                self._session_manager.bind_session_identity(
+                    session_id=session.session_id,
+                    car_model=session.car,
+                    car_uuid=session.car_uuid,
+                )
+
+    async def _emit_game_status(
+        self,
+        is_running: bool,
+        trigger: str = "unknown",
+        *,
+        force: bool = False,
+    ) -> None:
         """Emit game status change, logging if duplicate or state change."""
-        if self._last_emitted_game_status == is_running:
+        if self._last_emitted_game_status == is_running and not force:
             log_debug(Component.LOG_PARSER,
                 f"[GAME_STATUS] DUPLICATE DROPPED: is_running={is_running}, "
                 f"trigger={trigger}, last={self._last_emitted_game_status}  "
@@ -741,31 +839,61 @@ class LogParser:
         already_has_steam = self._is_steam_id(self.context.player_id or "")
 
         if self._is_steam_id(pid) or not already_has_steam:
+            previous_session = self.current_session
+            previous_session_type = (
+                previous_session.session_type if previous_session else "UNKNOWN"
+            )
+            previous_car_uuids = {
+                session.car_uuid
+                for session in self._sessions_by_id.values()
+                if session.car_uuid
+            }
+            car_switch = bool(
+                previous_session is not None
+                and not self._connect_is_same_car(car, car_uuid)
+            )
+
             self.context.player_id = pid
             self.context.current_car = car
             self.context.car_uuid = car_uuid
             self.context.player_car_uuids.add(car_uuid)
-            # Keep the shared capability sample bound to the identified car.
-            # This also clears a prior car's hybrid flags immediately when a
-            # car switch is observed before the next static SHM snapshot.
-            self._session_manager.update_player_identification_from_logs(
-                {"steam_id": pid, "car_uuid": car_uuid, "car_model": car}
-            )
             ers, kers = self._get_shm_hybrid_flags()
             self.context.car_is_hybrid = is_hybrid_car(has_ers_from_shm=ers, has_kers_from_shm=kers)
+
+            if car_switch:
+                # A connect-only car change is a real ownership boundary. Keep
+                # the outgoing SessionData immutable so queued SHM laps still
+                # resolve to its frozen car/UUID while the replacement parser
+                # session is opened for the newly connected car.
+                self._start_new_session(previous_session_type, line)
+                self.context.player_car_uuids.update(previous_car_uuids)
+                self._pending_connect_rollover = True
 
             if car_uuid in self.context.car_meta:
                 meta = self.context.car_meta[car_uuid]
                 if meta.get("player_name"):
                     self.context.player_name = meta["player_name"]
 
-            if self.current_session:
+            if not car_switch and self.current_session:
                 self.current_session.car_uuid = car_uuid
                 self.current_session.car = car
                 self.current_session.player_id = pid
                 self.current_session.fuel_reliable = not self.context.car_is_hybrid
-            else:
+            elif not self.current_session:
                 self._start_new_session("UNKNOWN", line)
+
+            # Keep the shared capability sample bound to the identified car.
+            # This also clears a prior car's hybrid flags immediately when a
+            # car switch is observed before the next static SHM snapshot.
+            self._session_manager.update_player_identification_from_logs(
+                {"steam_id": pid, "car_uuid": car_uuid, "car_model": car}
+            )
+
+            self._session_manager.bind_session_identity(
+                session_id=self.current_session.session_id if self.current_session else None,
+                car_model=car,
+                car_uuid=car_uuid,
+            )
 
             log_debug(Component.LOG_PARSER, 
                 f"[CONNECT] pid={pid} car={car} uuid={car_uuid} "
@@ -894,7 +1022,10 @@ class LogParser:
 
         pending = dict(self._pending_compound_updates)
         source_car_uuid = self._pending_compound_source_car_uuid
-        player_scoped = source_car_uuid is not None and self._is_player_car(source_car_uuid)
+        player_scoped = (
+            source_car_uuid is not None
+            and self._is_current_session_car(source_car_uuid)
+        )
         legacy_unscoped = source_car_uuid is None
         prelap_window = self.current_session is None or not self.current_session.laps
 
@@ -1001,6 +1132,8 @@ class LogParser:
         session_type = SESSION_TYPE_MAP.get(raw_type, raw_type)
         track = self._clean_track_name(raw_track_desc)
 
+        previous_context_car = self.context.current_car
+        previous_context_uuid = self.context.car_uuid
         self.context.current_track = track
         self.context.current_car = raw_car
         self.context.weather = raw_weather
@@ -1017,6 +1150,16 @@ class LogParser:
         tm = self._pats["date"].match(line)
         start_time = tm.group(1) if tm else datetime.now().isoformat()
 
+        # ``context.car_uuid`` can still refer to the outgoing model when
+        # Game Started arrives before the matching connect line. Preserve the
+        # Steam identity but do not attach the old car to this session.
+        session_car_uuid = (
+            previous_context_uuid
+            if previous_context_car.casefold() == raw_car.casefold()
+            else None
+        )
+        if session_car_uuid is None and previous_context_car.casefold() != raw_car.casefold():
+            self.context.car_uuid = None
         self.current_session = SessionData(
             session_type=session_type,
             game_version=self.context.game_version,
@@ -1024,7 +1167,7 @@ class LogParser:
             car=raw_car,
             player_name=self.context.player_name,
             player_id=self.context.player_id,
-            car_uuid=self.context.car_uuid,
+            car_uuid=session_car_uuid,
             weather=raw_weather,
             fuel_reliable=not self.context.car_is_hybrid,
             start_time=start_time,
@@ -1037,6 +1180,8 @@ class LogParser:
         
         self._reset_in_progress()
         self._finalise_stints()
+
+        self._establish_session_ownership(self.current_session)
 
         # ── Reset shared session before syncing the new session ─────────
         # _finalise_current_session() (above) may have pushed the old session's
@@ -1062,7 +1207,7 @@ class LogParser:
             if m:
                 car_id = m.group(1)
                 self._last_setup_car_uuid = car_id
-                if self.current_session and self._is_player_car(car_id):
+                if self._is_current_session_car(car_id):
                     self.current_session.initial_fuel = float(m.group(2))
                     log_debug(Component.LOG_PARSER, f"[FUEL] Initial fill: {m.group(2)} L")
             return
@@ -1078,7 +1223,7 @@ class LogParser:
         hundredmeters = int(m.group(2))
         fuel_delta = float(m.group(3))
 
-        if not self.current_session or not self._is_player_car(car_id):
+        if not self._is_current_session_car(car_id):
             return
 
         # Negative delta = tank fill / init event (race start).
@@ -1192,7 +1337,7 @@ class LogParser:
             return
 
         car_id, time_ms, split_idx = m.group(1), int(m.group(2)), int(m.group(3))
-        if not self._is_player_car(car_id):
+        if not self._is_current_session_car(car_id):
             return
 
         self._ip.splits[split_idx] = time_ms
@@ -1337,9 +1482,90 @@ class LogParser:
 
         if not self.current_session or not self._is_player_car(car_id):
             return None
+        # A new boundary for the current car proves that an omitted validity
+        # broadcast belongs to the outgoing car. Do not let that stale target
+        # capture a later equal-time validity line from this session.
+        if (
+            self._pending_outgoing_validity is not None
+            and self.current_session.car_uuid
+            and self._normalize_car_uuid(car_id)
+            == self._normalize_car_uuid(self.current_session.car_uuid)
+        ):
+            self._pending_outgoing_validity = None
+        # A delayed log line from an outgoing car may arrive after the parser
+        # has opened the next session. It must never be reconstructed from the
+        # new session's in-progress sectors, fuel, or compound state. The SHM
+        # completion already owns that boundary and will route to its origin.
+        if (
+            self.current_session.car_uuid
+            and car_id.casefold() != self.current_session.car_uuid.casefold()
+        ):
+            outgoing_session = next(
+                (
+                    session
+                    for session in self._sessions_by_id.values()
+                    if session.car_uuid
+                    and session.car_uuid.casefold() == car_id.casefold()
+                ),
+                None,
+            )
+            outgoing_shm_lap = self._nearest_lap_match(
+                [
+                    lap
+                    for lap in self._shm_emitted_laps
+                    if self._session_for_lap(lap) is outgoing_session
+                ],
+                self._parse_lap_time_ms(time_str),
+            ) if outgoing_session is not None else None
+            if outgoing_shm_lap is not None:
+                # The outgoing SHM lap is already frozen with its source
+                # session. Route the late boundary to that object so any
+                # later update callback remains BMW-owned and cannot rebuild
+                # it from Alfa's in-progress accumulator.
+                self._shm_emitted_laps.remove(outgoing_shm_lap)
+                self._reconciled_lap = outgoing_shm_lap
+                self._pending_outgoing_validity = (outgoing_shm_lap, outgoing_session)
+            return None
+        if not self.current_session.car_uuid and any(
+            session is not self.current_session
+            and session.car_uuid
+            and session.car_uuid.casefold() == car_id.casefold()
+            for session in self._sessions_by_id.values()
+        ):
+            outgoing_session = next(
+                (
+                    session
+                    for session in self._sessions_by_id.values()
+                    if session is not self.current_session
+                    and session.car_uuid
+                    and session.car_uuid.casefold() == car_id.casefold()
+                ),
+                None,
+            )
+            outgoing_shm_lap = self._nearest_lap_match(
+                [
+                    lap
+                    for lap in self._shm_emitted_laps
+                    if self._session_for_lap(lap) is outgoing_session
+                ],
+                self._parse_lap_time_ms(time_str),
+            ) if outgoing_session is not None else None
+            if outgoing_shm_lap is not None:
+                self._shm_emitted_laps.remove(outgoing_shm_lap)
+                self._reconciled_lap = outgoing_shm_lap
+                self._pending_outgoing_validity = (outgoing_shm_lap, outgoing_session)
+            return None
 
         lap_time_ms = self._parse_lap_time_ms(time_str)
-        shm_existing = self._nearest_lap_match(self._shm_emitted_laps, lap_time_ms)
+        # A delayed log lap can equal an outgoing session's SHM time. Only
+        # reconcile against SHM laps owned by the current parser session;
+        # otherwise an Alfa log line can mutate and suppress BMW's frozen lap.
+        current_shm_laps = [
+            lap
+            for lap in self._shm_emitted_laps
+            if self._session_for_lap(lap) is self.current_session
+        ]
+        shm_existing = self._nearest_lap_match(current_shm_laps, lap_time_ms)
         ip = self._ip
         completion_splits = (
             self._outlap_candidate_splits
@@ -1507,7 +1733,7 @@ class LogParser:
         if prior_pending is not None:
             prior_completion = self._lap_completion_by_lap_id.get(id(prior_pending))
             if prior_completion is None:
-                prior_completion = self._session_manager.get_lap_completion_by_time(
+                prior_completion = self._owned_completion_by_time(
                     prior_pending.lap_time_ms
                 )
                 if prior_completion is not None:
@@ -1517,9 +1743,7 @@ class LogParser:
                 # new lap, even when their rounded times are equal.
                 self._session_manager.consume_lap_completion(prior_completion)
         self._pending_lap = completed_lap
-        associated_completion = self._session_manager.get_lap_completion_by_time(
-            lap_time_ms
-        )
+        associated_completion = self._owned_completion_by_time(lap_time_ms)
         if associated_completion is not None:
             self._lap_completion_by_lap_id[id(completed_lap)] = associated_completion
         self._pending_lap_since = time.monotonic() if self._emit_callbacks else None
@@ -1567,6 +1791,41 @@ class LogParser:
         if not self.current_session:
             return None
         laptime_ms, valid_text, validity_flags, game_lap_number = parsed
+
+        # A delayed validity broadcast can follow an outgoing car's delayed
+        # New-lap line after the parser has opened a new session. Keep it tied
+        # to the frozen outgoing object instead of searching Alfa's laps by
+        # equal time.
+        if self._pending_outgoing_validity is not None:
+            outgoing_lap, outgoing_session = self._pending_outgoing_validity
+            if (
+                abs(outgoing_lap.lap_time_ms - laptime_ms)
+                <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                and (
+                    outgoing_lap.lap_number == game_lap_number
+                    or game_lap_number <= 0
+                )
+            ):
+                if validity_flags in (1, 2):
+                    game_valid = validity_flags == 2
+                else:
+                    game_valid = valid_text == "true"
+                outgoing_lap.lap_number = game_lap_number
+                if outgoing_lap.lap_state != LapState.OUTLAP:
+                    outgoing_lap.lap_state = (
+                        LapState.VALID if game_valid else LapState.INVALID_GAME
+                    )
+                    outgoing_lap.lap_type = outgoing_lap.lap_state.value
+                    outgoing_lap.is_valid = game_valid
+                outgoing_lap.validity_source = "authoritative"
+                bound_completion = self._lap_completion_by_lap_id.get(
+                    id(outgoing_lap)
+                )
+                if bound_completion is not None:
+                    self._session_manager.consume_lap_completion(bound_completion)
+                self._pending_outgoing_validity = None
+                self._reconciled_lap = outgoing_lap
+                return None
         pending = self._pending_lap
         already_emitted = False
         # Keep all retained lap objects eligible for a repeated or delayed
@@ -1713,9 +1972,7 @@ class LogParser:
             # only a single candidate may promote the structural outlap.
             matching_completions.extend(
                 candidate
-                for candidate in self._session_manager.get_lap_completions_after(
-                    float("-inf")
-                )
+                for candidate in self._owned_completions()
                 if abs(candidate.lap_time_ms - pending.lap_time_ms)
                 <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
                 and (
@@ -1775,6 +2032,8 @@ class LogParser:
         if completion is None:
             completion = self._lap_completion_by_lap_id.get(id(pending))
         if completion is None:
+            completion = self._owned_completion_by_time(pending.lap_time_ms)
+        if completion is None and self.current_session is None:
             completion = self._session_manager.get_lap_completion_by_time(
                 pending.lap_time_ms
             )
@@ -1865,6 +2124,85 @@ class LogParser:
             return None
         return self._flush_pending_lap()
 
+    def _session_for_completion(
+        self, completion: LapCompletionData
+    ) -> Optional[SessionData]:
+        """Resolve a queued SHM completion to its originating session."""
+        owner = self._session_manager.get_lap_completion_owner(completion)
+        owner_is_legacy = not isinstance(owner, tuple) or len(owner) != 4
+        if owner_is_legacy:
+            owner = (
+                completion.origin_epoch,
+                completion.session_id,
+                completion.car_model,
+                completion.car_uuid,
+            )
+        _epoch, session_id, _car_model, _car_uuid = owner
+        if not session_id:
+            if owner_is_legacy and self.current_session is not None:
+                return self.current_session
+            return None
+        if self.current_session and self.current_session.session_id == session_id:
+            return self.current_session
+        return self._sessions_by_id.get(session_id) or next(
+            (session for session in self.sessions if session.session_id == session_id),
+            None,
+        )
+
+    def _session_for_lap(self, lap: LapData) -> Optional[SessionData]:
+        completion = self._lap_completion_by_lap_id.get(id(lap))
+        if completion is not None:
+            return self._session_for_completion(completion)
+        if self.current_session and lap in self.current_session.laps:
+            return self.current_session
+        return next(
+            (session for session in self.sessions if lap in session.laps),
+            self.current_session,
+        )
+
+    def _owned_completions(self) -> list[LapCompletionData]:
+        session = self.current_session
+        result = self._session_manager.get_lap_completions_for_session_after(
+            float("-inf"),
+            session_id=session.session_id if session is not None else None,
+        )
+        if not isinstance(result, list):
+            result = self._session_manager.get_lap_completions_after(float("-inf"))
+        if not isinstance(result, list):
+            return []
+        if session is None:
+            return result
+        owned: list[LapCompletionData] = []
+        for completion in result:
+            owner = self._session_manager.get_lap_completion_owner(completion)
+            if not isinstance(owner, tuple) or len(owner) != 4:
+                # Legacy test/embedder managers do not expose provenance.
+                owned.append(completion)
+            elif owner[1] == session.session_id:
+                owned.append(completion)
+        return owned
+
+    def _owned_completion_by_time(
+        self, lap_time_ms: int
+    ) -> Optional[LapCompletionData]:
+        """Match log metadata only against this parser session's queue."""
+        session = self.current_session
+        if session is None:
+            return None
+        candidates = self._owned_completions()
+        candidates = [
+            completion
+            for completion in candidates
+            if abs(completion.lap_time_ms - lap_time_ms)
+            <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+        ]
+        if not candidates:
+            return None
+        return min(
+            candidates,
+            key=lambda item: (abs(item.lap_time_ms - lap_time_ms), item.observed_at),
+        )
+
     def _take_ready_shm_lap(self) -> Optional[LapData]:
         """Build a live lap when ACE's file logger has not flushed yet."""
         completions = self._session_manager.get_lap_completions_after(
@@ -1874,23 +2212,44 @@ class LogParser:
             return None
         # Consume oldest-first. ACE can delay file-log writes for more than a
         # full lap; keeping only the newest SHM transition swaps or drops laps.
-        completion = completions[0]
+        resolvable_index = next(
+            (
+                index
+                for index, candidate in enumerate(completions)
+                if self._session_for_completion(candidate) is not None
+            ),
+            None,
+        )
+        if resolvable_index is None:
+            return None
+        completion = completions[resolvable_index]
+
+        def mark_observed() -> None:
+            # Do not move the global cursor beyond an older unowned entry;
+            # that entry may be bound later in its opening epoch.
+            if all(
+                self._session_for_completion(candidate) is not None
+                for candidate in completions[:resolvable_index]
+            ):
+                self._last_shm_completion_observed_at = completion.observed_at
+
         if time.monotonic() - completion.observed_at < self.PENDING_VALIDITY_GRACE_SECONDS:
             return None
 
         # A capture completion can arrive before the log parser has observed
         # the corresponding session boundary. Keep it at the head of the
-        # queue until the log session exists; advancing the cursor here would
-        # lose the completion permanently when the identity arrives later.
-        if self.current_session is None:
+        # queue until its identity is bound; an unowned completion is never
+        # adopted by an arbitrary later session.
+        target_session = self._session_for_completion(completion)
+        if target_session is None:
             return None
 
-        if self._pending_lap is not None:
+        if target_session is self.current_session and self._pending_lap is not None:
             pending_completion = self._lap_completion_by_lap_id.get(
                 id(self._pending_lap)
             )
             if pending_completion is completion:
-                self._last_shm_completion_observed_at = completion.observed_at
+                mark_observed()
                 self._session_manager.consume_lap_completion(completion)
                 return None
             if (
@@ -1899,12 +2258,12 @@ class LogParser:
                 <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
             ):
                 self._lap_completion_by_lap_id[id(self._pending_lap)] = completion
-                self._last_shm_completion_observed_at = completion.observed_at
+                mark_observed()
                 self._session_manager.consume_lap_completion(completion)
                 return None
-        if self.current_session:
+        if target_session:
             unmatched_laps = [
-                lap for lap in self.current_session.laps
+                lap for lap in target_session.laps
                 if id(lap) not in self._lap_completion_by_lap_id
             ]
             matching_laps = [
@@ -1918,18 +2277,18 @@ class LogParser:
                     key=lambda lap: abs(lap.lap_time_ms - completion.lap_time_ms),
                 )
                 self._lap_completion_by_lap_id[id(matched_lap)] = completion
-                self._last_shm_completion_observed_at = completion.observed_at
+                mark_observed()
                 self._session_manager.consume_lap_completion(completion)
                 return None
 
-        self._last_shm_completion_observed_at = completion.observed_at
+        mark_observed()
 
         # SHM can report the finish before ACE flushes the corresponding log
         # lines. It has validity but no structural outlap classification. If
         # the log has already armed an outlap, consume this completion and wait
         # for ``New lap`` to supply the boundary without publishing a false
         # INVALID_GAME card first.
-        if self._ip.is_outlap:
+        if target_session is self.current_session and self._ip.is_outlap:
             log_debug(
                 Component.LOG_PARSER,
                 f"[OUTLAP] Deferred SHM completion {completion.lap_time_ms} ms "
@@ -1937,16 +2296,30 @@ class LogParser:
             )
             return None
 
-        prior_numbers = [lap.lap_number for lap in self.current_session.laps]
-        if self._pending_lap is not None:
+        prior_numbers = [lap.lap_number for lap in target_session.laps]
+        if target_session is self.current_session and self._pending_lap is not None:
             prior_numbers.append(self._pending_lap.lap_number)
         lap_number = max(prior_numbers, default=0) + 1
         is_valid = completion.is_valid is not False
         lap_state = LapState.VALID if is_valid else LapState.INVALID_GAME
         minutes, remainder = divmod(completion.lap_time_ms, 60_000)
         seconds, milliseconds = divmod(remainder, 1_000)
-        compound = self.context.tyre.compound_name
-        stint = self._ensure_stint(compound)
+        compound = target_session.tyre_compound
+        if (
+            (not compound or compound == "Unknown")
+            and target_session is self.current_session
+        ):
+            compound = self.context.tyre.compound_name
+        if target_session is self.current_session:
+            stint = self._ensure_stint(compound)
+        else:
+            stint = next(
+                (item for item in reversed(target_session.stints) if item.tyre_compound == compound),
+                None,
+            )
+            if stint is None:
+                stint = StintData(len(target_session.stints) + 1, compound)
+                target_session.stints.append(stint)
         stint.add_lap(lap_number, None)
         lap = LapData(
             lap_number=lap_number,
@@ -1961,7 +2334,12 @@ class LogParser:
             stint_number=stint.stint_number,
             timestamp=completion.timestamp,
         )
-        self.current_session.laps.append(lap)
+        target_session.laps.append(lap)
+        if target_session is not self.current_session and target_session not in self.sessions:
+            # A session can be finalized before its first SHM-only completion
+            # is drained. Make that retained origin visible to callers once
+            # the delayed lap arrives.
+            self.sessions.append(target_session)
         self._shm_emitted_laps.append(lap)
         self._lap_completion_by_lap_id[id(lap)] = completion
         self._session_manager.consume_lap_completion(completion)
@@ -2044,6 +2422,7 @@ class LogParser:
             weather=self.context.weather,
             fuel_reliable=not self.context.car_is_hybrid,
         )
+        self._establish_session_ownership(self.current_session)
         self._reset_in_progress()
         self._finalise_stints()
         self._sync_shared_session(self.current_session)
@@ -2249,6 +2628,10 @@ class LogParser:
                     except (RuntimeError, ValueError, TypeError) as exc:
                         log_debug(Component.LOG_PARSER, f"[ERROR] Historical parse: {exc}")
 
+                # Historical connect-only transitions establish parser
+                # ownership but must not replay a capture lifecycle callback.
+                self._pending_connect_rollover = False
+
                 log_debug(Component.LOG_PARSER, 
                     f"Historical pass: {historical_laps} lap(s). "
                     f"Session: {self.current_session is not None}"
@@ -2284,6 +2667,10 @@ class LogParser:
                 self._emit_callbacks = True
 
                 if self.current_session:
+                    # Direct embedders may provide an already-built session
+                    # instead of a Game Started line. Establish ownership
+                    # before the first live SHM sample is consumed.
+                    self._establish_session_ownership(self.current_session)
                     await self._emit_status("Monitoring for new laps …")
                     if self.current_session.player_id:
                         await self._emit_user_detected(
@@ -2311,19 +2698,59 @@ class LogParser:
                     # If a trailing newline is missing, rewind and retry on next poll.
                     if line and not line.endswith("\n"):
                         fh.seek(line_start_pos)
+                        # A partial line must not be parsed, but the SHM and
+                        # grace queues remain live while ACE finishes writing
+                        # it. Otherwise a delayed completion can wait forever
+                        # behind a buffered log fragment.
+                        grace_completed = self._flush_pending_lap_after_grace()
+                        if grace_completed is not None and self.current_session is not None:
+                            await self._emit_lap(self.current_session, grace_completed)
+                        shm_completed = self._take_ready_shm_lap()
+                        shm_session = (
+                            self._session_for_lap(shm_completed)
+                            if shm_completed is not None
+                            else None
+                        )
+                        if shm_completed is not None and shm_session is not None:
+                            await self._emit_lap(shm_session, shm_completed)
+                        if self._log_dir is not None:
+                            latest_partial = self._find_latest_log(self._log_dir)
+                            if latest_partial is not None and latest_partial != self.log_path:
+                                self._flush_pending_compound_batch()
+                                self._reset_session_boundary(
+                                    "log rotation during partial line",
+                                    finalize_current_session=False,
+                                )
+                                self.context = LogContext()
+                                self._emit_callbacks = True
+                                self._last_emitted_game_status = None
+                                self.log_path = latest_partial
+                                _restart = True
+                                break
+                        try:
+                            partial_size = os.path.getsize(self.log_path)
+                        except OSError:
+                            partial_size = None
+                        if partial_size is not None and partial_size < fh.tell():
+                            self._flush_pending_compound_batch()
+                            self._reset_session_boundary(
+                                "log truncation during partial line",
+                                finalize_current_session=False,
+                            )
+                            self.context = LogContext()
+                            self._emit_callbacks = True
+                            self._last_emitted_game_status = None
+                            fh.seek(0)
                         await asyncio.sleep(poll_interval)
                         continue
 
                     if line:
-                        if "Game Started!" in line:
-                            await self._emit_game_status(True, trigger="Game Started!")
-                        if "has started the race!" in line:
-                            if self._line_mentions_player_car(line):
-                                await self._emit_game_status(True, trigger="has started the race!")
-                                # After session restart, car detection may not re-fire.
-                                # Ensure we have a session so lap completion callbacks work.
-                                if not self.current_session:
-                                    self._start_new_session("RACE", line)
+                        game_started_line = "Game Started!" in line
+                        race_started_line = (
+                            "has started the race!" in line
+                            and self._line_mentions_player_car(line)
+                        )
+                        race_needs_session = race_started_line and self.current_session is None
                         # AC Evo: pause-menu "Restart Session" emits this line
                         # but does NOT emit a fresh "Game Started!", so we
                         # have to drive the buffer reset ourselves.
@@ -2373,10 +2800,64 @@ class LogParser:
                             log_debug(Component.LOG_PARSER, f"[ERROR] Live process_line: {exc}")
                             continue
 
-                        if self._reconciled_lap is not None and self.current_session is not None:
+                        connect_rollover = self._pending_connect_rollover
+                        self._pending_connect_rollover = False
+
+                        if connect_rollover:
+                            # Drain a resolvable outgoing completion while its
+                            # capture owner is still active.  The replacement
+                            # lifecycle callback below may stop/start capture
+                            # immediately, so leaving this queue for the
+                            # ordinary post-callback poll can lose the old
+                            # boundary to the new owner. A connect boundary is
+                            # also an unambiguous end for the old grace window.
+                            prior_grace = self.PENDING_VALIDITY_GRACE_SECONDS
+                            self.PENDING_VALIDITY_GRACE_SECONDS = 0.0
+                            try:
+                                rollover_lap = self._take_ready_shm_lap()
+                            finally:
+                                self.PENDING_VALIDITY_GRACE_SECONDS = prior_grace
+                            rollover_session = (
+                                self._session_for_lap(rollover_lap)
+                                if rollover_lap is not None
+                                else None
+                            )
+                            if rollover_lap is not None and rollover_session is not None:
+                                await self._emit_lap(rollover_session, rollover_lap)
+
+                        # Establish parser ownership first, then let the app
+                        # roll the capture lifecycle. Consecutive Game Started
+                        # events are real session boundaries even though the
+                        # game-running boolean remains True.
+                        if race_needs_session:
+                            self._start_new_session("RACE", line)
+                        if game_started_line:
+                            await self._emit_game_status(
+                                True,
+                                trigger="Game Started!",
+                                force=True,
+                            )
+                        elif connect_rollover:
+                            await self._emit_game_status(
+                                True,
+                                trigger="player car connect",
+                                force=True,
+                            )
+                        elif race_needs_session:
+                            await self._emit_game_status(
+                                True,
+                                trigger="has started the race!",
+                                force=True,
+                            )
+
+                        if self._reconciled_lap is not None:
                             reconciled = self._reconciled_lap
                             self._reconciled_lap = None
-                            await self._emit_lap_update(self.current_session, reconciled)
+                            reconciled_session = self._session_for_lap(reconciled)
+                            if reconciled_session is not None:
+                                await self._emit_lap_update(
+                                    reconciled_session, reconciled
+                                )
 
                         if completed:
                             session = self.current_session or SessionData(
@@ -2403,8 +2884,13 @@ class LogParser:
                         if grace_completed is not None and self.current_session is not None:
                             await self._emit_lap(self.current_session, grace_completed)
                         shm_completed = self._take_ready_shm_lap()
-                        if shm_completed is not None and self.current_session is not None:
-                            await self._emit_lap(self.current_session, shm_completed)
+                        shm_session = (
+                            self._session_for_lap(shm_completed)
+                            if shm_completed is not None
+                            else None
+                        )
+                        if shm_completed is not None and shm_session is not None:
+                            await self._emit_lap(shm_session, shm_completed)
                         continue
 
                     # No new data — check for a newer log file (new game session)
@@ -2412,8 +2898,13 @@ class LogParser:
                     if grace_completed is not None and self.current_session is not None:
                         await self._emit_lap(self.current_session, grace_completed)
                     shm_completed = self._take_ready_shm_lap()
-                    if shm_completed is not None and self.current_session is not None:
-                        await self._emit_lap(self.current_session, shm_completed)
+                    shm_session = (
+                        self._session_for_lap(shm_completed)
+                        if shm_completed is not None
+                        else None
+                    )
+                    if shm_completed is not None and shm_session is not None:
+                        await self._emit_lap(shm_session, shm_completed)
 
                     if self._log_dir is not None:
                         _latest = self._find_latest_log(self._log_dir)

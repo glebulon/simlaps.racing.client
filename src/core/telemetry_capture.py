@@ -21,7 +21,7 @@ from src.core.telemetry_decoder import (
     peek_graphics_validity,
     PHYSICS_SHM_SIZE, GRAPHICS_SHM_SIZE, STATIC_SHM_SIZE,
 )
-from src.models import SharedSessionManager
+from src.models import SessionOriginSnapshot, SharedSessionManager, car_models_match
 from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable, NamedTuple, TextIO
@@ -92,6 +92,13 @@ SHM_PATH_CANDIDATE_TEMPLATES: list[str] = [
 ]
 
 
+def _origin_car_matches(
+    expected: Optional[str], current: Optional[str]
+) -> bool:
+    """Compare graphics/log car labels through the shared identity contract."""
+    return car_models_match(expected, current)
+
+
 @dataclass
 class FrameData:
     """Single telemetry frame data.
@@ -110,6 +117,12 @@ class FrameData:
     graphics_raw: Optional[str] = None
     static: Dict[str, Any] = field(default_factory=dict)
     static_raw: Optional[str] = None
+    # Ownership is attached to retained frames so a report consumer can
+    # verify that its buffer never crossed a session/car generation.
+    origin_epoch: Optional[int] = None
+    session_id: Optional[str] = None
+    car_model: Optional[str] = None
+    car_uuid: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -299,6 +312,13 @@ class TelemetryCapture:
         self._last_sample_had_data = False
         self._recording_awaiting_boundary = False
         self._awaiting_lap_time_ms: Optional[int] = None
+        # The manager is the authority for origin changes.  Capture freezes
+        # the origin at start so a delayed parser callback cannot make an
+        # already-running buffer adopt a later session.
+        self._capture_origin: Optional[SessionOriginSnapshot] = None
+        self._last_frame_origin_stable = True
+        self._capture_track_name: Optional[str] = None
+        self._origin_rejection_count = 0
 
     def is_capturing(self) -> bool:
         """Check if currently capturing."""
@@ -383,6 +403,89 @@ class TelemetryCapture:
     def get_output_prefix(self) -> Optional[str]:
         """Get the current session output prefix."""
         return self._output_prefix
+
+    def get_capture_origin(self) -> Optional[SessionOriginSnapshot]:
+        """Return the immutable origin owned by this capture run."""
+        return self._capture_origin
+
+    def get_capture_track_name(self) -> Optional[str]:
+        """Return track identity frozen for this capture run."""
+        return self._capture_track_name
+
+    def owns_session(self, session_id: Optional[str]) -> bool:
+        """Return whether a lap callback belongs to this capture run.
+
+        A capture that started before the log parser assigned a session id is
+        intentionally anonymous.  It can accept a parser session only when
+        the manager still reports the same origin epoch.  A capture already
+        bound to an id rejects delayed callbacks from any later session even
+        if the shared manager has moved on.
+        """
+        origin = self._capture_origin
+        if origin is None or not session_id:
+            return False
+        if origin.session_id is None:
+            current = self._get_manager_origin()
+            return bool(
+                current
+                and current.epoch == origin.epoch
+                and current.session_id == session_id
+                and current.graphics_ready
+                and _origin_car_matches(
+                    origin.graphics_car_model,
+                    current.graphics_car_model,
+                )
+            )
+        # Once a concrete session id was frozen, do not consult the manager's
+        # newer active id.  Delayed callbacks for this outgoing capture still
+        # belong to its report until the lifecycle replaces the capture.
+        return origin.session_id == session_id
+
+    def _get_manager_origin(self) -> Optional[SessionOriginSnapshot]:
+        """Read the manager's atomic origin."""
+        origin = self._session_manager.get_session_origin()
+        return origin if isinstance(origin, SessionOriginSnapshot) else None
+
+    def _capture_origin_ready(self) -> bool:
+        """Return whether the current sample belongs to this run's origin."""
+        owner = self._capture_origin
+        current = self._get_manager_origin()
+        if owner is None or current is None:
+            return True
+        # Epoch protects against graphics-leading car changes.  Session id
+        # also matters because a parser-led Game Started can reuse the epoch
+        # while graphics is still publishing the outgoing car.
+        return (
+            current.epoch == owner.epoch
+            and current.graphics_ready
+            and (
+                not owner.graphics_ready
+                or _origin_car_matches(
+                    owner.graphics_car_model,
+                    current.graphics_car_model,
+                )
+            )
+            and (
+                owner.session_id is None
+                or current.session_id == owner.session_id
+            )
+        )
+
+    def _confirm_capture_origin(self, current: Optional[SessionOriginSnapshot]) -> None:
+        """Freeze a same-epoch parser identity after graphics confirms it."""
+        owner = self._capture_origin
+        if owner is None or current is None or not current.graphics_ready:
+            return
+        if current.epoch != owner.epoch:
+            return
+        if owner.session_id is not None and current.session_id != owner.session_id:
+            return
+        if owner.graphics_ready and not _origin_car_matches(
+            owner.graphics_car_model, current.graphics_car_model
+        ):
+            return
+        if current.session_id is not None or not owner.graphics_ready:
+            self._capture_origin = current
 
     def set_on_stop_callback(self, callback: Optional[Callable[[str], None]]):
         """Set callback to be called when capture stops.
@@ -664,6 +767,7 @@ class TelemetryCapture:
     def _capture_frame(self, frame_num: int) -> FrameData:
         """Capture a single frame from shared memory."""
         self._last_sample_had_data = False
+        origin_stable_before = self._capture_origin_ready()
         frame: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "frame_number": frame_num,
@@ -740,13 +844,62 @@ class TelemetryCapture:
             # A failed full decode must not disable the validity-only path.
             self._session_manager.update_from_graphics_shm(graphics_peek)
 
+        # Graphics is the origin detector and must always flow through the
+        # manager.  Static/physics from a transition frame can still belong to
+        # the outgoing car, so accept them only when ownership was stable on
+        # both sides of the graphics update.
+        origin_stable_after_graphics = self._capture_origin_ready()
+        if origin_stable_after_graphics:
+            self._confirm_capture_origin(self._get_manager_origin())
+        expected_origin = self._get_manager_origin()
+        origin_stable = (
+            origin_stable_before
+            and origin_stable_after_graphics
+            and expected_origin is not None
+        )
+
         static_data = frame.get("static") or {}
-        if isinstance(static_data, dict) and not static_data.get("error"):
-            self._session_manager.update_from_static_shm(static_data)
+        static_applied = True
+        if (
+            origin_stable
+            and isinstance(static_data, dict)
+            and not static_data.get("error")
+        ):
+            static_applied = self._session_manager.update_from_static_shm(
+                static_data,
+                expected_origin=expected_origin,
+            )
+            static_track = static_data.get("track")
+            if (
+                static_applied
+                and self._capture_track_name is None
+                and isinstance(static_track, str)
+                and static_track.strip()
+                and static_track.casefold() != "unknown"
+            ):
+                self._capture_track_name = static_track
 
         physics_data = frame.get("physics") or {}
-        if isinstance(physics_data, dict) and not physics_data.get("error"):
-            self._session_manager.update_from_physics_shm(physics_data)
+        physics_applied = True
+        if (
+            origin_stable
+            and static_applied
+            and isinstance(physics_data, dict)
+            and not physics_data.get("error")
+        ):
+            physics_applied = self._session_manager.update_from_physics_shm(
+                physics_data,
+                expected_origin=expected_origin,
+            )
+
+        final_origin = self._get_manager_origin()
+        origin_stable = (
+            origin_stable
+            and static_applied
+            and physics_applied
+            and final_origin == expected_origin
+        )
+        self._last_frame_origin_stable = origin_stable
 
         # Raw hex blobs are only needed for the debug dump paths
         # (save_raw_dump / export_to_jsonl), which are gated on _debug_logs.
@@ -756,6 +909,13 @@ class TelemetryCapture:
             frame["physics_raw"] = None
             frame["graphics_raw"] = None
             frame["static_raw"] = None
+
+        origin = self._get_manager_origin()
+        if origin is not None:
+            frame["origin_epoch"] = origin.epoch
+            frame["session_id"] = origin.session_id
+            frame["car_model"] = origin.graphics_car_model
+            frame["car_uuid"] = origin.car_uuid
 
         # The caller decides whether to retain this transient frame. In
         # validity-only mode it is discarded after updating shared state.
@@ -795,6 +955,18 @@ class TelemetryCapture:
             log_info(Component.TELEMETRY, "Game not running yet - will retry in capture loop")
 
         self._running = True
+        self._capture_origin = self._get_manager_origin()
+        session_metadata = self._session_manager.get_session_metadata_data()
+        track_name = getattr(session_metadata, "track", None)
+        self._capture_track_name = (
+            track_name
+            if self._capture_origin is not None
+            and self._capture_origin.session_id is not None
+            and isinstance(track_name, str)
+            and track_name.strip()
+            and track_name.casefold() != "unknown"
+            else None
+        )
         self._frames = []
         self._lap_boundaries = []
         self._recording_awaiting_boundary = self._record_frames
@@ -806,6 +978,7 @@ class TelemetryCapture:
         self._stop_reason = None
         self._all_disconnected_since = None
         self._idle_since = None
+        self._origin_rejection_count = 0
 
         # Start the capture loop task
         self._task = asyncio.create_task(self._capture_loop_wrapper())
@@ -929,12 +1102,19 @@ class TelemetryCapture:
                 frame = self._capture_frame(frame_num)
                 if self._last_sample_had_data:
                     self._last_valid_frame_time = now_mono
-                    self._start_recording_at_timing_boundary(frame)
-                    if (
-                        self._record_frames
-                        and not self._recording_awaiting_boundary
-                    ):
-                        self._frames.append(frame)
+                    origin_ready = (
+                        self._last_frame_origin_stable
+                        and self._capture_origin_ready()
+                    )
+                    if not origin_ready:
+                        self._origin_rejection_count += 1
+                    if origin_ready:
+                        self._start_recording_at_timing_boundary(frame)
+                        if (
+                            self._record_frames
+                            and not self._recording_awaiting_boundary
+                        ):
+                            self._frames.append(frame)
                     frame_num += 1
                     self._all_disconnected_since = None
                     
@@ -942,7 +1122,11 @@ class TelemetryCapture:
                     # started. Validity-only capture must remain available for
                     # the lifetime of ACE, and an armed recorder may sit in the
                     # pits for several minutes before its clean start boundary.
-                    if self._record_frames and not self._recording_awaiting_boundary:
+                    if (
+                        origin_ready
+                        and self._record_frames
+                        and not self._recording_awaiting_boundary
+                    ):
                         physics = frame.physics if frame.physics else {}
                         speed_kmh = (
                             physics.get("speed_kmh", 0)
@@ -977,7 +1161,13 @@ class TelemetryCapture:
                         log_info(Component.TELEMETRY, f"First frame captured - {mode_label}")
                 if frame_num % int(self._hz * 5) == 0 and frame_num > 0:
                     if frame_num % int(self._hz * 30) == 0:  # Log every 30 seconds at 10Hz
-                        log_info(Component.TELEMETRY, "Capture progress", frames=frame_num)
+                        log_info(
+                            Component.TELEMETRY,
+                            "Capture progress",
+                            sampled_frames=frame_num,
+                            retained_frames=len(self._frames),
+                            origin_rejections=self._origin_rejection_count,
+                        )
 
                 next_deadline += self._interval
                 sleep_for = next_deadline - time.perf_counter()

@@ -445,6 +445,59 @@ def test_graphics_completion_validity_survives_physical_counter_reuse_after_pit(
     assert completion.is_valid is False
 
 
+def test_graphics_car_switch_does_not_reinterpret_queued_completion() -> None:
+    """A display-name switch cannot turn BMW's finish into Alfa's lap one."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW M3", car_uuid="bmw-uuid")
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW M3",
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 108000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW M3",
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 108315,
+            "is_valid_lap": True,
+        }
+    )
+    completions = manager.get_lap_completions_after(0.0)
+    assert len(completions) == 1
+    assert completions[0].session_id == "bmw-session"
+    assert completions[0].car_model == "BMW M3"
+
+    # ACE can leave BMW's last time in the mapping while publishing the next
+    # display-name/car snapshot. The switch establishes a fresh baseline.
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "Alfa Romeo Giulia GTAm",
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 108315,
+            "is_valid_lap": False,
+        }
+    )
+    assert [item.lap_time_ms for item in manager.get_lap_completions_after(0.0)] == [108315]
+
+    manager.begin_session(
+        "alfa-session",
+        car_model="ks_alfa_romeo_giulia_gtam",
+        car_uuid="alfa-uuid",
+    )
+    assert manager.get_lap_completions_for_session_after(
+        0.0, session_id="alfa-session", origin_epoch=manager.get_session_epoch()
+    ) == []
+
+
 def test_graphics_retains_multiple_unconsumed_lap_completions() -> None:
     """Delayed log polling must not collapse a multi-lap SHM backlog."""
     manager = SharedSessionManager()
@@ -1205,3 +1258,97 @@ def test_shm_stale_last_laptime_not_scrubbed_when_laps_exist() -> None:
         f"Legitimate last_laptime_ms should be preserved, "
         f"but got {timing.last_lap_time_ms}"
     )
+
+
+def test_graphics_transaction_aborts_when_session_changes_during_timing_publish() -> None:
+    """A reentrant epoch change cannot write the old sample into Alfa."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW")
+    original = manager.update_lap_timing_from_graphics_shm
+    changed = False
+
+    def interleave(*args, **kwargs):
+        nonlocal changed
+        if not changed:
+            changed = True
+            manager.begin_session("alfa-session", car_model="Alfa")
+        return original(*args, **kwargs)
+
+    manager.update_lap_timing_from_graphics_shm = interleave
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW",
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "current_lap_time_ms": 6_000,
+            "last_laptime_ms": 0,
+            "total_lap_count": 0,
+            "is_valid_lap": True,
+        }
+    )
+
+    assert manager.get_active_session_id() == "alfa-session"
+    assert manager.get_all_lap_times() == {}
+    assert manager.get_all_lap_validity() == {}
+    assert manager.get_current_lap_time() is None
+    assert manager.get_fuel_data().current_fuel is None
+
+
+def test_static_publish_rechecks_graphics_origin_after_session_interleave() -> None:
+    """Static data from the old car cannot follow a reentrant epoch change."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW")
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW",
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "current_lap_time_ms": 6_000,
+            "total_lap_count": 0,
+        }
+    )
+    original = manager.update_session_metadata_from_static_shm
+    changed = False
+
+    def interleave(static_data):
+        nonlocal changed
+        if not changed:
+            changed = True
+            manager.begin_session("alfa-session", car_model="Alfa")
+        return original(static_data)
+
+    manager.update_session_metadata_from_static_shm = interleave
+    manager.update_from_static_shm({"track": "BMW Track"})
+
+    assert manager.get_active_session_id() == "alfa-session"
+    assert manager.get_session_metadata()["track"] == "Unknown"
+
+
+def test_physics_publish_rechecks_graphics_origin_after_session_interleave() -> None:
+    """Physics from the old car cannot follow a reentrant epoch change."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW")
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW",
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "current_lap_time_ms": 6_000,
+            "total_lap_count": 0,
+        }
+    )
+    original = manager.update_from_physics_shm
+    changed = False
+
+    def interleave(physics_data):
+        nonlocal changed
+        if not changed:
+            changed = True
+            manager.begin_session("alfa-session", car_model="Alfa")
+        return original(physics_data)
+
+    manager.update_from_physics_shm = interleave
+    manager.update_from_physics_shm({"speed_kmh": 222.0})
+
+    assert manager.get_active_session_id() == "alfa-session"
+    assert manager._session_data.max_speed is None

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.models import SharedSessionManager
 from src.ui.app import SimLapsApp
 from src.ui.components.status_bar import ConnectionStatus
 from src.ui.services.session_lifecycle_service import SessionLifecycleService
@@ -76,6 +77,47 @@ async def test_game_running_resets_session_updates_ui_and_starts_capture():
     manager.reset.assert_called_once_with()
     start.assert_awaited_once_with()
     stop.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_repeated_game_started_rolls_capture_for_new_manager_epoch():
+    """A second true status cannot leave one buffer spanning two sessions."""
+    home = MagicMock()
+    manager = SharedSessionManager()
+    manager.begin_session("first-session", car_model="ks_bmw_m2_coupe")
+
+    class Capture:
+        def __init__(self):
+            self.capturing = False
+
+        def is_capturing(self):
+            return self.capturing
+
+    capture = Capture()
+    events = []
+
+    async def start():
+        events.append("start")
+        capture.capturing = True
+
+    async def stop(reason, **_kwargs):
+        events.append(reason)
+        capture.capturing = False
+
+    service = SessionLifecycleService(
+        home_page=home,
+        session_manager=manager,
+        telemetry_capture=capture,
+        start_capture=start,
+        stop_capture=stop,
+    )
+
+    await service.handle_game_status_change(True)
+    manager.begin_session("second-session", car_model="ks_alfa_romeo_giulia_gtam")
+    await service.handle_game_status_change(True)
+
+    assert events == ["start", "session_rollover", "start"]
+    assert capture.capturing is True
 
 
 @pytest.mark.asyncio

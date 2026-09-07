@@ -33,6 +33,7 @@ class SessionLifecycleService:
         # delayed stop, while the capture identity prevents a stop for an old
         # capture instance from reaching a replacement created by Settings.
         self._lifecycle_generation = 0
+        self._pending_game_stop = False
 
     def set_telemetry_capture(self, telemetry_capture: Optional[Any]) -> None:
         """Refresh the capture dependency if Settings recreates it."""
@@ -66,7 +67,11 @@ class SessionLifecycleService:
         log_info(Component.APP, "Session restart — discarding telemetry buffer and restarting")
         log_debug(Component.APP, "Session restart detected; restarting telemetry capture")
         self._begin_new_session()
-        self._session_manager.reset()
+        # LogParser establishes the replacement owner before this callback.
+        # A second manager reset would erase that new metadata and graphics
+        # baseline while retaining the old queue under the wrong epoch.
+        if not isinstance(self._session_manager.get_active_session_id(), str):
+            self._session_manager.reset()
         if self._telemetry_capture and self._telemetry_capture.is_capturing():
             await self._stop_capture("session_restart", discard=True)
         await self._start_capture()
@@ -78,6 +83,8 @@ class SessionLifecycleService:
 
         self._home_page.set_game_running(is_running)
         if is_running:
+            supersedes_pending_stop = self._pending_game_stop
+            self._pending_game_stop = False
             self._begin_new_session()
             self._home_page.set_connection_status(
                 ConnectionStatus.CONNECTED,
@@ -91,7 +98,20 @@ class SessionLifecycleService:
                 f"Best lap before reset: {best_before}, "
                 f"timing entries: {len(all_times_before)}",
             )
-            self._session_manager.reset()
+            active_id = self._session_manager.get_active_session_id()
+            if not isinstance(active_id, str):
+                # Preserve the historical service contract for embedders that
+                # do not expose manager ownership yet.
+                self._session_manager.reset()
+            if (
+                self._telemetry_capture
+                and self._telemetry_capture.is_capturing()
+                and (
+                    not supersedes_pending_stop
+                    or isinstance(active_id, str)
+                )
+            ):
+                await self._stop_capture("session_rollover", discard=False)
             best_after = self._session_manager.get_best_lap_time()
             all_times_after = self._session_manager.get_all_lap_times()
             log_info(
@@ -108,10 +128,13 @@ class SessionLifecycleService:
             ConnectionStatus.CONNECTED,
             "Monitoring - waiting for session...",
         )
+        self._session_manager.end_session()
         capture = self._telemetry_capture
         generation = self._lifecycle_generation
         if capture and capture.is_capturing():
+            self._pending_game_stop = True
             await asyncio.sleep(2.0)
             if not self._delayed_stop_is_current(generation, capture):
                 return
+            self._pending_game_stop = False
         await self._stop_capture("session_end")

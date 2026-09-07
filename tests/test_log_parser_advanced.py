@@ -266,11 +266,14 @@ class TestComplexScenarios:
             "GameModeSelectionWeatherType_Clear\n"
             "[2024-01-01 12:00:02.000] [gameplay] [info] "
             "New lap carId abc123-456: 1:23.456\n"
+            "[2024-01-01 12:59:59] "
+            "76561198321627695 connected on car car2, "
+            "with new carId abc123-789\n"
             "[2024-01-01 13:00:00] [gameplay] [info] "
             "Game Started! GameModeType_RACE | Track2 | Car2 | "
             "GameModeSelectionWeatherType_Clear\n"
             "[2024-01-01 13:00:01.000] [gameplay] [info] "
-            "New lap carId abc123-456: 1:24.567\n"
+            "New lap carId abc123-789: 1:24.567\n"
         )
         log_file = tmp_path / "sessions.log"
         log_file.write_text(log_content)

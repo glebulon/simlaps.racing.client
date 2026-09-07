@@ -26,6 +26,8 @@ from .shared_session import (
     PlayerIdentificationData,
     SectorSplitData,
     SessionMetadataData,
+    SessionOriginSnapshot,
+    car_models_match,
     SharedSessionData,
     SharedSessionManager,
 )
@@ -56,6 +58,8 @@ __all__ = [
     "PlayerIdentificationData",
     "SectorSplitData",
     "SessionMetadataData",
+    "SessionOriginSnapshot",
+    "car_models_match",
     "SharedSessionData",
     "SharedSessionManager",
 ]

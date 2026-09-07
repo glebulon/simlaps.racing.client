@@ -224,31 +224,102 @@ class APIClient:
         effective_is_valid: bool,
     ) -> tuple[Optional[Dict[str, Any]], Optional[SubmissionResult]]:
         """Build the source-aware unsigned payload without changing precedence."""
-        shared_lap_timing = self._session_manager.get_lap_timing_data(lap.lap_number)
-        shared_sector_splits = self._session_manager.get_sector_split_data(lap.lap_number)
-        shared_fuel_data = self._session_manager.get_fuel_data()
-        session_metadata = self._session_manager.get_session_metadata_data()
+        active_session_id = self._session_manager.get_active_session_id()
+        shared_belongs_to_session = (
+            isinstance(active_session_id, str)
+            and active_session_id == session.session_id
+        )
+        shared_snapshot = None
+        if shared_belongs_to_session and isinstance(
+            self._session_manager, SharedSessionManager
+        ):
+            expected_origin = self._session_manager.get_session_origin()
+            shared_snapshot = self._session_manager.get_data_for_origin(
+                expected_origin,
+                session_id=session.session_id,
+            )
+            shared_belongs_to_session = shared_snapshot is not None
+        if not isinstance(self._session_manager, SharedSessionManager):
+            # Legacy embedders without the manager provenance contract retain
+            # the established source-priority behavior.
+            shared_belongs_to_session = True
+        shared_lap_timing = (
+            (
+                shared_snapshot.lap_timing.get(lap.lap_number)
+                if shared_snapshot is not None
+                else self._session_manager.get_lap_timing_data(lap.lap_number)
+            )
+            if shared_belongs_to_session
+            else None
+        )
+        shared_sector_splits = (
+            (
+                shared_snapshot.sector_splits.get(lap.lap_number)
+                if shared_snapshot is not None
+                else self._session_manager.get_sector_split_data(lap.lap_number)
+            )
+            if shared_belongs_to_session
+            else None
+        )
+        shared_fuel_data = (
+            (
+                shared_snapshot.fuel_data
+                if shared_snapshot is not None
+                else self._session_manager.get_fuel_data()
+            )
+            if shared_belongs_to_session
+            else None
+        )
+        session_metadata = (
+            (
+                shared_snapshot.session_metadata
+                if shared_snapshot is not None
+                else self._session_manager.get_session_metadata_data()
+            )
+            if shared_belongs_to_session
+            else None
+        )
 
         effective_track = (
             session.track
             if session.track and session.track != "Unknown"
-            else session_metadata.track
+            else (session_metadata.track if session_metadata is not None else "Unknown")
         )
         effective_car = (
             session.car
             if session.car and session.car != "Unknown"
-            else (shared_player.car_model or session.car)
+            else (
+                (
+                    shared_snapshot.player_identification.car_model
+                    if shared_snapshot is not None
+                    else shared_player.car_model
+                )
+                if shared_belongs_to_session
+                else session.car
+            )
         )
-        effective_session_id = session.session_id or session_metadata.session_id
+        effective_session_id = session.session_id or (
+            session_metadata.session_id
+            if session_metadata is not None
+            else None
+        )
         effective_session_type = (
             session.session_type
             if session.session_type and session.session_type != "Unknown"
-            else session_metadata.session_type
+            else (
+                session_metadata.session_type
+                if session_metadata is not None
+                else session.session_type
+            )
         )
         effective_game_version = (
             session.game_version
             if session.game_version and session.game_version != "Unknown"
-            else session_metadata.game_version
+            else (
+                session_metadata.game_version
+                if session_metadata is not None
+                else session.game_version
+            )
         )
 
         track_id = self._normalize_track_id(effective_track)
@@ -328,7 +399,11 @@ class APIClient:
                 payload[field_name] = int(value)
 
         # SHM's per-lap fuel is authoritative; parsed log fuel is the fallback.
-        fuel_used_value = shared_fuel_data.fuel_consumed_lap
+        fuel_used_value = (
+            shared_fuel_data.fuel_consumed_lap
+            if shared_fuel_data is not None
+            else None
+        )
         if fuel_used_value is None:
             fuel_used_value = lap.fuel_used
         if fuel_used_value is not None:

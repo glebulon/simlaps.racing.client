@@ -90,7 +90,17 @@ async def test_valid_timed_lap_after_rejected_pit_prefix_is_not_suppressed(tmp_p
         (27111, 18177, 32613),
     ]
 
+    session = SessionData(
+        track="Red Bull Ring GP",
+        car="ks_mazda_mx5_nd_cup",
+        player_id="76561197986609341",
+        session_type="PRACTICE",
+        car_uuid=car_id,
+    )
     manager = SharedSessionManager()
+    manager.begin_session(
+        session.session_id, car_model=session.car, car_uuid=session.car_uuid
+    )
     for lap_number, (lap_time_ms, is_valid) in enumerate(
         zip(lap_times, lap_validity),
         start=1,
@@ -161,13 +171,8 @@ async def test_valid_timed_lap_after_rejected_pit_prefix_is_not_suppressed(tmp_p
         log_path=str(log_file),
         session_manager=manager,
     )
-    parser.current_session = SessionData(
-        track="Red Bull Ring GP",
-        car="ks_mazda_mx5_nd_cup",
-        player_id="76561197986609341",
-        session_type="PRACTICE",
-        car_uuid=car_id,
-    )
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
     parser.context.player_id = "76561197986609341"
     parser.context.car_uuid = car_id
     parser.context.tyre.set_all("S")
@@ -226,7 +231,17 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
     car_id = "45dee0b268b7dc7c-9bb207d2d0ce68ad"
     lap_times = [61_854, 62_400]
     sectors = [(25_000, 18_000, 18_854), (25_200, 18_100, 19_100)]
+    session = SessionData(
+        track="Red Bull Ring GP",
+        car="ks_mazda_mx5_nd_cup",
+        player_id="76561197986609341",
+        session_type="PRACTICE",
+        car_uuid=car_id,
+    )
     manager = SharedSessionManager()
+    manager.begin_session(
+        session.session_id, car_model=session.car, car_uuid=session.car_uuid
+    )
     for lap_number, lap_time_ms in enumerate(lap_times, start=1):
         _publish_shm_completion(
             manager,
@@ -294,13 +309,8 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
         log_path=str(log_file),
         session_manager=manager,
     )
-    parser.current_session = SessionData(
-        track="Red Bull Ring GP",
-        car="ks_mazda_mx5_nd_cup",
-        player_id="76561197986609341",
-        session_type="PRACTICE",
-        car_uuid=car_id,
-    )
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
     parser.context.player_id = "76561197986609341"
     parser.context.car_uuid = car_id
     parser.context.tyre.set_all("S")
