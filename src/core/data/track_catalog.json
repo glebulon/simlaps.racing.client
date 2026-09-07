@@ -1157,82 +1157,89 @@
           "11-corner",
           "11_corner"
         ],
+        "_calibration": {
+          "official_track_map": "https://weathertechraceway.com/pages/track-information",
+          "game_version": "0.9.1",
+          "progress_reference": "absolute graphics normalized_car_position in [0, 1); no global phase offset",
+          "method": "inferred from locally observed geometry landmarks in a valid BMW telemetry replay",
+          "uncertainty": "Approximate geometry intervals; no per-car apex-speed expectations are encoded."
+        },
         "corners": [
           {
             "id": 1,
             "name": "Turn 1",
-            "start": 0.02,
-            "end": 0.045,
+            "start": 0.04,
+            "end": 0.075,
             "_confidence": "profiled"
           },
           {
             "id": 2,
             "name": "Andretti Hairpin",
-            "start": 0.07,
-            "end": 0.125,
+            "start": 0.08,
+            "end": 0.145,
             "_confidence": "profiled"
           },
           {
             "id": 3,
             "name": "Turn 3",
             "start": 0.185,
-            "end": 0.225,
+            "end": 0.235,
             "_confidence": "profiled"
           },
           {
             "id": 4,
             "name": "Turn 4",
-            "start": 0.285,
+            "start": 0.265,
             "end": 0.325,
             "_confidence": "profiled"
           },
           {
             "id": 5,
             "name": "Turn 5",
-            "start": 0.38,
-            "end": 0.425,
+            "start": 0.39,
+            "end": 0.455,
             "_confidence": "profiled"
           },
           {
             "id": 6,
             "name": "Turn 6",
-            "start": 0.475,
-            "end": 0.52,
+            "start": 0.5,
+            "end": 0.565,
             "_confidence": "profiled"
           },
           {
             "id": 7,
             "name": "Turn 7",
-            "start": 0.555,
-            "end": 0.59,
+            "start": 0.58,
+            "end": 0.635,
             "_confidence": "profiled"
           },
           {
             "id": 8,
             "name": "Corkscrew",
-            "start": 0.59,
-            "end": 0.645,
+            "start": 0.645,
+            "end": 0.715,
             "_confidence": "profiled"
           },
           {
             "id": 9,
             "name": "Rainey Curve",
-            "start": 0.7,
-            "end": 0.745,
+            "start": 0.715,
+            "end": 0.79,
             "_confidence": "profiled"
           },
           {
             "id": 10,
             "name": "Turn 10",
-            "start": 0.81,
-            "end": 0.85,
+            "start": 0.8,
+            "end": 0.86,
             "_confidence": "profiled"
           },
           {
             "id": 11,
             "name": "Turn 11",
-            "start": 0.9,
-            "end": 0.96,
+            "start": 0.885,
+            "end": 0.95,
             "_confidence": "profiled"
           }
         ]
