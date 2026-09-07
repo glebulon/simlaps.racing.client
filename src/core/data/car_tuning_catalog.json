@@ -2,4331 +2,4508 @@
   "ks_abarth_695_biposto": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 19,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 20
+      "settings_count": 20,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 34
+      "settings_count": 34,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 2,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_alfa_romeo_75_turbo_evo": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 14
+      "settings_count": 14,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 14
+      "settings_count": 14,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 48
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 49,
+      "category": "basic"
     }
   ],
   "ks_alfa_romeo_giulia_gta_sprint": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 18
+      "settings_count": 18,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 18
+      "settings_count": 18,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 58
+      "settings_count": 58,
+      "category": "basic"
     },
     {
       "label": "Brake bias",
-      "settings_count": 21,
+      "settings_count": 151,
       "category": "brakes"
     }
   ],
   "ks_alfa_romeo_giulia_gtam": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 31
+      "settings_count": 31,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 57
+      "settings_count": 57,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_alfa_romeo_junior": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 31,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 51
+      "settings_count": 51,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 44
+      "settings_count": 44,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_alpine_a110_s": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 31
+      "settings_count": 31,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 45
+      "settings_count": 45,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_alpine_a290_b": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 4,
+      "category": "electronics"
+    }
+  ],
+  "ks_audi_r8_lms_gt2": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 181,
+      "category": "basic"
+    },
+    {
+      "label": "Rear tyre pressure",
+      "settings_count": 181,
+      "category": "basic"
+    },
+    {
+      "label": "Front camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Rear camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 31,
+      "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 51,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 120,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 8,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 9,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 3,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
-      "settings_count": 21,
+      "settings_count": 76,
       "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 5,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 5,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 12,
+      "category": "dampers"
     }
   ],
   "ks_audi_r8_lms_gt3_evo_2": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
-    },
-    {
-      "label": "Front toe",
-      "settings_count": 26
-    },
-    {
-      "label": "Rear toe",
-      "settings_count": 36
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 36
+      "settings_count": 17,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 36
+      "settings_count": 31,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 6,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
+      "settings_count": 120,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 13,
+      "category": "electronics"
+    },
+    {
+      "label": "Traction control 2",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 11,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 5,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
-      "settings_count": 41,
+      "settings_count": 76,
       "category": "brakes"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 20,
+      "label": "Differential preload",
+      "settings_count": 26,
       "category": "suspension"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 20,
+      "label": "Front wheel rate",
+      "settings_count": 5,
       "category": "suspension"
     },
     {
-      "label": "Front anti-roll bar",
-      "settings_count": 20,
+      "label": "Rear wheel rate",
+      "settings_count": 5,
       "category": "suspension"
     },
     {
-      "label": "Rear anti-roll bar",
-      "settings_count": 20,
+      "label": "Front bumpstop rate",
+      "settings_count": 10,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
+      "label": "Rear bumpstop rate",
+      "settings_count": 10,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 30,
+      "label": "Rear slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
+      "label": "Front slow rebound",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 30,
+      "label": "Rear slow rebound",
+      "settings_count": 12,
       "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
-    },
-    {
-      "label": "Front splitter / aero balance",
-      "settings_count": 15,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
     }
   ],
   "ks_audi_r8_lms_gt4_evo": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 21
-    },
-    {
-      "label": "Rear ride height",
-      "settings_count": 31
-    },
-    {
-      "label": "Fuel load",
-      "settings_count": 118
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 16,
+      "settings_count": 21,
       "category": "aero"
     },
     {
-      "label": "Differential power lock",
-      "settings_count": 16,
-      "category": "drivetrain"
+      "label": "Rear ride height",
+      "settings_count": 31,
+      "category": "aero"
     },
     {
-      "label": "Differential coast lock",
+      "label": "Fuel load",
+      "settings_count": 118,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 8,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 8,
+      "category": "electronics"
+    },
+    {
+      "label": "Brake bias",
+      "settings_count": 76,
+      "category": "brakes"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
+    }
+  ],
+  "ks_audi_r8_v10_performance": [
+    {
+      "label": "Front tyre pressure",
       "settings_count": 16,
-      "category": "drivetrain"
+      "category": "basic"
+    },
+    {
+      "label": "Rear tyre pressure",
+      "settings_count": 16,
+      "category": "basic"
+    },
+    {
+      "label": "Front camber",
+      "settings_count": 26,
+      "category": "basic"
+    },
+    {
+      "label": "Rear camber",
+      "settings_count": 26,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 51,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 51,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 3,
+      "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 3,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 83,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 3,
+      "category": "suspension"
     }
   ],
   "ks_audi_rs_3_sportback": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 24,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 55
+      "settings_count": 55,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_audi_rs_6_avant": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 13
+      "settings_count": 13,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 13
-    },
-    {
-      "label": "Front camber",
-      "settings_count": 21
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 13,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 51
+      "settings_count": 51,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 51
+      "settings_count": 51,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 73
+      "settings_count": 73,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_audi_sport_quattro": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 90
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 90,
+      "category": "basic"
     }
   ],
   "ks_bmw_m2_coupe": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 18,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 26,
+      "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 21,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 52
+      "settings_count": 52,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 11,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_bmw_m2_cs_racing": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 25
+      "settings_count": 23,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 26
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 26
-    },
-    {
-      "label": "Rear ride height",
-      "settings_count": 31
-    },
-    {
-      "label": "Fuel load",
-      "settings_count": 120
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 16,
+      "settings_count": 26,
       "category": "aero"
     },
     {
-      "label": "Differential power lock",
-      "settings_count": 16,
-      "category": "drivetrain"
+      "label": "Rear ride height",
+      "settings_count": 31,
+      "category": "aero"
     },
     {
-      "label": "Differential coast lock",
-      "settings_count": 16,
-      "category": "drivetrain"
+      "label": "Rear wing angle",
+      "settings_count": 6,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 120,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 4,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Rear anti-roll bar",
+      "settings_count": 2,
+      "category": "suspension"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 7,
+      "category": "suspension"
+    },
+    {
+      "label": "Brake bias",
+      "settings_count": 76,
+      "category": "brakes"
+    },
+    {
+      "label": "Brake torque",
+      "settings_count": 5,
+      "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 3,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 6,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
     }
   ],
   "ks_bmw_m3_e30_evo_iii": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 55
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 55,
+      "category": "basic"
     }
   ],
   "ks_bmw_m3_e46_csl": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 63
+      "settings_count": 63,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 2,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_bmw_m4_csl": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 58
+      "settings_count": 58,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 11,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_bmw_m4_gt3": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 46,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 36,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
+      "settings_count": 120,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 13,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 20,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 11,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 10,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 10,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Steer ratio",
+      "settings_count": 7,
+      "category": "suspension"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Brake bias",
+      "settings_count": 151,
+      "category": "brakes"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Differential preload",
+      "settings_count": 17,
+      "category": "suspension"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Front wheel rate",
+      "settings_count": 6,
+      "category": "suspension"
     },
     {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
+      "label": "Rear wheel rate",
+      "settings_count": 6,
+      "category": "suspension"
     },
     {
-      "label": "Front splitter / aero balance",
-      "settings_count": 15,
-      "category": "aero"
+      "label": "Front bumpstop rate",
+      "settings_count": 73,
+      "category": "suspension"
     },
     {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Rear bumpstop rate",
+      "settings_count": 73,
+      "category": "suspension"
     },
     {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Front bumpstop range",
+      "settings_count": 16,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear bumpstop range",
+      "settings_count": 21,
+      "category": "suspension"
     }
   ],
   "ks_bmw_m8_competition": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
-    },
-    {
-      "label": "Front camber",
-      "settings_count": 21
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 91
+      "settings_count": 91,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 91
+      "settings_count": 91,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 68
+      "settings_count": 68,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 2,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_caterham_485_csr": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 18
+      "settings_count": 18,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 18
+      "settings_count": 18,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 41
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 4,
       "category": "suspension"
     },
     {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Brake bias",
+      "settings_count": 126,
+      "category": "brakes"
     }
   ],
   "ks_caterham_academy": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 31
+      "settings_count": 31,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "basic"
+    },
+    {
+      "label": "Front anti-roll bar",
+      "settings_count": 3,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
-      "settings_count": 21,
+      "settings_count": 126,
       "category": "brakes"
     }
   ],
   "ks_chevrolet_camaro_zl1": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 31
+      "settings_count": 31,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 71
+      "settings_count": 71,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 4,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Rear anti-roll bar",
+      "settings_count": 3,
+      "category": "suspension"
     }
   ],
   "ks_dallara_exp": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 55
+      "settings_count": 55,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 9,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 9,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
     },
     {
       "label": "Brake bias",
-      "settings_count": 41,
+      "settings_count": 76,
       "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 30,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 30,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 25,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 25,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump fast (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Front bump slow (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound fast",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound slow",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump fast (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump slow (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound fast",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound slow",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 30,
-      "category": "aero"
-    },
-    {
-      "label": "Front wing / splitter",
-      "settings_count": 25,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 25,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 25,
-      "category": "drivetrain"
     }
   ],
   "ks_dallara_stradale_coupe": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 51
+      "settings_count": 51,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 51
+      "settings_count": 51,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 21
+      "settings_count": 31,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 31
+      "settings_count": 41,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 55
+      "settings_count": 55,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 30,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 2,
+      "category": "electronics"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 30,
-      "category": "suspension"
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
+    }
+  ],
+  "ks_datsun_240z_fairlady": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 131,
+      "category": "basic"
     },
     {
-      "label": "Front anti-roll bar",
-      "settings_count": 25,
-      "category": "suspension"
+      "label": "Rear tyre pressure",
+      "settings_count": 131,
+      "category": "basic"
     },
     {
-      "label": "Rear anti-roll bar",
-      "settings_count": 25,
-      "category": "suspension"
+      "label": "Front camber",
+      "settings_count": 21,
+      "category": "basic"
     },
     {
-      "label": "Front bump fast (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Rear camber",
+      "settings_count": 21,
+      "category": "basic"
     },
     {
-      "label": "Front bump slow (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound fast",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound slow",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump fast (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump slow (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound fast",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound slow",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 30,
-      "category": "aero"
-    },
-    {
-      "label": "Front wing / splitter",
-      "settings_count": 25,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 25,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 25,
-      "category": "drivetrain"
+      "label": "Fuel load",
+      "settings_count": 60,
+      "category": "basic"
     }
   ],
   "ks_ferrari_288_gto": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 11
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 11
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 7
+      "settings_count": 5,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 5
+      "settings_count": 5,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 100
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
+      "settings_count": 120,
+      "category": "basic"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 31,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 26,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
+      "label": "Brake bias",
+      "settings_count": 6,
+      "category": "brakes"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Brake torque",
+      "settings_count": 6,
+      "category": "brakes"
     }
   ],
   "ks_ferrari_296_gt3": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
+      "settings_count": 120,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 13,
+      "category": "electronics"
+    },
+    {
+      "label": "Traction control 2",
+      "settings_count": 13,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 11,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 7,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
-      "settings_count": 41,
+      "settings_count": 151,
       "category": "brakes"
     },
     {
-      "label": "Front spring rate",
+      "label": "Differential preload",
       "settings_count": 20,
       "category": "suspension"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 20,
+      "label": "Front wheel rate",
+      "settings_count": 9,
       "category": "suspension"
     },
     {
-      "label": "Front anti-roll bar",
-      "settings_count": 20,
+      "label": "Rear wheel rate",
+      "settings_count": 9,
       "category": "suspension"
     },
     {
-      "label": "Rear anti-roll bar",
-      "settings_count": 20,
+      "label": "Front bumpstop rate",
+      "settings_count": 10,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
-    },
-    {
-      "label": "Front splitter / aero balance",
-      "settings_count": 15,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Rear bumpstop rate",
+      "settings_count": 10,
+      "category": "suspension"
     }
   ],
   "ks_ferrari_296_gtb": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 64
+      "settings_count": 64,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 4,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_ferrari_488_challenge_evo": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 44,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 34,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 109
+      "settings_count": 109,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 5,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 16,
-      "category": "suspension"
+      "label": "Traction control 2",
+      "settings_count": 5,
+      "category": "electronics"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 16,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 5,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 16,
+      "settings_count": 2,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 16,
+      "settings_count": 2,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 25,
+      "label": "Steer ratio",
+      "settings_count": 6,
+      "category": "suspension"
+    },
+    {
+      "label": "Brake bias",
+      "settings_count": 126,
+      "category": "brakes"
+    },
+    {
+      "label": "Brake torque",
+      "settings_count": 31,
+      "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 11,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 9,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 25,
+      "label": "Rear slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 25,
+      "label": "Front slow rebound",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 25,
+      "label": "Rear slow rebound",
+      "settings_count": 12,
       "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 16,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 16,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 16,
-      "category": "drivetrain"
     }
   ],
   "ks_ferrari_daytona_sp3": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 86
+      "settings_count": 86,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 4,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_ferrari_f2004": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 33
+      "settings_count": 33,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 33
+      "settings_count": 33,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 20
+      "settings_count": 20,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 150
+      "settings_count": 150,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 30,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 30,
-      "category": "suspension"
+      "label": "Traction control",
+      "settings_count": 10,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 25,
+      "settings_count": 36,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 25,
+      "settings_count": 10,
       "category": "suspension"
     },
     {
-      "label": "Front bump fast (compression)",
-      "settings_count": 30,
+      "label": "Brake bias",
+      "settings_count": 76,
+      "category": "brakes"
+    },
+    {
+      "label": "Brake torque",
+      "settings_count": 21,
+      "category": "brakes"
+    },
+    {
+      "label": "Differential preload",
+      "settings_count": 40,
+      "category": "suspension"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 17,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 17,
+      "category": "suspension"
+    },
+    {
+      "label": "Front fast bump",
+      "settings_count": 23,
       "category": "dampers"
     },
     {
-      "label": "Front bump slow (compression)",
-      "settings_count": 30,
+      "label": "Rear fast bump",
+      "settings_count": 33,
       "category": "dampers"
     },
     {
-      "label": "Front rebound fast",
-      "settings_count": 30,
+      "label": "Front fast rebound",
+      "settings_count": 23,
       "category": "dampers"
     },
     {
-      "label": "Front rebound slow",
-      "settings_count": 30,
+      "label": "Rear fast rebound",
+      "settings_count": 33,
       "category": "dampers"
-    },
-    {
-      "label": "Rear bump fast (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump slow (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound fast",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound slow",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 30,
-      "category": "aero"
-    },
-    {
-      "label": "Front wing / splitter",
-      "settings_count": 25,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 25,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 25,
-      "category": "drivetrain"
     }
   ],
   "ks_ferrari_f40_lm": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 31,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 31
+      "settings_count": 31,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 5,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 100
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
+      "settings_count": 120,
+      "category": "basic"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 5,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 7,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
+      "label": "Brake bias",
+      "settings_count": 101,
+      "category": "brakes"
+    },
+    {
+      "label": "Brake torque",
+      "settings_count": 6,
+      "category": "brakes"
+    },
+    {
+      "label": "Differential preload",
+      "settings_count": 19,
+      "category": "suspension"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 13,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 11,
+      "category": "suspension"
+    },
+    {
+      "label": "Front fast bump",
+      "settings_count": 21,
       "category": "dampers"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 20,
+      "label": "Rear fast bump",
+      "settings_count": 26,
       "category": "dampers"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
+      "label": "Front fast rebound",
+      "settings_count": 31,
       "category": "dampers"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 20,
+      "label": "Rear fast rebound",
+      "settings_count": 41,
       "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
     }
   ],
   "ks_ferrari_sf_25": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 23
+      "settings_count": 23,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 17
+      "settings_count": 17,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 30,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 30,
-      "category": "suspension"
+      "settings_count": 145,
+      "category": "basic"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 25,
+      "settings_count": 16,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 25,
+      "settings_count": 9,
       "category": "suspension"
     },
     {
-      "label": "Front bump fast (compression)",
+      "label": "Differential preload",
       "settings_count": 30,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Front bump slow (compression)",
-      "settings_count": 30,
+      "label": "Rear slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Front rebound fast",
-      "settings_count": 30,
+      "label": "Front slow rebound",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Front rebound slow",
-      "settings_count": 30,
+      "label": "Rear slow rebound",
+      "settings_count": 12,
       "category": "dampers"
-    },
-    {
-      "label": "Rear bump fast (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump slow (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound fast",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound slow",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 30,
-      "category": "aero"
-    },
-    {
-      "label": "Front wing / splitter",
-      "settings_count": 25,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 25,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 25,
-      "category": "drivetrain"
     }
   ],
   "ks_ford_escort_rs_cosworth": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 31
+      "settings_count": 31,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 61
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 65,
+      "category": "basic"
     }
   ],
   "ks_ford_mustang_gt3": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 8,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
+      "settings_count": 120,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 13,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 20,
-      "category": "suspension"
+      "label": "Traction control 2",
+      "settings_count": 12,
+      "category": "electronics"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 20,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 41,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 41,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Steer ratio",
+      "settings_count": 8,
+      "category": "suspension"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Brake bias",
+      "settings_count": 151,
+      "category": "brakes"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Brake torque",
+      "settings_count": 21,
+      "category": "brakes"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Differential preload",
+      "settings_count": 29,
+      "category": "suspension"
     },
     {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
-    },
-    {
-      "label": "Front splitter / aero balance",
+      "label": "Front wheel rate",
       "settings_count": 15,
-      "category": "aero"
+      "category": "suspension"
     },
     {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Rear wheel rate",
+      "settings_count": 15,
+      "category": "suspension"
     },
     {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Front bumpstop rate",
+      "settings_count": 98,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear bumpstop rate",
+      "settings_count": 98,
+      "category": "suspension"
+    },
+    {
+      "label": "Front bumpstop range",
+      "settings_count": 16,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear bumpstop range",
+      "settings_count": 21,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 5,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 5,
+      "category": "dampers"
+    },
+    {
+      "label": "Front fast bump",
+      "settings_count": 4,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear fast bump",
+      "settings_count": 4,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 5,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 5,
+      "category": "dampers"
+    },
+    {
+      "label": "Front fast rebound",
+      "settings_count": 19,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear fast rebound",
+      "settings_count": 19,
+      "category": "dampers"
     }
   ],
   "ks_honda_nsx_r": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 13
+      "settings_count": 13,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 13
+      "settings_count": 13,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 70
+      "settings_count": 70,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Traction control",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_honda_s2000_ap1": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 24
+      "settings_count": 36,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 24
+      "settings_count": 24,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 44
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 50,
+      "category": "basic"
     }
   ],
   "ks_hyundai_i30_n_hb": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 20,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 20,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 54
+      "settings_count": 54,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
+    }
+  ],
+  "ks_ktm_x_bow_gt2": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 181,
+      "category": "basic"
+    },
+    {
+      "label": "Rear tyre pressure",
+      "settings_count": 181,
+      "category": "basic"
+    },
+    {
+      "label": "Front camber",
+      "settings_count": 11,
+      "category": "basic"
+    },
+    {
+      "label": "Rear camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 41,
+      "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 41,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 118,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 11,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 11,
+      "category": "electronics"
     },
     {
       "label": "Brake bias",
-      "settings_count": 21,
+      "settings_count": 76,
       "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 9,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 13,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 12,
+      "category": "dampers"
+    }
+  ],
+  "ks_ktm_x_bow_gt4": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 181,
+      "category": "basic"
+    },
+    {
+      "label": "Rear tyre pressure",
+      "settings_count": 181,
+      "category": "basic"
+    },
+    {
+      "label": "Front camber",
+      "settings_count": 11,
+      "category": "basic"
+    },
+    {
+      "label": "Rear camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 31,
+      "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 46,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 9,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 120,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 5,
+      "category": "suspension"
+    },
+    {
+      "label": "Brake bias",
+      "settings_count": 76,
+      "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 3,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 3,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 12,
+      "category": "dampers"
     }
   ],
   "ks_lamborghini_countach": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
+      "settings_count": 120,
+      "category": "basic"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 11,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
       "settings_count": 10,
-      "category": "aero"
+      "category": "suspension"
     }
   ],
   "ks_lamborghini_huracan_st_evo2": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 131
+      "settings_count": 131,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 131
+      "settings_count": 131,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 33,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 29,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 26
-    },
-    {
-      "label": "Rear ride height",
-      "settings_count": 26
-    },
-    {
-      "label": "Fuel load",
-      "settings_count": 119
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
+      "settings_count": 26,
       "category": "aero"
     },
     {
-      "label": "Front splitter / aero balance",
+      "label": "Rear ride height",
+      "settings_count": 26,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
       "settings_count": 15,
       "category": "aero"
     },
     {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Fuel load",
+      "settings_count": 119,
+      "category": "basic"
     },
     {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Traction control",
+      "settings_count": 8,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "Front anti-roll bar",
+      "settings_count": 5,
+      "category": "suspension"
+    },
+    {
+      "label": "Brake bias",
+      "settings_count": 151,
+      "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 8,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 8,
+      "category": "suspension"
     }
   ],
   "ks_lamborghini_huracan_sto": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 82
+      "settings_count": 82,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_lancia_delta_hf_integrale_evo_ii": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 71
+      "settings_count": 71,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 56
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 57,
+      "category": "basic"
     }
   ],
   "ks_lotus_emira": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 56
+      "settings_count": 56,
+      "category": "basic"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 39
+      "settings_count": 39,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 59
+      "settings_count": 53,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_lotus_exige_v6_cup": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 60
+      "settings_count": 40,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 4,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_maserati_mc20_gt2": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
+      "settings_count": 120,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 13,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 20,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 11,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 7,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 7,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Brake bias",
+      "settings_count": 76,
+      "category": "brakes"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Differential preload",
+      "settings_count": 19,
+      "category": "suspension"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Front wheel rate",
+      "settings_count": 9,
+      "category": "suspension"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Rear wheel rate",
+      "settings_count": 9,
+      "category": "suspension"
     },
     {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
+      "label": "Front bumpstop rate",
+      "settings_count": 21,
+      "category": "suspension"
     },
     {
-      "label": "Front splitter / aero balance",
-      "settings_count": 15,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Rear bumpstop rate",
+      "settings_count": 21,
+      "category": "suspension"
     }
   ],
   "ks_mazda_mx5_na": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 24,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 24,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 61
+      "settings_count": 61,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 71
+      "settings_count": 71,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 71
+      "settings_count": 71,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 47
+      "settings_count": 47,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "ABS",
+      "settings_count": 2,
+      "category": "electronics"
     }
   ],
   "ks_mazda_mx5_nd_cup": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 29
+      "settings_count": 29,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 29
+      "settings_count": 29,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 20
+      "settings_count": 20,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 20
+      "settings_count": 20,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 44
+      "settings_count": 44,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 2,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 7,
       "category": "suspension"
     },
     {
-      "label": "Rear anti-roll bar",
+      "label": "Front slow bump",
       "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
       "category": "dampers"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 20,
+      "label": "Rear slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
+      "label": "Front slow rebound",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 20,
+      "label": "Rear slow rebound",
+      "settings_count": 12,
       "category": "dampers"
+    }
+  ],
+  "ks_mazda_rx7_fd": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 17,
+      "category": "basic"
     },
     {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
+      "label": "Rear tyre pressure",
+      "settings_count": 17,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 26,
       "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 26,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 4,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 76,
+      "category": "basic"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 5,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 5,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 5,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 5,
+      "category": "dampers"
     }
   ],
   "ks_mercedes_190e_evo_ii": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 6
+      "settings_count": 6,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 6
+      "settings_count": 6,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 69
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "settings_count": 69,
+      "category": "basic"
     }
   ],
   "ks_mercedes_amg_gt2": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 121
+      "settings_count": 121,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 5,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 120
+      "settings_count": 120,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 6,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 20,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 6,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 9,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 20,
+      "settings_count": 6,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Brake bias",
+      "settings_count": 27,
+      "category": "brakes"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Differential preload",
+      "settings_count": 10,
+      "category": "suspension"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
-      "category": "dampers"
+      "label": "Front wheel rate",
+      "settings_count": 8,
+      "category": "suspension"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 30,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
-    },
-    {
-      "label": "Front splitter / aero balance",
-      "settings_count": 15,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
+      "label": "Rear wheel rate",
+      "settings_count": 8,
+      "category": "suspension"
     }
   ],
   "ks_mini_jcs_1990": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
-    },
-    {
-      "label": "Front camber",
-      "settings_count": 16
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 34
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 34,
+      "category": "basic"
     }
   ],
   "ks_peugeot_205_t16": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 110
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 110,
+      "category": "basic"
     }
   ],
   "ks_porsche_718_cayman_gt4_cs_mr": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 181
+      "settings_count": 181,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 81
+      "settings_count": 81,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 31
-    },
-    {
-      "label": "Rear ride height",
-      "settings_count": 31
-    },
-    {
-      "label": "Fuel load",
-      "settings_count": 115
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 41,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 16,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 25,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 16,
+      "settings_count": 31,
       "category": "aero"
     },
     {
-      "label": "Differential power lock",
-      "settings_count": 16,
-      "category": "drivetrain"
+      "label": "Rear ride height",
+      "settings_count": 31,
+      "category": "aero"
     },
     {
-      "label": "Differential coast lock",
-      "settings_count": 16,
-      "category": "drivetrain"
+      "label": "Rear wing angle",
+      "settings_count": 5,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 115,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 7,
+      "category": "suspension"
+    },
+    {
+      "label": "Brake bias",
+      "settings_count": 151,
+      "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 3,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 3,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
     }
   ],
   "ks_porsche_718_cayman_gt4_rs": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 19
+      "settings_count": 19,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 19
+      "settings_count": 19,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 64
+      "settings_count": 64,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 2,
+      "category": "electronics"
+    }
+  ],
+  "ks_porsche_935": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 151,
+      "category": "basic"
+    },
+    {
+      "label": "Rear tyre pressure",
+      "settings_count": 151,
+      "category": "basic"
+    },
+    {
+      "label": "Front camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Rear camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 31,
+      "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 31,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 8,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 119,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 5,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
+      "settings_count": 111,
+      "category": "brakes"
+    },
+    {
+      "label": "Brake torque",
       "settings_count": 21,
       "category": "brakes"
+    },
+    {
+      "label": "Front wheel rate",
+      "settings_count": 7,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear wheel rate",
+      "settings_count": 4,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
+      "settings_count": 12,
+      "category": "dampers"
+    },
+    {
+      "label": "Front slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
+      "settings_count": 12,
+      "category": "dampers"
     }
   ],
   "ks_porsche_964_turbo_3_6": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 11
+      "settings_count": 11,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 85
+      "settings_count": 92,
+      "category": "basic"
+    }
+  ],
+  "ks_porsche_991ii_gt2_rs_clubsport_evo": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 151,
+      "category": "basic"
+    },
+    {
+      "label": "Rear tyre pressure",
+      "settings_count": 151,
+      "category": "basic"
+    },
+    {
+      "label": "Front camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Rear camber",
+      "settings_count": 21,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Front ride height",
+      "settings_count": 31,
+      "category": "aero"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 31,
+      "category": "aero"
+    },
+    {
+      "label": "Rear wing angle",
+      "settings_count": 7,
+      "category": "aero"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 119,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 5,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
+      "settings_count": 111,
+      "category": "brakes"
+    },
+    {
+      "label": "Brake torque",
       "settings_count": 21,
       "category": "brakes"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
+      "label": "Front wheel rate",
+      "settings_count": 5,
       "category": "suspension"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 12,
+      "label": "Rear wheel rate",
+      "settings_count": 3,
       "category": "suspension"
     },
     {
-      "label": "Front anti-roll bar",
+      "label": "Front slow bump",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow bump",
       "settings_count": 12,
-      "category": "suspension"
+      "category": "dampers"
     },
     {
-      "label": "Rear anti-roll bar",
+      "label": "Front slow rebound",
+      "settings_count": 11,
+      "category": "dampers"
+    },
+    {
+      "label": "Rear slow rebound",
       "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
       "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
     }
   ],
   "ks_porsche_992_gt3_cup": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 39
+      "settings_count": 39,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 111
+      "settings_count": 111,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 13,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 5,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
-      "settings_count": 41,
+      "settings_count": 136,
       "category": "brakes"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 20,
+      "label": "Differential preload",
+      "settings_count": 30,
       "category": "suspension"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Front anti-roll bar",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear anti-roll bar",
-      "settings_count": 20,
-      "category": "suspension"
-    },
-    {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
+      "label": "Front slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 30,
+      "label": "Rear slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
+      "label": "Front slow rebound",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 30,
+      "label": "Rear slow rebound",
+      "settings_count": 12,
       "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
-    },
-    {
-      "label": "Front splitter / aero balance",
-      "settings_count": 15,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
     }
   ],
   "ks_porsche_992_gt3_r_rennsport": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 151
+      "settings_count": 151,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 36
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 117
+      "settings_count": 117,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 13,
+      "category": "electronics"
+    },
+    {
+      "label": "Traction control 2",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "ABS",
+      "settings_count": 12,
+      "category": "electronics"
+    },
+    {
+      "label": "Steer ratio",
+      "settings_count": 8,
+      "category": "suspension"
     },
     {
       "label": "Brake bias",
-      "settings_count": 41,
+      "settings_count": 86,
       "category": "brakes"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 20,
+      "label": "Differential preload",
+      "settings_count": 30,
       "category": "suspension"
     },
     {
-      "label": "Rear spring rate",
-      "settings_count": 20,
+      "label": "Front wheel rate",
+      "settings_count": 26,
       "category": "suspension"
     },
     {
-      "label": "Front anti-roll bar",
-      "settings_count": 20,
+      "label": "Rear wheel rate",
+      "settings_count": 26,
       "category": "suspension"
     },
     {
-      "label": "Rear anti-roll bar",
-      "settings_count": 20,
+      "label": "Front bumpstop rate",
+      "settings_count": 10,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 30,
+      "label": "Rear bumpstop rate",
+      "settings_count": 10,
+      "category": "suspension"
+    },
+    {
+      "label": "Front bumpstop range",
+      "settings_count": 6,
+      "category": "suspension"
+    },
+    {
+      "label": "Rear bumpstop range",
+      "settings_count": 6,
+      "category": "suspension"
+    },
+    {
+      "label": "Front slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 30,
+      "label": "Rear slow bump",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear bump (compression)",
-      "settings_count": 30,
+      "label": "Front slow rebound",
+      "settings_count": 12,
       "category": "dampers"
     },
     {
-      "label": "Rear rebound",
-      "settings_count": 30,
+      "label": "Rear slow rebound",
+      "settings_count": 12,
       "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 20,
-      "category": "aero"
-    },
-    {
-      "label": "Front splitter / aero balance",
-      "settings_count": 15,
-      "category": "aero"
-    },
-    {
-      "label": "Differential power lock",
-      "settings_count": 20,
-      "category": "drivetrain"
-    },
-    {
-      "label": "Differential coast lock",
-      "settings_count": 20,
-      "category": "drivetrain"
     }
   ],
   "ks_porsche_992_gt3_rs": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 14
+      "settings_count": 14,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 14
+      "settings_count": 14,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 9
+      "settings_count": 9,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 3
+      "settings_count": 3,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 4
+      "settings_count": 4,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 90
+      "settings_count": 90,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 8,
+      "category": "electronics"
     },
     {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 3,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 3,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Differential preload",
+      "settings_count": 61,
+      "category": "suspension"
     }
   ],
   "ks_renault_5_gt_turbo": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
-    },
-    {
-      "label": "Front camber",
-      "settings_count": 16
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 50
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 50,
+      "category": "basic"
     }
   ],
   "ks_toyota_ae86_sprinter_trueno": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 41
+      "settings_count": 41,
+      "category": "basic"
+    },
+    {
+      "label": "Rear ride height",
+      "settings_count": 31,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 50
+      "settings_count": 50,
+      "category": "basic"
     },
     {
       "label": "Brake bias",
-      "settings_count": 21,
+      "settings_count": 23,
       "category": "brakes"
     }
   ],
   "ks_toyota_gr86": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 26
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 16
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 101
+      "settings_count": 101,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 101
+      "settings_count": 101,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 49
+      "settings_count": 49,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ],
   "ks_toyota_supra_mkiv": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 141
+      "settings_count": 141,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 141
+      "settings_count": 141,
+      "category": "basic"
     },
     {
       "label": "Front camber",
-      "settings_count": 31
+      "settings_count": 46,
+      "category": "basic"
     },
     {
       "label": "Rear camber",
-      "settings_count": 31
+      "settings_count": 26,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 101
+      "settings_count": 101,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 101
+      "settings_count": 101,
+      "category": "basic"
     },
     {
       "label": "Front ride height",
-      "settings_count": 7
+      "settings_count": 31,
+      "category": "aero"
     },
     {
       "label": "Rear ride height",
-      "settings_count": 7
+      "settings_count": 36,
+      "category": "aero"
     },
     {
       "label": "Fuel load",
-      "settings_count": 70
+      "settings_count": 70,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
-    },
-    {
-      "label": "Front spring rate",
-      "settings_count": 12,
-      "category": "suspension"
-    },
-    {
-      "label": "Rear spring rate",
-      "settings_count": 12,
-      "category": "suspension"
+      "label": "ABS",
+      "settings_count": 2,
+      "category": "electronics"
     },
     {
       "label": "Front anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 8,
       "category": "suspension"
     },
     {
       "label": "Rear anti-roll bar",
-      "settings_count": 12,
+      "settings_count": 8,
       "category": "suspension"
     },
     {
-      "label": "Front bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
+      "label": "Front wheel rate",
+      "settings_count": 9,
+      "category": "suspension"
     },
     {
-      "label": "Front rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear bump (compression)",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear rebound",
-      "settings_count": 20,
-      "category": "dampers"
-    },
-    {
-      "label": "Rear wing / downforce",
-      "settings_count": 10,
-      "category": "aero"
+      "label": "Rear wheel rate",
+      "settings_count": 8,
+      "category": "suspension"
     }
   ],
   "ks_volkswagen_golf_gti_mk1": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 21
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 21
-    },
-    {
-      "label": "Front camber",
-      "settings_count": 16
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 21,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 45
-    },
-    {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "settings_count": 45,
+      "category": "basic"
     }
   ],
   "ks_volkswagen_golf_gti_mk8": [
     {
       "label": "Front tyre pressure",
-      "settings_count": 16
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Rear tyre pressure",
-      "settings_count": 16
-    },
-    {
-      "label": "Front camber",
-      "settings_count": 16
-    },
-    {
-      "label": "Rear camber",
-      "settings_count": 11
+      "settings_count": 16,
+      "category": "basic"
     },
     {
       "label": "Front toe",
-      "settings_count": 8
+      "settings_count": 8,
+      "category": "basic"
     },
     {
       "label": "Rear toe",
-      "settings_count": 6
+      "settings_count": 6,
+      "category": "basic"
     },
     {
       "label": "Fuel load",
-      "settings_count": 49
+      "settings_count": 49,
+      "category": "basic"
     },
     {
-      "label": "Brake bias",
-      "settings_count": 21,
-      "category": "brakes"
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
+    }
+  ],
+  "ks_volkswagen_golf_r_mk8": [
+    {
+      "label": "Front tyre pressure",
+      "settings_count": 16,
+      "category": "basic"
+    },
+    {
+      "label": "Rear tyre pressure",
+      "settings_count": 16,
+      "category": "basic"
+    },
+    {
+      "label": "Front camber",
+      "settings_count": 24,
+      "category": "basic"
+    },
+    {
+      "label": "Rear camber",
+      "settings_count": 26,
+      "category": "basic"
+    },
+    {
+      "label": "Front toe",
+      "settings_count": 61,
+      "category": "basic"
+    },
+    {
+      "label": "Rear toe",
+      "settings_count": 61,
+      "category": "basic"
+    },
+    {
+      "label": "Fuel load",
+      "settings_count": 55,
+      "category": "basic"
+    },
+    {
+      "label": "Traction control",
+      "settings_count": 3,
+      "category": "electronics"
+    },
+    {
+      "label": "Stability control",
+      "settings_count": 3,
+      "category": "electronics"
     }
   ]
 }

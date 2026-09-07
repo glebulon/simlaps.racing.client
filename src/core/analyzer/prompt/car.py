@@ -4,6 +4,7 @@ import math
 from typing import Dict, List
 
 from src.core.analyzer.metrics import analyze_brake_thermals, analyze_suspension
+from src.core.car_tuning_catalog import format_tuning_block
 from .context import PromptContext
 
 
@@ -383,6 +384,10 @@ def build_car_sections(
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
     lines: List[str] = []
+    tuning_block = format_tuning_block(ctx.car_model)
+    if tuning_block:
+        lines.append(tuning_block)
+        lines.append("")
     lines.extend(build_aero_sections(ctx, lap_corner_map))
     lines.extend(build_gearing_sections(ctx, lap_corner_map))
     lines.extend(build_brake_sections(ctx, lap_corner_map))
