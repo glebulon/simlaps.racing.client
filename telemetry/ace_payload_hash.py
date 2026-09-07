@@ -85,24 +85,8 @@ def submit_payload(payload: dict, token: str) -> dict:
         return {"status_code": resp.status_code, "text": resp.text}
 
 
-# ==================== PASTE YOUR PAYLOAD & TOKEN HERE ====================
-
-payload = {
-    "testID": "A-4",
-    "replayDate": "2026-06-11",
-    "replayTime": "21:38:30",
-    "carID": "ks_ferrari_f40_lm",
-    "carPreset": "preset_f40lm_mech_3",
-    "trackID": "ks_imola",
-    "layout": "gp",
-    "bestTimeMs": 112040,
-    "steamId": "76561198321627695"
-}
-
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzZXNzaW9uSUQiOiI2ZDExNzhhZi03OTg0LTRlN2EtYjlhYS0xYmI5YWU2MWU4NGEiLCJpYXQiOjE3ODAyNzc5NDN9.LbhbQVtr6ti-agr9mDZGh_ojymtObbZeChO2LIjhgyI"
-
-# ======================================================================
-
 if __name__ == "__main__":
-    result = submit_payload(payload, TOKEN)
-    print(json.dumps(result, indent=2))
+    raise SystemExit(
+        "Import this helper and call compute_payload_hash(payload) or "
+        "submit_payload(payload, token) with your own payload and token."
+    )

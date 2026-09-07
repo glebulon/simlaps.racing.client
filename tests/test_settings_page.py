@@ -1,6 +1,8 @@
 """Behavior tests for the Settings page using real Flet controls."""
 
-from unittest.mock import MagicMock, PropertyMock, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+
+import pytest
 
 from src.ui.app import AppPage, SimLapsApp
 from src.ui.pages.settings import SettingsPage
@@ -99,6 +101,25 @@ def test_discord_pb_filter_is_scoped_and_disabled_with_posting() -> None:
     collect_text(page)
     assert "Post personal bests only" in labels
     assert "Only post new personal best laps to Discord" in labels
+
+
+@pytest.mark.asyncio
+async def test_test_webhook_passes_unsaved_field_to_app_callback() -> None:
+    test_callback = AsyncMock(return_value=(True, "Test message sent successfully"))
+    page = SettingsPage(
+        config=AppConfig(
+            discord_enabled=True,
+            discord_webhook_url="https://discord.com/api/webhooks/123/old-token",
+        ),
+        on_test_discord=test_callback,
+    )
+    unsaved_url = "https://discord.com/api/webhooks/123/new-token"
+    page._discord_webhook_field.value = unsaved_url
+    page._discord_test_status.update = MagicMock()
+
+    await page._test_discord_webhook(None)
+
+    test_callback.assert_called_once_with(unsaved_url)
 
 
 def test_opening_settings_reloads_active_config() -> None:

@@ -1,0 +1,7 @@
+# Captured fixture hashes describe exact bytes, including original line endings.
+tests/fixtures/sample_telemetry.jsonl -text
+tests/fixtures/sample_log.txt -text -whitespace
+tests/fixtures/ac_evo_graphics_frame.txt -text
+tests/fixtures/ac_evo_graphics_frame_physics.json -text
+tests/fixtures/ac_evo_static_frame.txt -text
+tests/fixtures/captured_provenance.json text eol=lf

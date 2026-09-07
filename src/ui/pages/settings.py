@@ -10,7 +10,9 @@ from typing import Optional, Callable
 
 from ...utils.config import AppConfig, DEFAULT_SERVER_URL
 from ...utils.structured_logger import Component, log_exception
+from ...core.discord_notifier import DiscordNotifier
 from ..components.feedback import show_snackbar
+from ..components.mount_safe import mounted_page, safe_update
 
 
 class SettingsPage(ft.Container):
@@ -322,17 +324,13 @@ class SettingsPage(ft.Container):
         self._discord_pb_only_switch.disabled = not bool(
             self._discord_enabled_switch.value
         )
-        try:
-            self._discord_pb_only_switch.update()
-        except RuntimeError:
-            # Tests and pre-mount form refreshes have no Flet page yet.
-            pass
+        safe_update(self._discord_pb_only_switch)
     
     async def _test_connection(self, e):
         """Test server connection."""
         self._connection_status.value = "Testing..."
         self._connection_status.color = "#ffd43b"
-        self._connection_status.update()
+        safe_update(self._connection_status)
         
         if self.on_test_connection:
             success, message = await self.on_test_connection(
@@ -344,7 +342,7 @@ class SettingsPage(ft.Container):
             else:
                 self._connection_status.value = f"{message}"
                 self._connection_status.color = "#ff6b6b"
-            self._connection_status.update()
+            safe_update(self._connection_status)
     
     async def _test_discord_webhook(self, e):
         """Test Discord webhook connection."""
@@ -353,12 +351,12 @@ class SettingsPage(ft.Container):
         if not webhook_url:
             self._discord_test_status.value = "No webhook URL"
             self._discord_test_status.color = "#ff6b6b"
-            self._discord_test_status.update()
+            safe_update(self._discord_test_status)
             return
         
         self._discord_test_status.value = "Testing..."
         self._discord_test_status.color = "#ffd43b"
-        self._discord_test_status.update()
+        safe_update(self._discord_test_status)
         
         if self.on_test_discord:
             # Use the app's Discord test method
@@ -371,14 +369,14 @@ class SettingsPage(ft.Container):
                 self._discord_test_status.color = "#ff6b6b"
         else:
             # Fallback to basic URL validation
-            if webhook_url.startswith("https://discord.com/api/webhooks/"):
+            if DiscordNotifier.validate_webhook_url(webhook_url):
                 self._discord_test_status.value = "URL valid"
                 self._discord_test_status.color = "#51cf66"
             else:
                 self._discord_test_status.value = "Invalid URL format"
                 self._discord_test_status.color = "#ff6b6b"
         
-        self._discord_test_status.update()
+        safe_update(self._discord_test_status)
     
     def _save_settings(self, e):
         """Save current settings."""
@@ -401,12 +399,16 @@ class SettingsPage(ft.Container):
                 self.on_save(updated_config)
         except Exception as exc:
             log_exception(Component.UI, "Could not save settings", exc)
-            show_snackbar(self.page, f"Could not save settings: {exc}", "#ff6b6b")
+            page = mounted_page(self)
+            if page is not None:
+                show_snackbar(page, f"Could not save settings: {exc}", "#ff6b6b")
             return
         self.config = updated_config
         
         # Show success feedback
-        show_snackbar(self.page, "Settings saved!", "#51cf66")
+        page = mounted_page(self)
+        if page is not None:
+            show_snackbar(page, "Settings saved!", "#51cf66")
     
     def _reset_settings(self, e):
         """Reset settings to defaults and persist immediately."""
@@ -416,7 +418,9 @@ class SettingsPage(ft.Container):
                 self.on_save(default_config)
         except Exception as exc:
             log_exception(Component.UI, "Could not reset settings", exc)
-            show_snackbar(self.page, f"Could not reset settings: {exc}", "#ff6b6b")
+            page = mounted_page(self)
+            if page is not None:
+                show_snackbar(page, f"Could not reset settings: {exc}", "#ff6b6b")
             return
 
         # Update the page only after the defaults were applied successfully.
@@ -438,18 +442,20 @@ class SettingsPage(ft.Container):
         self._telemetry_output_path_field.value = self.config.telemetry_output_path
         self._telemetry_debug_logs_switch.value = self.config.telemetry_debug_logs
 
-        self._server_url_field.update()
-        self._submit_invalid_switch.update()
-        self._discord_webhook_field.update()
-        self._discord_enabled_switch.update()
-        self._discord_pb_only_switch.update()
-        self._discord_test_status.update()
-        self._telemetry_enabled_switch.update()
-        self._telemetry_output_path_field.update()
-        self._telemetry_debug_logs_switch.update()
+        safe_update(self._server_url_field)
+        safe_update(self._submit_invalid_switch)
+        safe_update(self._discord_webhook_field)
+        safe_update(self._discord_enabled_switch)
+        safe_update(self._discord_pb_only_switch)
+        safe_update(self._discord_test_status)
+        safe_update(self._telemetry_enabled_switch)
+        safe_update(self._telemetry_output_path_field)
+        safe_update(self._telemetry_debug_logs_switch)
 
         # Show feedback
-        show_snackbar(self.page, "Settings reset to defaults", "#7c3aed")
+        page = mounted_page(self)
+        if page is not None:
+            show_snackbar(page, "Settings reset to defaults", "#7c3aed")
     
     def update_config(self, config: AppConfig):
         """Reload the form from the application's active configuration."""
@@ -472,11 +478,6 @@ class SettingsPage(ft.Container):
         self._connection_status.value = ""
         self._discord_test_status.value = ""
 
-        # Settings may be refreshed immediately before it is mounted. Current
-        # Flet raises when ``update()`` is called on an unmounted control; the
+        # Settings may be refreshed immediately before it is mounted. The
         # subsequent page.add() will render these values without an update.
-        try:
-            self.page
-        except RuntimeError:
-            return
-        self.update()
+        safe_update(self)

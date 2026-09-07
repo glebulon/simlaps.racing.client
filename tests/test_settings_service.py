@@ -198,6 +198,38 @@ def test_apply_creates_discord_notifier_when_configured():
     assert app._discord_notifier is notifier
 
 
+@pytest.mark.parametrize(
+    "webhook_url",
+    [
+        "malformed",
+        "http://discord.com/api/webhooks/123/token",
+        "https://127.0.0.1/api/webhooks/123/token",
+        "https://user:password@discord.com/api/webhooks/123/token",
+    ],
+)
+def test_apply_rejects_invalid_enabled_webhook_before_persistence(webhook_url):
+    app = _make_app()
+    create_notifier = MagicMock()
+    config = AppConfig(
+        server_url="https://simlaps.racing",
+        discord_enabled=True,
+        discord_webhook_url=webhook_url,
+    )
+
+    with pytest.raises(ValueError, match="Invalid Discord webhook URL"):
+        SettingsService().apply(
+            app=app,
+            config=config,
+            create_discord_notifier=create_notifier,
+            get_pb_cache_for_server=MagicMock(),
+            create_api_client=MagicMock(),
+            create_log_parser=MagicMock(),
+        )
+
+    app._config_manager.set.assert_not_called()
+    create_notifier.assert_not_called()
+
+
 def test_apply_updates_pb_cache_when_server_url_changes():
     app = _make_app()
     app._pb_cache.server_url = "https://old-server.com"
@@ -240,7 +272,7 @@ def test_apply_persists_while_all_live_state_still_uses_previous_config():
         server_url="https://new-server.com",
         log_path="C:/new-logs",
         discord_enabled=True,
-        discord_webhook_url="https://discord.com/api/webhooks/new",
+        discord_webhook_url="https://discord.com/api/webhooks/123/new",
         telemetry_enabled=True,
         telemetry_output_path="C:/new-telemetry",
     )
@@ -281,7 +313,7 @@ def test_apply_persists_while_all_live_state_still_uses_previous_config():
         {"log_path": "C:/new-logs"},
         {
             "discord_enabled": True,
-            "discord_webhook_url": "https://discord.com/api/webhooks/new",
+            "discord_webhook_url": "https://discord.com/api/webhooks/123/new",
         },
         {
             "telemetry_enabled": True,

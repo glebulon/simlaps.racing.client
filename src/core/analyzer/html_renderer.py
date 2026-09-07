@@ -2,12 +2,13 @@
 
 import json
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from src.core.analyzer._util import _optional_float
-from src.utils.structured_logger import log_debug, Component
+from src.utils.structured_logger import Component, log_debug
 
 
 _VENDOR_DIR = Path(__file__).with_name("vendor")
@@ -16,6 +17,15 @@ _VENDOR_DIR = Path(__file__).with_name("vendor")
 def _load_vendor_script(filename: str) -> str:
     """Load a pinned chart dependency bundled with source and frozen builds."""
     return (_VENDOR_DIR / filename).read_text(encoding="utf-8")
+
+
+def _escape_json_for_script(data_json: str) -> str:
+    """Keep serialized JSON inside a JavaScript script data context."""
+    return (
+        data_json.replace("<", r"\u003c")
+        .replace(">", r"\u003e")
+        .replace("&", r"\u0026")
+    )
 
 
 async def render_html(
@@ -124,7 +134,7 @@ async def render_html(
         "ref_corners": ref_corners_json,
         "corner_data": corner_data_json,
         "corner_speeds": corner_speeds_json,
-    })
+    }, ensure_ascii=True)
 
     html_content = build_html_template(
         data_json,
@@ -150,7 +160,8 @@ def build_html_template(
     annotation_js = annotation_js or _load_vendor_script(
         "chartjs-plugin-annotation.min.js"
     )
-    return r"""<!DOCTYPE html>
+    data_json = _escape_json_for_script(data_json)
+    template = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -316,7 +327,11 @@ function rebuildAll() { syncFilterButtons(); buildSpeedChart(); buildInputsChart
 
 function makeLapFilters(containerId, onChange) {
   const el = document.getElementById(containerId);
-  el.innerHTML = '<span style="font-size:12px;color:var(--muted);margin-right:4px">Laps:</span>';
+  el.replaceChildren();
+  const heading = document.createElement('span');
+  heading.style.cssText = 'font-size:12px;color:var(--muted);margin-right:4px';
+  heading.textContent = 'Laps:';
+  el.appendChild(heading);
   DATA.laps.forEach(lap => {
     const btn = document.createElement('button');
     btn.className = 'lap-btn active';
@@ -344,15 +359,42 @@ function renderStats() {
     { label: 'Valid-Lap Top Speed', value: maxSpd !== null ? maxSpd.toFixed(0) + ' km/h' : 'N/A' },
     { label: 'Corners / Lap', value: DATA.ref_corners.length },
   ];
-  row.innerHTML = stats.map(s => `<div class="stat"><div class="label">${s.label}</div><div class="value">${s.value}</div></div>`).join('');
+  row.replaceChildren();
+  stats.forEach(s => {
+    const stat = document.createElement('div');
+    stat.className = 'stat';
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.textContent = s.label;
+    const value = document.createElement('div');
+    value.className = 'value';
+    value.textContent = String(s.value);
+    stat.append(label, value);
+    row.appendChild(stat);
+  });
   const notice = document.getElementById('analysis-notice');
   const notes = DATA.analysis_notes || [];
   if (notice && (DATA.analysis_mode !== 'full' || notes.length)) {
-    const escaped = notes.map(note => String(note).replace(/[&<>"']/g, ch => ({'&':'&','<':'<','>':'>','"':'"',"'":'\x27'}[ch])));
-    const title = DATA.analysis_mode !== 'full'
-      ? '<strong>Diagnostic mode:</strong> Detailed coaching is suppressed because this capture is not fully trustworthy.'
-      : '<strong>Analysis notes:</strong>';
-    notice.innerHTML = title + (escaped.length ? `<ul>${escaped.map(note => `<li>${note}</li>`).join('')}</ul>` : '');
+    notice.replaceChildren();
+    const title = document.createElement('strong');
+    title.textContent = DATA.analysis_mode !== 'full'
+      ? 'Diagnostic mode:'
+      : 'Analysis notes:';
+    notice.appendChild(title);
+    if (DATA.analysis_mode !== 'full') {
+      notice.appendChild(document.createTextNode(
+        ' Detailed coaching is suppressed because this capture is not fully trustworthy.'
+      ));
+    }
+    if (notes.length) {
+      const list = document.createElement('ul');
+      notes.forEach(note => {
+        const item = document.createElement('li');
+        item.textContent = String(note);
+        list.appendChild(item);
+      });
+      notice.appendChild(list);
+    }
     notice.style.display = 'block';
   } else if (notice) {
     notice.style.display = 'none';
@@ -477,24 +519,60 @@ function buildCornerChart() {
 function buildCornerTable() {
   const table = document.getElementById('corner-table');
   const lapNums = DATA.laps.map(l => l.lap_num);
-  let html = '<thead><tr><th>Corner</th>' + lapNums.map(n => `<th>Lap ${n}</th>`).join('') + '<th>\u0394 Best\u2013Worst</th></tr></thead><tbody>';
+  table.replaceChildren();
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  const cornerHeader = document.createElement('th');
+  cornerHeader.textContent = 'Corner';
+  headerRow.appendChild(cornerHeader);
+  lapNums.forEach(n => {
+    const header = document.createElement('th');
+    header.textContent = `Lap ${n}`;
+    headerRow.appendChild(header);
+  });
+  const deltaHeader = document.createElement('th');
+  deltaHeader.textContent = '\u0394 Best\u2013Worst';
+  headerRow.appendChild(deltaHeader);
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+  const tbody = document.createElement('tbody');
   DATA.ref_corners.forEach(c => {
     const speeds = DATA.corner_data?.[c.id] || {};
     const vals = lapNums.map(n => speeds[n]?.apex).filter(v => v !== undefined);
     const best = vals.length ? Math.max(...vals) : null;
     const worst = vals.length ? Math.min(...vals) : null;
     const delta = best !== null ? (best - worst).toFixed(1) : '\u2014';
-    html += `<tr><td><span class="badge" style="background:var(--border)">${c.name || ('C' + c.id)}</span></td>`;
+    const row = document.createElement('tr');
+    const cornerCell = document.createElement('td');
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.style.background = 'var(--border)';
+    badge.textContent = c.name || ('C' + c.id);
+    cornerCell.appendChild(badge);
+    row.appendChild(cornerCell);
     lapNums.forEach(n => {
       const v = speeds[n]?.apex;
-      if (v === undefined) { html += '<td style="color:var(--muted)">-</td>'; return; }
+      const cell = document.createElement('td');
+      if (v === undefined) {
+        cell.style.color = 'var(--muted)';
+        cell.textContent = '-';
+        row.appendChild(cell);
+        return;
+      }
       const isB = v === best, isW = v === worst;
       const color = isB ? 'var(--green)' : isW ? 'var(--red)' : 'var(--text)';
-      html += `<td style="color:${color};font-weight:${isB||isW?700:400}">${v.toFixed(1)}</td>`;
+      cell.style.color = color;
+      cell.style.fontWeight = isB || isW ? '700' : '400';
+      cell.textContent = v.toFixed(1);
+      row.appendChild(cell);
     });
-    html += `<td style="color:var(--orange)">${delta}</td></tr>`;
+    const deltaCell = document.createElement('td');
+    deltaCell.style.color = 'var(--orange)';
+    deltaCell.textContent = delta;
+    row.appendChild(deltaCell);
+    tbody.appendChild(row);
   });
-  html += '</tbody>'; table.innerHTML = html;
+  table.appendChild(tbody);
 }
 
 /* ── Inputs chart (Brake / Throttle / Gear) ───────────────── */
@@ -621,6 +699,17 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 </body>
-</html>""".replace("__DATA__", data_json).replace(
-        "__CHART_JS__", chart_js
-    ).replace("__ANNOTATION_JS__", annotation_js)
+</html>"""
+    # Resolve all markers from the original template in one pass. This keeps
+    # marker text in either trusted scripts or report data from changing the
+    # other substitution.
+    replacements = {
+        "__CHART_JS__": chart_js,
+        "__ANNOTATION_JS__": annotation_js,
+        "__DATA__": data_json,
+    }
+    return re.sub(
+        r"__CHART_JS__|__ANNOTATION_JS__|__DATA__",
+        lambda match: replacements[match.group(0)],
+        template,
+    )

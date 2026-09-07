@@ -254,7 +254,7 @@ sim-laps-client/
 │   └── test_version_sync.py
 ├── telemetry/
 │   ├── ACE_SharedFileOut_Documentation_v1.md  # ACE shared memory documentation
-│   └── ace_payload_hash.py                    # FNV hash utility for ACE payloads
+│   └── ace_payload_hash.py                    # ACE payload hash utility
 ├── tools/
 │   ├── generate_car_tuning_catalog.py  # Car tuning catalog generator
 │   ├── parse_all_logs.py               # Batch log parsing utility
@@ -326,7 +326,7 @@ Laps are submitted to `/api/submit` with signed payloads:
 
 ```json
 {
-  "userId": "76561198321627695",
+  "userId": "example-steam-id",
   "trackId": "spa_francorchamps",
   "carId": "ks_porsche_992_gt3_cup",
   "time": 138456,
@@ -341,6 +341,10 @@ Laps are submitted to `/api/submit` with signed payloads:
   "_signature": "a1b2c3..."
 }
 ```
+
+The standalone ACE payload helper contains no credentials or sample submission.
+Import `telemetry.ace_payload_hash` and supply your own payload and token when
+calling its hashing or submission functions.
 
 ## Troubleshooting
 
@@ -384,7 +388,13 @@ venv-sim-laps-client\Scripts\python.exe -m pytest tests/
 
 # Or using system pytest
 pytest tests/
+
+# Opt-in wheel build/install check, required before a PR or release
+venv-sim-laps-client\Scripts\python.exe -m pytest tests/test_packaging.py -q -m packaging
 ```
+
+Default test runs exclude the slower `packaging` check. Run it explicitly as shown
+above to verify the installed wheel before a PR or release.
 
 ### Test Coverage
 

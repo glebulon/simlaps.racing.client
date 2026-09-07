@@ -676,6 +676,7 @@ class TelemetryCapture:
         }
 
         disconnected = []
+        graphics_peek: Optional[Dict[str, Any]] = None
         for key, reader in list(self._readers.items()):
             try:
                 raw = reader.read_raw()
@@ -693,15 +694,13 @@ class TelemetryCapture:
             self._last_sample_had_data = True
             frame[f"{key}_raw"] = raw.hex()
 
-            # ── Lightweight peek: always feed lap validity to shared state ──
+            # ── Lightweight peek: preserve live timing when recording is off ──
             # Runs regardless of debug_logs / full decode; costs ~1 µs per
-            # frame (3 struct.unpack_from calls) vs ~500 µs for the full
+            # frame (5 small reads) vs ~500 µs for the full
             # decoder.  This ensures lap counting + validity data flows even
             # when telemetry recording is off.
             if key == "graphics":
-                peeked = peek_graphics_validity(raw)
-                if peeked is not None:
-                    self._session_manager.update_from_graphics_shm(peeked)
+                graphics_peek = peek_graphics_validity(raw)
 
             try:
                 if key == "physics":
@@ -730,7 +729,16 @@ class TelemetryCapture:
 
         graphics_data = frame.get("graphics") or {}
         if isinstance(graphics_data, dict) and not graphics_data.get("error"):
+            # The peek and full decoder read the same graphics snapshot. Merge
+            # the peek as a fallback, but publish only once after the full
+            # decode so a transient peek cannot queue a completion before the
+            # authoritative session phase is available.
+            if graphics_peek is not None:
+                graphics_data = {**graphics_peek, **graphics_data}
             self._session_manager.update_from_graphics_shm(graphics_data)
+        elif graphics_peek is not None:
+            # A failed full decode must not disable the validity-only path.
+            self._session_manager.update_from_graphics_shm(graphics_peek)
 
         static_data = frame.get("static") or {}
         if isinstance(static_data, dict) and not static_data.get("error"):

@@ -32,6 +32,9 @@ def test_lightweight_graphics_peek_includes_completed_lap_time() -> None:
     result = peek_graphics_validity(bytes(data))
 
     assert result == {
+        "status": 0,
+        "status_name": "AC_OFF",
+        "session_phase": "",
         "total_lap_count": 2,
         "completed_laps": 2,
         "is_valid_lap": True,

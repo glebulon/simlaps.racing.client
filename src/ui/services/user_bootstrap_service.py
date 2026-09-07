@@ -30,8 +30,9 @@ class UserBootstrapService:
             app._home_page.set_detected_user(steam_id, player_name)
 
         if app._config.discord_webhook_url and app._config.discord_enabled:
-            app._discord_notifier = create_discord_notifier(app._config.discord_webhook_url)
-            if source == "startup":
+            notifier = create_discord_notifier(app._config.discord_webhook_url)
+            app._discord_notifier = notifier
+            if source == "startup" and notifier is not None:
                 log_info(Component.APP, "Discord notifier initialized", steam_id=steam_id)
 
         if app._pb_cache.is_loaded() and app._pb_cache.get_steam_id() == steam_id:

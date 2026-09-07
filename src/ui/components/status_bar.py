@@ -7,6 +7,7 @@ from typing import Optional
 from enum import Enum
 from ...version import get_version, GAME_NAME
 from ...core.security import is_secret_configured
+from .mount_safe import safe_update
 
 
 class ConnectionStatus(Enum):
@@ -142,4 +143,4 @@ class StatusBar(ft.Container):
             self._status_message = message
         
         self.content = self._build_content()
-        self.update()
+        safe_update(self)

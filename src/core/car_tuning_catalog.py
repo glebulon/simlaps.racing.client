@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+from importlib import resources
 from typing import List, Optional
 
 _CATALOG: dict | None = None
@@ -24,9 +25,19 @@ def _load_catalog() -> dict:
     global _CATALOG
     if _CATALOG is None:
         try:
-            with open(_CATALOG_PATH, "r", encoding="utf-8") as f:
-                _CATALOG = json.load(f)
-        except (OSError, json.JSONDecodeError):
+            catalog_text = resources.files("src.core").joinpath(
+                "data", "car_tuning_catalog.json"
+            ).read_text(encoding="utf-8")
+            _CATALOG = json.loads(catalog_text)
+        except (FileNotFoundError, ModuleNotFoundError, OSError, TypeError):
+            # Keep source checkouts and PyInstaller bundles working when the
+            # package resource loader is not available for the active importer.
+            try:
+                with open(_CATALOG_PATH, "r", encoding="utf-8") as f:
+                    _CATALOG = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                _CATALOG = {}
+        except json.JSONDecodeError:
             _CATALOG = {}
     return _CATALOG
 

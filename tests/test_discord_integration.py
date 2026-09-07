@@ -34,7 +34,7 @@ class TestDiscordNotifier:
     
     def test_create_lap_embed(self):
         """Test Discord embed creation."""
-        notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+        notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
         
         lap_data = DiscordLapPayload(
             track_name="laguna_seca",
@@ -68,7 +68,7 @@ class TestDiscordNotifier:
     
     def test_create_lap_embed_invalid(self):
         """Test Discord embed for invalid lap."""
-        notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+        notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
         
         lap_data = DiscordLapPayload(
             track_name="brands_hatch",
@@ -97,7 +97,7 @@ class TestDiscordNotifier:
             mock_response.status_code = 204
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
             
-            notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+            notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
             
             lap_data = DiscordLapPayload(
                 track_name="test_track",
@@ -117,7 +117,7 @@ class TestDiscordNotifier:
             # Mock failed response with RuntimeError (which is now caught)
             mock_client.return_value.__aenter__.return_value.post.side_effect = RuntimeError("Network error")
             
-            notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+            notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
             
             lap_data = DiscordLapPayload(
                 track_name="test_track",
@@ -139,14 +139,14 @@ class TestDiscordNotifier:
             mock_response.status_code = 204
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
             
-            notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+            notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
             result = await notifier.send_test_message()
             assert result is True
 
     @pytest.mark.asyncio
     async def test_send_test_message_delegates_to_lap_delivery(self):
         """The test path must use the same delivery behavior as real laps."""
-        notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+        notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
         notifier.post_lap = AsyncMock(return_value=False)
 
         result = await notifier.send_test_message()
@@ -167,7 +167,7 @@ class TestDiscordNotifier:
                 httpx.TimeoutException("Discord timed out")
             )
 
-            notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+            notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
 
             assert await notifier.send_test_message() is False
     
@@ -176,6 +176,7 @@ class TestDiscordNotifier:
         # Valid URLs
         assert DiscordNotifier.validate_webhook_url("https://discord.com/api/webhooks/1234567890/abcdef-123456")
         assert DiscordNotifier.validate_webhook_url("https://discord.com/api/webhooks/123/abc")
+        assert DiscordNotifier.validate_webhook_url("https://discordapp.com/api/webhooks/123/abc")
         
         # Invalid URLs
         assert not DiscordNotifier.validate_webhook_url("")
@@ -183,6 +184,25 @@ class TestDiscordNotifier:
         assert not DiscordNotifier.validate_webhook_url("https://example.com/webhook")
         assert not DiscordNotifier.validate_webhook_url("not-a-url")
         assert not DiscordNotifier.validate_webhook_url("https://discord.com/api/webhooks/")  # No id/token
+
+        invalid_urls = (
+            "http://discord.com/api/webhooks/123/abc",
+            "https://discord.com/api/webhooks/123",
+            "https://discord.com/api/webhooks/123/abc/extra",
+            "https://discord.com/api/webhooks/not-an-id/abc",
+            "https://discord.com/api/webhooks/123/abc?redirect=http://localhost",
+            "https://discord.com.evil.example/api/webhooks/123/abc",
+            "https://127.0.0.1/api/webhooks/123/abc",
+            "https://user:password@discord.com/api/webhooks/123/abc",
+            "https://discord.com:443/api/webhooks/123/abc",
+        )
+        assert all(not DiscordNotifier.validate_webhook_url(url) for url in invalid_urls)
+
+    def test_constructor_rejects_invalid_webhook_without_echoing_secret(self):
+        secret_url = "http://127.0.0.1/api/webhooks/123/super-secret-token"
+        with pytest.raises(ValueError) as exc_info:
+            DiscordNotifier(secret_url)
+        assert "super-secret-token" not in str(exc_info.value)
     
     def test_create_discord_notifier(self):
         """Test Discord notifier factory function."""
@@ -371,7 +391,7 @@ class TestIntegration:
             
             # Create cache and notifier
             cache = PBCache("http://localhost:3000")
-            notifier = DiscordNotifier("https://discord.com/api/webhooks/test")
+            notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
             
             # Simulate initial PB
             is_pb1 = cache.check_and_update_pb("test_track", "test_car", 65000)
@@ -456,6 +476,41 @@ class TestAppDiscordPosting:
             pb_was_new=True,
         )
         app._pb_cache.check_and_update_pb.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_test_webhook_uses_unsaved_url_and_does_not_touch_saved_notifier(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app.page = MagicMock()
+        saved_notifier = MagicMock()
+        app._discord_notifier = saved_notifier
+        test_notifier = MagicMock()
+        test_notifier.send_test_message = AsyncMock(return_value=True)
+        unsaved_url = "https://discord.com/api/webhooks/123/new-token"
+
+        with (
+            patch("src.ui.app.create_discord_notifier", return_value=test_notifier) as factory,
+            patch("src.ui.app.show_snackbar"),
+        ):
+            result = await app._test_discord_webhook(unsaved_url)
+
+        assert result == (True, "Test message sent successfully")
+        factory.assert_called_once_with(unsaved_url)
+        test_notifier.send_test_message.assert_awaited_once_with()
+        saved_notifier.send_test_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_test_webhook_rejects_invalid_url_without_http_or_saved_notifier(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app.page = MagicMock()
+        app._discord_notifier = None
+
+        with patch("httpx.AsyncClient") as http_client:
+            result = await app._test_discord_webhook(
+                "https://user:password@127.0.0.1/api/webhooks/123/secret-token"
+            )
+
+        assert result == (False, "Invalid Discord webhook URL")
+        http_client.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_on_lap_complete_auto_submits_when_shared_validity_overrides_parser_invalid(self):
@@ -587,6 +642,7 @@ class TestAppDiscordPosting:
         card = MagicMock()
         card.data = MagicMock(session=session, lap=lap, lap_number=1)
 
+        app._bind_history_entry_to_lap(lap, history_entry)
         app._on_retry_lap(card)
 
         app.page.run_task.assert_called_once_with(
@@ -624,7 +680,8 @@ class TestAppDiscordPosting:
         app = SimLapsApp.__new__(SimLapsApp)
         app.page = MagicMock()
         app._config = AppConfig(submit_invalid_laps=True)
-        app._history_entries = []
+        # A matching display ordinal must not substitute for an identity binding.
+        app._history_entries = [MagicMock()]
 
         session = SessionData(track="Laguna Seca", car="Ferrari 296 GT3")
         lap = SessionLapData(
@@ -683,7 +740,7 @@ class TestAppDiscordPosting:
             telemetry_enabled=True,
             telemetry_output_path="telemetry",
         )
-        assert call_args.kwargs["create_discord_notifier"] is DiscordNotifier
+        assert call_args.kwargs["create_discord_notifier"] is create_discord_notifier
 
 
 if __name__ == "__main__":

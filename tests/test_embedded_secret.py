@@ -41,8 +41,8 @@ class TestGetBuildSecret:
 
     def test_reads_from_dotenv_when_env_missing(self, tmp_path, monkeypatch):
         monkeypatch.delenv("APP_SECRET", raising=False)
-        monkeypatch.chdir(tmp_path)
         (tmp_path / ".env").write_text(f"APP_SECRET={TEST_SECRET}\n", encoding="utf-8")
+        monkeypatch.setattr(build, "REPO_ROOT", tmp_path)
 
         assert build.get_build_secret() == TEST_SECRET
 
@@ -53,14 +53,14 @@ class TestGetBuildSecret:
 
     def test_rejects_placeholder_from_dotenv(self, tmp_path, monkeypatch):
         monkeypatch.delenv("APP_SECRET", raising=False)
-        monkeypatch.chdir(tmp_path)
         (tmp_path / ".env").write_text("APP_SECRET=blahtopsecret\n", encoding="utf-8")
+        monkeypatch.setattr(build, "REPO_ROOT", tmp_path)
 
         assert build.get_build_secret() is None
 
     def test_missing_everywhere_returns_none(self, tmp_path, monkeypatch):
         monkeypatch.delenv("APP_SECRET", raising=False)
-        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(build, "REPO_ROOT", tmp_path)
 
         assert build.get_build_secret() is None
 

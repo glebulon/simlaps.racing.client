@@ -728,25 +728,37 @@ _GE_DIFF_POWER_RAW_VALUE = 2460
 _GE_RACE_CUT_GAINED_TIME_MS = 2464
 _GE_DISTANCE_TO_DEADLINE = 2468
 _GE_RACE_CUT_CURRENT_DELTA = 2472
-# session_state SMEvoSessionState (256 B) at 2476
-_GE_SESSION_PHASE_NAME = 2476
-_GE_SESSION_TIME_LEFT = 2511
-_GE_SESSION_TOTAL_LAP = 2515
-_GE_SESSION_CURRENT_LAP = 2519
-_GE_SESSION_LAP_LENGTH_KM = 2527
+# session_state SMEvoSessionState (256 B) at 2476. The fields below use
+# MSVC ``#pragma pack(push, 4)`` layout: the two fixed strings are followed
+# by aligned int32 fields, and the struct itself remains padded to 256 bytes.
+_GE_SESSION_PHASE_NAME = 2476       # +0, char[33]
+_GE_SESSION_TIME_LEFT = 2509        # +33, char[15]
+_GE_SESSION_TIME_LEFT_MS = 2524     # +48, int32_t
+_GE_SESSION_WAIT_TIME = 2528        # +52, char[15]
+_GE_SESSION_TOTAL_LAP = 2544        # +68, int32_t (1-byte pad before it)
+_GE_SESSION_CURRENT_LAP = 2548     # +72, int32_t
+_GE_SESSION_LIGHTS_ON = 2552       # +76, int32_t
+_GE_SESSION_LIGHTS_MODE = 2556     # +80, int32_t
+_GE_SESSION_LAP_LENGTH_KM = 2560   # +84, float
+_GE_SESSION_END_FLAG = 2564        # +88, int32_t
+_GE_SESSION_TIME_TO_NEXT = 2568    # +92, char[15]
+# bool fields begin at +107 (the remainder of this 256-byte struct is padding)
 # timing_state SMEvoTimingState (256 B) at 2732
-# NOTE: AC Evo 0.8.0.1 does NOT populate this struct — all fields read as
-# zero/empty in captured frames.  The offsets below are retained for
-# compatibility with future builds that may start writing timing data.
+# The captured ACE 0.8.0.1 fixture contains populated timing strings and
+# validity flags; initialization snapshots can still be empty. See
+# tests/fixtures/captured_provenance.json for the evidence and redactions.
 # For live lap validation use ``peek_graphics_validity()`` which reads
 # the working ``is_valid_lap`` bool at offset 3121 instead.
-_GE_TIMING_CURRENT_LAPTIME = 2732
-_GE_TIMING_DELTA_CURRENT = 2747
-_GE_TIMING_DELTA_LAST = 2762
-_GE_TIMING_BEST_LAPTIME = 2777
-_GE_TIMING_IDEAL_LAPTIME = 2792
-_GE_TIMING_TOTAL_TIME = 2807
-_GE_TIMING_IS_INVALID = 2822
+_GE_TIMING_CURRENT_LAPTIME = 2732       # +0, char[15]
+_GE_TIMING_DELTA_CURRENT = 2747        # +15, char[15]
+_GE_TIMING_DELTA_CURRENT_P = 2764     # +32, int32_t (2-byte pad)
+_GE_TIMING_LAST_LAPTIME = 2768        # +36, char[15]
+_GE_TIMING_DELTA_LAST = 2783           # +51, char[15]
+_GE_TIMING_DELTA_LAST_P = 2800         # +68, int32_t (2-byte pad)
+_GE_TIMING_BEST_LAPTIME = 2804        # +72, char[15]
+_GE_TIMING_IDEAL_LAPTIME = 2819       # +87, char[15]
+_GE_TIMING_TOTAL_TIME = 2834          # +102, char[15]
+_GE_TIMING_IS_INVALID = 2849          # +117, bool
 _GE_PLAYER_PING = 2988
 _GE_PLAYER_LATENCY = 2992
 _GE_PLAYER_CPU_USAGE = 2996
@@ -886,7 +898,7 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         
         # ── Session State (definitive lap counting)
         session_phase_name = struct.unpack_from("<33s", data, _GE_SESSION_PHASE_NAME)[0].decode('utf-8', 'ignore').rstrip('\x00')
-        session_time_left_ms = struct.unpack_from("<i", data, _GE_SESSION_TIME_LEFT)[0]
+        session_time_left_ms = struct.unpack_from("<i", data, _GE_SESSION_TIME_LEFT_MS)[0]
         session_total_lap = struct.unpack_from("<i", data, _GE_SESSION_TOTAL_LAP)[0]
         session_current_lap = struct.unpack_from("<i", data, _GE_SESSION_CURRENT_LAP)[0]
         session_lap_length_km = struct.unpack_from("<f", data, _GE_SESSION_LAP_LENGTH_KM)[0]
@@ -894,7 +906,10 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         # ── Timing State (definitive timing data)
         timing_current_laptime = struct.unpack_from("<15s", data, _GE_TIMING_CURRENT_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
         timing_delta_current = struct.unpack_from("<15s", data, _GE_TIMING_DELTA_CURRENT)[0].decode('utf-8', 'ignore').rstrip('\x00')
+        timing_delta_current_p = struct.unpack_from("<i", data, _GE_TIMING_DELTA_CURRENT_P)[0]
+        timing_last_laptime = struct.unpack_from("<15s", data, _GE_TIMING_LAST_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
         timing_delta_last = struct.unpack_from("<15s", data, _GE_TIMING_DELTA_LAST)[0].decode('utf-8', 'ignore').rstrip('\x00')
+        timing_delta_last_p = struct.unpack_from("<i", data, _GE_TIMING_DELTA_LAST_P)[0]
         timing_best_laptime = struct.unpack_from("<15s", data, _GE_TIMING_BEST_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
         timing_ideal_laptime = struct.unpack_from("<15s", data, _GE_TIMING_IDEAL_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
         timing_total_time = struct.unpack_from("<15s", data, _GE_TIMING_TOTAL_TIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
@@ -1111,7 +1126,10 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         # ── Timing State (definitive)
         "timing_current_laptime": timing_current_laptime,
         "timing_delta_current": timing_delta_current,
+        "timing_delta_current_p": timing_delta_current_p,
+        "timing_last_laptime": timing_last_laptime,
         "timing_delta_last": timing_delta_last,
+        "timing_delta_last_p": timing_delta_last_p,
         "timing_best_laptime": timing_best_laptime,
         "timing_ideal_laptime": timing_ideal_laptime,
         "timing_total_time": timing_total_time,
@@ -1422,9 +1440,10 @@ def decode_static_fallback(data: bytes) -> Dict[str, Any]:
 
 
 # ── Lightweight SHM peek for live lap validation ──────────────────────────
-# Reads the live counter, last/current lap times, and validity flag from the
-# raw 4096-byte graphics buffer. Logs remain the richer source for sectors and
-# lifecycle context, but ACE can buffer them long after the finish line.
+# Reads the live status/phase, counter, last/current lap times, and validity
+# flag from the raw 4096-byte graphics buffer. Logs remain the richer source
+# for sectors and lifecycle context, but ACE can buffer them long after the
+# finish line.
 #
 # This is ~800× cheaper than the full decoder and runs on every capture
 # frame regardless of whether telemetry recording is enabled.
@@ -1436,6 +1455,8 @@ def decode_static_fallback(data: bytes) -> Dict[str, Any]:
 _PEEK_CURRENT_LAP_TIME = 188
 _PEEK_TOTAL_LAP_COUNT = 2384
 _PEEK_LAST_LAPTIME = 2396
+_PEEK_STATUS = 4
+_PEEK_SESSION_PHASE = 2476
 _PEEK_IS_VALID_LAP    = 3121
 
 # Minimum buffer size needed for the peek.
@@ -1454,9 +1475,13 @@ def peek_graphics_validity(data: bytes) -> Optional[Dict[str, Any]]:
         return None
 
     try:
+        status = struct.unpack_from("<i", data, _PEEK_STATUS)[0]
         current_lap_time_ms = struct.unpack_from("<i", data, _PEEK_CURRENT_LAP_TIME)[0]
         total_lap_count = struct.unpack_from("<i", data, _PEEK_TOTAL_LAP_COUNT)[0]
         last_laptime_ms = struct.unpack_from("<i", data, _PEEK_LAST_LAPTIME)[0]
+        session_phase = data[_PEEK_SESSION_PHASE:_PEEK_SESSION_PHASE + 33].split(b"\x00", 1)[0].decode(
+            "utf-8", "ignore"
+        )
         is_valid_lap = bool(data[_PEEK_IS_VALID_LAP])
     except (struct.error, IndexError):
         return None
@@ -1465,6 +1490,9 @@ def peek_graphics_validity(data: bytes) -> Optional[Dict[str, Any]]:
         return None
 
     return {
+        "status": status,
+        "status_name": _enum_name(AC_STATUS, status),
+        "session_phase": session_phase,
         "total_lap_count": total_lap_count,
         "completed_laps": total_lap_count,
         "is_valid_lap": is_valid_lap,

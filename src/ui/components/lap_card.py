@@ -11,6 +11,7 @@ from ...models import LapData, SessionData
 from ...core.api_client import SubmissionStatus
 from ...utils.helpers import format_lap_time, format_sector_time, format_car_name, format_track_name
 from ...utils.structured_logger import log_error, Component
+from .mount_safe import safe_update
 
 
 class LapCardStatus(Enum):
@@ -220,5 +221,4 @@ class LapCard(ft.Container):
         self.content = self._build_content()
         self.bgcolor = self._get_bgcolor()
         self.border = ft.Border.all(1, self._get_border_color())
-        if self.page:
-            self.update()
+        safe_update(self)

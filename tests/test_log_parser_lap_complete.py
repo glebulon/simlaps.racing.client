@@ -7,7 +7,7 @@ Targets the big uncovered chunk (lines 992-1092).
 import pytest
 
 from src.core.log_parser import LogParser
-from src.models import LapData, SessionData, LapState
+from src.models import LapData, SessionData, LapState, SharedSessionManager
 
 
 class TestHandleLapCompleteBasic:
@@ -736,3 +736,326 @@ class TestHandleLapCompleteStint:
         
         # Outlaps shouldn't update stint
         assert True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delta", [-1, 1])
+async def test_delayed_log_enrichment_rounding_keeps_one_invalid_lap_card(delta):
+    """A rounded log finish enriches, rather than duplicates, SHM output."""
+    manager = SharedSessionManager()
+    parser = LogParser(session_manager=manager)
+    session = SessionData(track="spa", car="porsche", car_uuid="abc123")
+    parser.current_session = session
+    parser.context.car_uuid = "abc123"
+    parser.context.tyre.set_all("S")
+    shm_lap = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100000,
+        lap_time_str="01:40.000",
+        lap_state=LapState.INVALID_GAME,
+        lap_type=LapState.INVALID_GAME.value,
+        is_valid=False,
+        validity_source="shm_graphics",
+    )
+    session.laps.append(shm_lap)
+    parser._shm_emitted_laps.append(shm_lap)
+    parser._ip.physics_lap_num = 1
+
+    updates = []
+
+    async def on_update(_session, lap):
+        updates.append(lap)
+
+    parser.on_lap_update = on_update
+    log_ms = 100000 + delta
+    minutes, remainder = divmod(log_ms, 60000)
+    seconds, milliseconds = divmod(remainder, 1000)
+    assert parser._handle_lap_complete(
+        f"[2026-08-26 12:00:00.000] [gameplay] [info] New lap carId abc123: "
+        f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+    ) is None
+    assert parser._reconciled_lap is shm_lap
+
+    await parser._emit_lap_update(session, shm_lap)
+
+    assert updates == [shm_lap]
+    assert len(session.laps) == 1
+    assert shm_lap.is_valid is False
+    assert shm_lap.lap_state == LapState.INVALID_GAME
+
+
+@pytest.mark.parametrize(
+    "delta, expected", [(1, True), (-1, True), (3, False), (-3, False)]
+)
+def test_lap_time_match_rejects_just_outside_tolerance(delta, expected):
+    """The named tolerance accepts rounding only, never a distinct time."""
+    lap = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100000,
+        lap_time_str="01:40.000",
+    )
+    assert (LogParser._nearest_lap_match([lap], 100000 + delta) is not None) is expected
+
+
+def test_unmatched_validity_broadcast_preserves_pending_lap() -> None:
+    """A stale onSplit message must not terminate log following state."""
+    parser = LogParser()
+    parser.current_session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE"
+    )
+    parser._pending_lap = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100_000,
+        lap_time_str="01:40.000",
+        lap_state=LapState.VALID,
+        lap_type=LapState.VALID.value,
+        is_valid=True,
+    )
+
+    result = parser._handle_lap_validity(
+        "[2026-08-26 12:00:00.000] [network] [info] "
+        "Relevant onSplit for Combo 1@1: laptime 120000, valid false, "
+        "flags 1, lap 2 (prev 1)"
+    )
+
+    assert result is None
+    assert parser._pending_lap is not None
+    assert parser._pending_lap.lap_time_ms == 100_000
+
+
+def test_equal_time_completions_keep_their_lap_associations() -> None:
+    """A delayed first log line cannot consume the second SHM completion."""
+    manager = SharedSessionManager()
+    for completed_laps, lap_time_ms in ((1, 100_000), (2, 100_001)):
+        manager.update_from_graphics_shm(
+            {
+                "total_lap_count": completed_laps - 1,
+                "current_lap_time_ms": 100_000,
+                "last_laptime_ms": 0,
+                "is_valid_lap": True,
+            }
+        )
+        manager.update_from_graphics_shm(
+            {
+                "total_lap_count": completed_laps,
+                "current_lap_time_ms": 10,
+                "last_laptime_ms": lap_time_ms,
+                "is_valid_lap": True,
+            }
+        )
+
+    parser = LogParser(session_manager=manager)
+    parser.PENDING_VALIDITY_GRACE_SECONDS = 0
+    parser._last_shm_completion_observed_at = 0
+    parser.current_session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE"
+    )
+    parser.context.car_uuid = "abc123"
+
+    assert parser._handle_lap_complete(
+        "[2026-08-26 12:00:00.000] [gameplay] [info] "
+        "New lap carId abc123: 01:40.000"
+    ) is None
+    assert parser._take_ready_shm_lap() is None  # consumes only completion 1
+    second = parser._take_ready_shm_lap()
+    assert second is not None
+    assert second.lap_time_ms == 100_001
+    assert [item.lap_time_ms for item in manager.get_lap_completions_after(0)] == []
+
+
+def test_equal_time_validity_prefers_game_lap_number_over_pending_tie() -> None:
+    """A lap-one broadcast must not retag an equal-time pending lap two."""
+    parser = LogParser()
+    parser.current_session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE"
+    )
+    emitted = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100_000,
+        lap_time_str="01:40.000",
+        lap_state=LapState.VALID,
+        lap_type=LapState.VALID.value,
+        is_valid=True,
+        validity_source="shm_graphics",
+    )
+    pending = LapData(
+        lap_number=2,
+        physics_lap_number=2,
+        lap_time_ms=100_000,
+        lap_time_str="01:40.000",
+        lap_state=LapState.VALID,
+        lap_type=LapState.VALID.value,
+        is_valid=True,
+    )
+    parser.current_session.laps.append(emitted)
+    parser._pending_lap = pending
+
+    assert parser._handle_lap_validity(
+        "[2026-08-26 12:00:00.000] [network] [info] "
+        "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
+        "flags 1, lap 1 (prev 0)"
+    ) is None
+
+    assert emitted.is_valid is False
+    assert emitted.validity_source == "authoritative"
+    assert parser._pending_lap is pending
+    assert pending.lap_number == 2
+    assert pending.is_valid is True
+
+    # Reordered duplicate metadata must continue to address lap one after
+    # its first verdict has changed the provenance from SHM to logs.
+    assert parser._handle_lap_validity(
+        "[2026-08-26 12:00:00.001] [network] [info] "
+        "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
+        "flags 1, lap 1 (prev 0)"
+    ) is None
+    assert parser._pending_lap is pending
+    assert pending.lap_number == 2
+    assert pending.is_valid is True
+
+
+def test_validity_uses_pending_time_before_stale_same_number_lap() -> None:
+    """A far older lap number cannot steal a nearby pending verdict."""
+    parser = LogParser()
+    parser.current_session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE"
+    )
+    old_lap = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=90_000,
+        lap_time_str="01:30.000",
+        lap_state=LapState.VALID,
+        lap_type=LapState.VALID.value,
+        is_valid=True,
+        validity_source="authoritative",
+    )
+    pending = LapData(
+        lap_number=2,
+        physics_lap_number=2,
+        lap_time_ms=100_000,
+        lap_time_str="01:40.000",
+        lap_state=LapState.VALID,
+        lap_type=LapState.VALID.value,
+        is_valid=True,
+    )
+    parser.current_session.laps.append(old_lap)
+    parser._pending_lap = pending
+
+    assert parser._handle_lap_validity(
+        "[2026-08-26 12:00:00.000] [network] [info] "
+        "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
+        "flags 1, lap 1 (prev 0)"
+    ) is pending
+    assert pending.is_valid is False
+    assert pending.lap_number == 1
+    assert old_lap.is_valid is True
+
+
+def test_bound_unknown_completion_is_consumed_when_validity_map_finishes_lap() -> None:
+    """Map validity may finish a bound lap without leaving an SHM duplicate."""
+    from src.models import SharedSessionManager
+
+    manager = SharedSessionManager()
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 100_000,
+            "last_laptime_ms": 0,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 1,
+            "current_lap_time_ms": 10,
+            "last_laptime_ms": 100_000,
+        }
+    )
+    completion = manager.get_latest_lap_completion()
+    assert completion is not None
+    assert completion.is_valid is None
+    manager.update_lap_validity_from_graphics_shm(1, False)
+
+    parser = LogParser(session_manager=manager)
+    pending = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100_000,
+        lap_time_str="01:40.000",
+        lap_state=LapState.VALID,
+        lap_type=LapState.VALID.value,
+        is_valid=True,
+    )
+    parser._lap_completion_by_lap_id[id(pending)] = completion
+    parser._apply_shm_fallback_validity(pending)
+
+    assert pending.is_valid is True
+    assert pending.validity_source == "shm_graphics"
+    assert manager.get_lap_completions_after(0) == []
+
+
+def test_outlap_bound_invalid_completion_requires_matching_counter() -> None:
+    """A time-only outlap binding cannot promote another physical lap."""
+    from src.models import LapCompletionData, SharedSessionManager
+
+    manager = SharedSessionManager()
+    completion = LapCompletionData(
+        completed_laps=5,
+        lap_time_ms=100_000,
+        is_valid=False,
+        timestamp="2026-09-05T00:00:00+00:00",
+        observed_at=1.0,
+    )
+    manager._session_data.lap_completions.append(completion)
+    parser = LogParser(session_manager=manager)
+    parser.current_session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE"
+    )
+    pending = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100_000,
+        lap_time_str="01:40.000",
+        lap_state=LapState.OUTLAP,
+        lap_type=LapState.OUTLAP.value,
+        is_valid=True,
+    )
+    parser._lap_completion_by_lap_id[id(pending)] = completion
+    parser._apply_shm_fallback_validity(pending)
+
+    assert pending.lap_state == LapState.OUTLAP
+    assert pending.is_valid is True
+
+
+def test_shm_completion_waits_for_log_session_identity() -> None:
+    """A completion observed before Game Started remains available."""
+    from src.models import SharedSessionManager
+
+    manager = SharedSessionManager()
+    manager.update_from_graphics_shm(
+        {"total_lap_count": 0, "current_lap_time_ms": 100_000}
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 1,
+            "current_lap_time_ms": 10,
+            "last_laptime_ms": 100_000,
+        }
+    )
+    parser = LogParser(session_manager=manager)
+    parser.PENDING_VALIDITY_GRACE_SECONDS = 0
+    parser._last_shm_completion_observed_at = 0
+
+    assert parser._take_ready_shm_lap() is None
+    assert manager.get_lap_completions_after(0)
+
+    parser.current_session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE"
+    )
+    lap = parser._take_ready_shm_lap()
+    assert lap is not None
+    assert lap.lap_time_ms == 100_000

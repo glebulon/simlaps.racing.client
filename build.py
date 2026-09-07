@@ -21,6 +21,9 @@ from pathlib import Path
 from dotenv import dotenv_values
 
 
+REPO_ROOT = Path(__file__).resolve().parent
+
+
 def get_venv_executable(name: str) -> str:
     """Get the path to an executable in the current venv."""
     # Check if we're in a venv
@@ -41,55 +44,149 @@ def get_venv_executable(name: str) -> str:
 
 
 # Import version from source
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+sys.path.insert(0, str(REPO_ROOT / "src"))
 from version import VERSION
 
 # Configuration
 APP_NAME = "SimLapsClient"
 APP_VERSION = VERSION
-ENTRY_POINT = "src/main.py"  # Correct path to main script
-ICON_PATH = "assets/icon.ico"
-DIST_DIR = "dist"
-BUILD_DIR = "build"
-OBFUSCATED_DIR = "obfuscated"
-SECURITY_FILE = "src/core/security.py"
+# Build paths are deliberately rooted at this file's repository.  The build
+# script is commonly invoked from IDEs and release shells whose CWD is not the
+# repository, and relative artifact paths in that case are unsafe.
+ENTRY_POINT = REPO_ROOT / "src" / "main.py"
+ICON_PATH = REPO_ROOT / "assets" / "icon.ico"
+DIST_DIR = REPO_ROOT / "dist"
+BUILD_DIR = REPO_ROOT / "build"
+OBFUSCATED_DIR = REPO_ROOT / "obfuscated"
+SECURITY_FILE = REPO_ROOT / "src" / "core" / "security.py"
 
 # Build-time embedded secret: generated Cython module compiled to a native
-# extension so the release artifact carries no plaintext credential.
-SECRET_STAGE_DIR = os.path.join(BUILD_DIR, "secret_stage")
+# extension so release artifacts carry no plaintext credential.
+SECRET_STAGE_DIR = BUILD_DIR / "secret_stage"
 EMBEDDED_SECRET_MODULE = "_embedded_secret"
 PLACEHOLDER_SECRETS = frozenset({"blahtopsecret"})
+
+
+def _validate_cleanup_target(path: Path, allowed_root: Path) -> Path:
+    """Validate a cleanup target before touching it.
+
+    A symlink is safe to unlink, but never safe to recurse into.  For regular
+    paths, both the lexical path and its resolved destination must remain
+    below the intended repository tree.
+    """
+    candidate = Path(path)
+    root = Path(allowed_root).resolve()
+    lexical = Path(os.path.abspath(os.fspath(candidate)))
+    try:
+        lexical.relative_to(root)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Refusing to clean path outside {root}: {candidate}"
+        ) from exc
+
+    if candidate.is_symlink():
+        return candidate
+
+    try:
+        candidate.resolve(strict=False).relative_to(root)
+    except ValueError as exc:
+        raise RuntimeError(
+            f"Refusing to clean redirected path outside {root}: {candidate}"
+        ) from exc
+    return candidate
+
+
+def _remove_path(path: Path, allowed_root: Path) -> None:
+    """Remove one validated file, symlink, or directory without following links."""
+    target = _validate_cleanup_target(path, allowed_root)
+    if target.is_symlink() or target.is_file():
+        target.unlink()
+    elif target.is_dir():
+        shutil.rmtree(target)
+
+
+def _is_virtual_environment(path: Path) -> bool:
+    """Return whether *path* looks like a Python virtual environment."""
+    return (
+        (path / "pyvenv.cfg").is_file()
+        or (path / "Scripts" / "python.exe").is_file()
+        or (path / "bin" / "python").is_file()
+    )
+
+
+def _clean_cached_files() -> None:
+    """Remove project bytecode without traversing environments or artifacts."""
+    skipped_names = {
+        ".git",
+        ".pyarmor",
+        ".venv",
+        "build",
+        "dist",
+        "env",
+        "env.bak",
+        "obfuscated",
+        "venv",
+        "venv-sim-laps-client",
+        "venv.bak",
+    }
+    for current_root, dir_names, file_names in os.walk(
+        REPO_ROOT, topdown=True, followlinks=False
+    ):
+        current = Path(current_root)
+        retained_dirs = []
+        for name in dir_names:
+            child = current / name
+            relative_child = child.relative_to(REPO_ROOT)
+            if (
+                name in skipped_names
+                or relative_child == Path("tests") / "output"
+            ):
+                continue
+            if child.is_symlink() or _is_virtual_environment(child):
+                continue
+            retained_dirs.append(name)
+        dir_names[:] = retained_dirs
+
+        for name in file_names:
+            if not name.endswith(".pyc"):
+                continue
+            target = current / name
+            if target.is_symlink():
+                continue
+            _remove_path(target, REPO_ROOT)
+
+        for name in list(dir_names):
+            if name != "__pycache__":
+                continue
+            target = current / name
+            _remove_path(target, REPO_ROOT)
+            dir_names.remove(name)
 
 
 def clean():
     """Remove build artifacts."""
     print("Cleaning build artifacts...")
-    
-    dirs_to_clean = [BUILD_DIR, "__pycache__", ".pyarmor"]
-    
-    for dir_name in dirs_to_clean:
-        if os.path.exists(dir_name):
-            print(f"  Removing {dir_name}/")
-            shutil.rmtree(dir_name)
-    
-    # Clean dist/, including credential artifacts left by older releases.
-    if os.path.exists(DIST_DIR):
-        for item in os.listdir(DIST_DIR):
-            item_path = os.path.join(DIST_DIR, item)
-            if os.path.isfile(item_path):
-                os.remove(item_path)
-                print(f"  Removing {item_path}")
-            elif os.path.isdir(item_path):
-                shutil.rmtree(item_path)
-                print(f"  Removing {item_path}/")
-    
-    # Remove .pyc files
-    for pyc in Path(".").rglob("*.pyc"):
-        pyc.unlink()
-    
-    # Remove __pycache__ directories
-    for pycache in Path(".").rglob("__pycache__"):
-        shutil.rmtree(pycache)
+
+    # These are the only top-level directories the build owns.  Validate each
+    # before removing it so a redirected symlink or modified constant cannot
+    # turn cleanup into deletion outside the repository.
+    for artifact_dir in (BUILD_DIR, OBFUSCATED_DIR, REPO_ROOT / ".pyarmor"):
+        if artifact_dir.exists() or artifact_dir.is_symlink():
+            _remove_path(artifact_dir, REPO_ROOT)
+            print(f"  Removing {artifact_dir}/")
+
+    # Clean dist/ and remove credential artifacts left by older builds.
+    if DIST_DIR.exists() or DIST_DIR.is_symlink():
+        if DIST_DIR.is_symlink():
+            _remove_path(DIST_DIR, REPO_ROOT)
+        else:
+            _validate_cleanup_target(DIST_DIR, REPO_ROOT)
+            for item in DIST_DIR.iterdir():
+                is_directory = item.is_dir()
+                _remove_path(item, DIST_DIR)
+                print(f"  Removing {item}{'/' if is_directory else ''}")
+
+    _clean_cached_files()
     
     print("Clean complete!")
 
@@ -114,7 +211,7 @@ def check_dependencies():
                 # Invoke via python -m for reliability.
                 result = subprocess.run(
                     [sys.executable, "-m", "pyarmor.cli", "--version"],
-                    capture_output=True, text=True,
+                    capture_output=True, text=True, cwd=REPO_ROOT,
                 )
                 if result.returncode != 0:
                     missing.append(package)
@@ -132,83 +229,25 @@ def check_dependencies():
     return True
 
 
-def obfuscate_source():
-    """Obfuscate source code with PyArmor."""
-    print("Obfuscating source code with PyArmor...")
-    
-    # Only obfuscate sensitive files to stay within trial limits
-    files_to_obfuscate = [
-        "src/core/security.py",
-        "src/core/api_client.py",
-    ]
-    
-    # PyArmor obfuscation command (free tier maximum: code-object and
-    # module-level obfuscation, which are the defaults at level 1).
-    # Invoke via python -m pyarmor.cli for venv-path resilience.
-    cmd = [
-        sys.executable, "-m", "pyarmor.cli",
-        "gen",
-        "--output", OBFUSCATED_DIR,
-        "--obf-code", "1",  # Obfuscate each function code object (free tier)
-        "--obf-module", "1",  # Obfuscate whole module code (free tier)
-        *files_to_obfuscate,
-    ]
-    
-    print(f"  Running: pyarmor gen --output {OBFUSCATED_DIR} ...")
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    
-    if result.returncode != 0:
-        print(f"  PyArmor error: {result.stderr}")
-        print(f"  stdout: {result.stdout}")
-        
-        # Check if it's a license issue
-        if "out of license" in result.stderr or "trial" in result.stdout.lower():
-            print("  WARNING: PyArmor trial limitation detected")
-            print("  Falling back to basic obfuscation...")
-            
-            # Try with minimal arguments
-            simple_cmd = [
-                sys.executable, "-m", "pyarmor.cli",
-                "gen",
-                "--output", OBFUSCATED_DIR,
-                *files_to_obfuscate,
-            ]
-            
-            print(f"  Running: pyarmor gen --output {OBFUSCATED_DIR} ...")
-            result = subprocess.run(simple_cmd, capture_output=True, text=True)
-            
-            if result.returncode != 0:
-                print(f"  Simple PyArmor also failed: {result.stderr}")
-                return False
-    
-    # Verify obfuscated output
-    if os.path.exists(OBFUSCATED_DIR):
-        print(f"  Obfuscation complete: {OBFUSCATED_DIR}/")
-        return True
-    else:
-        print("  Obfuscation failed: output directory not found")
-        return False
-
-
 def get_build_secret() -> str | None:
-    """Resolve the APP_SECRET to embed, from the process env or a local .env.
+    """Resolve APP_SECRET from the build environment or repository .env.
 
-    Returns None when no usable secret is available (unset or placeholder).
+    The file is read only while staging the compiled extension and is never
+    passed to PyInstaller.  Process environment values take precedence over
+    the local file, matching runtime dotenv behavior.
     """
     secret = os.environ.get("APP_SECRET")
-    if not secret and os.path.exists(".env"):
-        secret = dotenv_values(".env").get("APP_SECRET")
+    if not secret:
+        env_path = REPO_ROOT / ".env"
+        if env_path.is_file():
+            secret = dotenv_values(env_path).get("APP_SECRET")
     if not secret or secret.strip() in PLACEHOLDER_SECRETS:
         return None
     return secret.strip()
 
 
 def generate_secret_module_source(secret: str) -> str:
-    """Generate Cython source carrying the secret as two XOR pads.
-
-    The secret never appears as a contiguous literal; it is reconstructed at
-    runtime as pad_a ^ pad_b inside compiled machine code.
-    """
+    """Generate Cython source that reconstructs *secret* from XOR pads."""
     data = secret.encode("utf-8")
     pad_a = secrets.token_bytes(len(data))
     pad_b = bytes(a ^ b for a, b in zip(pad_a, data))
@@ -227,40 +266,31 @@ def generate_secret_module_source(secret: str) -> str:
 
 
 def stage_embedded_secret() -> bool:
-    """Generate and compile the embedded-secret native extension.
-
-    Output lands in SECRET_STAGE_DIR (inside build/, which is gitignored) and
-    is picked up by PyInstaller via --paths + --hidden-import.
-    """
+    """Compile the build credential into a native extension under build/."""
     print("Embedding APP_SECRET as compiled native module...")
-
     secret = get_build_secret()
     if not secret:
-        print("\nERROR: no usable APP_SECRET found in the process environment or .env!")
+        print("\nERROR: no usable APP_SECRET found in the process environment or repository .env!")
         print("Set APP_SECRET before building (see .env.example).")
-        print("A release without the embedded secret cannot submit laps.")
         return False
 
-    os.makedirs(SECRET_STAGE_DIR, exist_ok=True)
-
-    pyx_path = os.path.join(SECRET_STAGE_DIR, f"{EMBEDDED_SECRET_MODULE}.pyx")
-    with open(pyx_path, "w", encoding="utf-8") as f:
-        f.write(generate_secret_module_source(secret))
-
-    setup_path = os.path.join(SECRET_STAGE_DIR, "setup.py")
-    with open(setup_path, "w", encoding="utf-8") as f:
-        f.write(
-            "from setuptools import Extension, setup\n"
-            "from Cython.Build import cythonize\n"
-            "setup(ext_modules=cythonize(\n"
-            f'    [Extension("{EMBEDDED_SECRET_MODULE}", ["{EMBEDDED_SECRET_MODULE}.pyx"])],\n'
-            "    language_level=3,\n"
-            "))\n"
-        )
-
+    stage_dir = Path(SECRET_STAGE_DIR)
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    (stage_dir / f"{EMBEDDED_SECRET_MODULE}.pyx").write_text(
+        generate_secret_module_source(secret), encoding="utf-8"
+    )
+    (stage_dir / "setup.py").write_text(
+        "from setuptools import Extension, setup\n"
+        "from Cython.Build import cythonize\n"
+        "setup(ext_modules=cythonize(\n"
+        f'    [Extension("{EMBEDDED_SECRET_MODULE}", ["{EMBEDDED_SECRET_MODULE}.pyx"])],\n'
+        "    language_level=3,\n"
+        "))\n",
+        encoding="utf-8",
+    )
     result = subprocess.run(
         [sys.executable, "setup.py", "build_ext", "--inplace"],
-        cwd=SECRET_STAGE_DIR,
+        cwd=stage_dir,
         capture_output=True,
         text=True,
     )
@@ -268,14 +298,71 @@ def stage_embedded_secret() -> bool:
         print(f"  Cython compile failed: {result.stderr}")
         print("  Ensure Cython is installed and MSVC Build Tools are present.")
         return False
-
-    compiled = list(Path(SECRET_STAGE_DIR).glob(f"{EMBEDDED_SECRET_MODULE}.*.pyd"))
+    compiled = list(stage_dir.glob(f"{EMBEDDED_SECRET_MODULE}.*.pyd"))
     if not compiled:
         print("  Cython compile produced no .pyd output")
         return False
-
     print(f"  Embedded secret module: {compiled[0]}")
     return True
+
+
+def obfuscate_source():
+    """Obfuscate source code with PyArmor."""
+    print("Obfuscating source code with PyArmor...")
+
+    # Only obfuscate sensitive files to stay within trial limits
+    files_to_obfuscate = [
+        "src/core/security.py",
+        "src/core/api_client.py",
+    ]
+
+    # PyArmor obfuscation command (using free features only)
+    # Invoke via python -m pyarmor.cli for venv-path resilience
+    cmd = [
+        sys.executable, "-m", "pyarmor.cli",
+        "gen",
+        "--output", OBFUSCATED_DIR,
+        "--obf-code", "1",  # Obfuscate each function code object (free tier)
+        "--obf-module", "1",  # Obfuscate whole module code (free tier)
+        *(REPO_ROOT / path for path in files_to_obfuscate),
+    ]
+
+    print(f"  Running: pyarmor gen --output {OBFUSCATED_DIR} ...")
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+
+    if result.returncode != 0:
+        print(f"  PyArmor error: {result.stderr}")
+        print(f"  stdout: {result.stdout}")
+
+        # Check if it's a license issue
+        if "out of license" in result.stderr or "trial" in result.stdout.lower():
+            print("  WARNING: PyArmor trial limitation detected")
+            print("  Falling back to basic obfuscation...")
+
+            # Try with minimal arguments
+            simple_cmd = [
+                sys.executable, "-m", "pyarmor.cli",
+                "gen",
+                "--output", OBFUSCATED_DIR,
+                *(REPO_ROOT / path for path in files_to_obfuscate),
+            ]
+
+            print(f"  Running: pyarmor gen --output {OBFUSCATED_DIR} ...")
+            result = subprocess.run(
+                simple_cmd, capture_output=True, text=True, cwd=REPO_ROOT
+            )
+
+            if result.returncode != 0:
+                print(f"  Simple PyArmor also failed: {result.stderr}")
+                return False
+
+    # Verify obfuscated output
+    if OBFUSCATED_DIR.exists():
+        print(f"  Obfuscation complete: {OBFUSCATED_DIR}/")
+        return True
+    else:
+        print("  Obfuscation failed: output directory not found")
+        return False
 
 
 def build_executable():
@@ -285,7 +372,7 @@ def build_executable():
     pyinstaller_exe = get_venv_executable("pyinstaller")
     
     # Use obfuscated source if available
-    src_dir = "."  # Always use root since main.py is at root
+    src_dir = REPO_ROOT
     entry = ENTRY_POINT
     
     print(f"  Using source: {src_dir}")
@@ -302,31 +389,29 @@ def build_executable():
     
     # Add icon if exists
     if os.path.exists(ICON_PATH):
-        cmd.extend(["--icon", ICON_PATH])
+        cmd.extend(["--icon", str(ICON_PATH)])
         # Include icon.ico as data file for window icon at runtime
         cmd.extend(["--add-data", f"{ICON_PATH};assets"])
     
     # Also include icon.png for ft.Image in the UI
-    icon_png_path = "assets/icon.png"
-    if os.path.exists(icon_png_path):
+    icon_png_path = REPO_ROOT / "assets" / "icon.png"
+    if icon_png_path.exists():
         cmd.extend(["--add-data", f"{icon_png_path};assets"])
 
     # Saved telemetry reports are self-contained and load these pinned chart
     # libraries from the frozen application's extraction directory.
-    analyzer_vendor_path = "src/core/analyzer/vendor"
-    if os.path.isdir(analyzer_vendor_path):
+    analyzer_vendor_path = REPO_ROOT / "src" / "core" / "analyzer" / "vendor"
+    if analyzer_vendor_path.is_dir():
         cmd.extend([
             "--add-data",
             f"{analyzer_vendor_path};src/core/analyzer/vendor",
         ])
     
-    # Never bundle .env as data: the secret ships only inside the compiled
-    # native extension produced by stage_embedded_secret().
-    if os.path.isdir(SECRET_STAGE_DIR):
-        if not list(Path(SECRET_STAGE_DIR).glob(f"{EMBEDDED_SECRET_MODULE}.*.pyd")):
-            print("  ERROR: embedded secret module not staged - run stage_embedded_secret first")
-            return False
-        cmd.extend(["--paths", SECRET_STAGE_DIR])
+    # Never bundle .env as data. The credential is supplied by the compiled
+    # native extension staged by main().
+    stage_dir = Path(SECRET_STAGE_DIR)
+    if list(stage_dir.glob(f"{EMBEDDED_SECRET_MODULE}.*.pyd")):
+        cmd.extend(["--paths", str(stage_dir)])
         hidden_imports_extra = [EMBEDDED_SECRET_MODULE]
     else:
         print("  WARNING: no embedded secret module - release will run in offline mode")
@@ -387,18 +472,24 @@ def build_executable():
         "--collect-all", "src.utils",
     ])
     
-    # Add obfuscated src directory first so it shadows the plain sources
-    if os.path.exists(OBFUSCATED_DIR):
-        cmd.extend(["--paths", os.path.join(OBFUSCATED_DIR)])
-    
-    # Add the source directory to path so imports work
-    cmd.extend(["--paths", src_dir])
+    # Add obfuscated src directory first so it shadows the plain sources.
+    if OBFUSCATED_DIR.exists():
+        cmd.extend(["--paths", str(OBFUSCATED_DIR)])
+
+    # Add the source and artifact paths so imports and outputs remain rooted
+    # at the repository even when called from another CWD.
+    cmd.extend([
+        "--distpath", str(DIST_DIR),
+        "--workpath", str(BUILD_DIR),
+        "--specpath", str(REPO_ROOT),
+        "--paths", str(src_dir),
+    ])
     
     # Add entry point
-    cmd.append(entry)
+    cmd.append(str(entry))
     
     print(f"  Running: {' '.join(cmd[:10])}...")
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
     
     if result.returncode != 0:
         print(f"  PyInstaller error: {result.stderr}")
@@ -406,8 +497,8 @@ def build_executable():
         return False
     
     # Verify output
-    exe_path = os.path.join(DIST_DIR, f"{APP_NAME}.exe")
-    if os.path.exists(exe_path):
+    exe_path = DIST_DIR / f"{APP_NAME}.exe"
+    if exe_path.exists():
         size_mb = os.path.getsize(exe_path) / (1024 * 1024)
         print(f"  Build complete: {exe_path} ({size_mb:.1f} MB)")
         return True
@@ -418,13 +509,15 @@ def build_executable():
 
 def create_spec_file():
     """Create a PyInstaller spec file for more control."""
+    entry_point = repr(str(ENTRY_POINT))
+    icon_path = repr(str(ICON_PATH)) if ICON_PATH.exists() else "None"
     spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
 a = Analysis(
-    ['src/main.py'],
-    pathex=[],
+    [{entry_point}],
+    pathex=[{str(REPO_ROOT)!r}],
     binaries=[],
     datas=[],
     hiddenimports=[
@@ -472,12 +565,12 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='assets/icon.ico' if os.path.exists('assets/icon.ico') else None,
+    icon={icon_path},
 )
 '''
     
-    spec_path = f"{APP_NAME}.spec"
-    with open(spec_path, "w") as f:
+    spec_path = REPO_ROOT / f"{APP_NAME}.spec"
+    with open(spec_path, "w", encoding="utf-8") as f:
         f.write(spec_content)
     
     print(f"Created {spec_path}")
@@ -508,10 +601,9 @@ def main():
     if not check_dependencies():
         return 1
     
-    # Clean previous build (also wipes the previous secret staging dir)
+    # Clean previous build and stage the authorized credential as a compiled
+    # extension. The source .env is never copied into the release artifact.
     clean()
-    
-    # Compile the embedded secret module from APP_SECRET (env or local .env)
     if not stage_embedded_secret():
         return 1
     

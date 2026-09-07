@@ -7,6 +7,7 @@ Displays telemetry capture status on the home page.
 import flet as ft
 from enum import Enum
 from typing import Optional
+from .mount_safe import safe_update
 
 
 class TelemetryStatus(Enum):
@@ -96,17 +97,17 @@ class TelemetryStatusIndicator(ft.Container):
         self._text.color = self._status_color
 
         self.visible = status != TelemetryStatus.IDLE
-        self.update()
+        safe_update(self)
 
     def show(self):
         """Show the indicator."""
         self.visible = True
-        self.update()
+        safe_update(self)
 
     def hide(self):
         """Hide the indicator."""
         self.visible = False
-        self.update()
+        safe_update(self)
 
 
 class TelemetryButton(ft.Container):
