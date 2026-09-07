@@ -1815,11 +1815,11 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
         from src.core.car_tuning_catalog import get_tuning_params
 
-        car_model = "BMW M2 Coupe"
+        car_model = "Ford Mustang GT3"
         params = get_tuning_params(car_model)
-        assert params is not None, "M2 should match catalog"
+        assert params is not None, "Mustang GT3 should match catalog"
         param_labels = [p["label"].lower() for p in params]
-        assert any("brake bias" in l for l in param_labels), "M2 catalog should now list brake bias"
+        assert any("brake bias" in l for l in param_labels), "Mustang GT3 catalog should list brake bias"
 
         corner = {
             "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,

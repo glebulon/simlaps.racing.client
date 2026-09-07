@@ -10,9 +10,10 @@ _CATALOG: dict | None = None
 _CATALOG_PATH = os.path.join(os.path.dirname(__file__), "data", "car_tuning_catalog.json")
 
 # Category ordering and display labels for grouped parameter output
-_CATEGORY_ORDER = ["basic", "brakes", "suspension", "dampers", "aero", "drivetrain"]
+_CATEGORY_ORDER = ["basic", "electronics", "brakes", "suspension", "dampers", "aero", "drivetrain"]
 _CATEGORY_LABELS = {
     "basic": "Basic",
+    "electronics": "Electronics",
     "brakes": "Brakes",
     "suspension": "Suspension",
     "dampers": "Dampers",
