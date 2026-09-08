@@ -143,6 +143,22 @@ class TestTrackNameCleaning:
         result = parser._clean_track_name("monza")
         assert result == "monza"
 
+    def test_clean_track_name_strips_session_length_descriptor(self):
+        """Newer ACE builds append 'N laps'/'N seconds' before the @date."""
+        parser = LogParser()
+        assert (
+            parser._clean_track_name(
+                "Laguna Seca GP Race Race  5 laps @2014/8/15 15:0:0"
+            )
+            == "Laguna Seca GP"
+        )
+        assert (
+            parser._clean_track_name(
+                "Laguna Seca GP Time Attack Practice  5400 seconds @2014/8/15 15:0:0"
+            )
+            == "Laguna Seca GP"
+        )
+
 
 class TestFollowMoreScenarios:
     """More follow() method tests."""
