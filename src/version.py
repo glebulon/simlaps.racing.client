@@ -19,8 +19,8 @@ VERSION_PATCH = 1
 VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
 
 # Build metadata (set during build process)
-BUILD_DATE = "2026-08-25"
-BUILD_COMMIT = "8befba3"
+BUILD_DATE = "2026-09-07"
+BUILD_COMMIT = "0ff1b28"
 
 # User-Agent string for API requests
 USER_AGENT = f"SimLaps-Client/{VERSION}"

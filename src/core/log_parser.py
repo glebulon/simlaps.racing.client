@@ -413,6 +413,14 @@ class LogParser:
         """Strip session-type words and date suffixes from track description."""
         if "@" in raw:
             raw = raw[: raw.index("@")]
+        # Newer ACE builds append the session length before the @date,
+        # e.g. "Laguna Seca GP Race Race  5 laps @2014/8/15 15:0:0".
+        raw = re.sub(
+            r"\s+\d+\s+(?:laps?|seconds?|minutes?|hours?)\s*$",
+            "",
+            raw,
+            flags=re.IGNORECASE,
+        )
         for suffix in (
             " Race Race", " Race", " Time Attack Practice",
             " Time Attack", " Practice", " Qualifying", " Hotlap", " Drift",
