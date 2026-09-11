@@ -37,7 +37,6 @@ GRAPHICS_SHM_SIZE = 4096
 STATIC_SHM_SIZE = 2048
 
 
-
 @dataclass
 class Coords:
     x: float
@@ -176,7 +175,7 @@ class R:
     def s(self, n: int, pad: int = 0) -> str:
         raw = self._b.read(2 * n + pad)
         self._pos += 2 * n + pad
-        return raw[:2 * n].decode("utf-16-le", errors="ignore").rstrip("\x00")
+        return raw[: 2 * n].decode("utf-16-le", errors="ignore").rstrip("\x00")
 
     def skip(self, n: int):
         self._b.read(n)
@@ -238,7 +237,7 @@ def _word_candidate(data: bytes, offset: int, field: str) -> Dict[str, Any]:
     return {
         "field": field,
         "offset": offset,
-        "raw_hex": data[offset:offset + 4].hex(),
+        "raw_hex": data[offset : offset + 4].hex(),
         "int_value": struct.unpack_from("<i", data, offset)[0],
         "float_value": struct.unpack_from("<f", data, offset)[0],
     }
@@ -251,7 +250,9 @@ def _is_finite_number(value: Any) -> bool:
         return False
 
 
-def _sanitize_float_field(result: Dict[str, Any], field: str, invalid_reasons: List[str], low: float, high: float) -> None:
+def _sanitize_float_field(
+    result: Dict[str, Any], field: str, invalid_reasons: List[str], low: float, high: float
+) -> None:
     value = result.get(field)
     if value is None:
         return
@@ -284,7 +285,9 @@ def _sanitize_int_field(result: Dict[str, Any], field: str, invalid_reasons: Lis
     result[field] = value
 
 
-def _sanitize_coords(value: Any, invalid_reasons: List[str], field: str, abs_max: float) -> Optional[Dict[str, Optional[float]]]:
+def _sanitize_coords(
+    value: Any, invalid_reasons: List[str], field: str, abs_max: float
+) -> Optional[Dict[str, Optional[float]]]:
     if not isinstance(value, dict):
         return None
 
@@ -334,10 +337,10 @@ def _sanitize_float_list(value: Any, invalid_reasons: List[str], field: str, low
 # Format: (field_name, sanitizer_fn_or_name, *bounds)
 # Using the existing helper functions keeps the code lean — no OOP overhead.
 
-_FLOAT = "float"     # _sanitize_float_field(result, name, reasons, lo, hi)
-_INT = "int"         # _sanitize_int_field(result, name, reasons, lo, hi)
-_COORDS = "coords"   # _sanitize_coords(result.get(name), reasons, name, abs_max)
-_FLIST = "flist"     # _sanitize_float_list(result.get(name), reasons, name, lo, hi)
+_FLOAT = "float"  # _sanitize_float_field(result, name, reasons, lo, hi)
+_INT = "int"  # _sanitize_int_field(result, name, reasons, lo, hi)
+_COORDS = "coords"  # _sanitize_coords(result.get(name), reasons, name, abs_max)
+_FLIST = "flist"  # _sanitize_float_list(result.get(name), reasons, name, lo, hi)
 
 # (name, type, lo, hi)  — coords use abs_max as "lo"
 _PHYSICS_FIELDS = [
@@ -480,8 +483,14 @@ def _sanitize_graphics_payload(result: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(result.get("car_ids"), list):
         result["car_ids"] = result["car_ids"][:active_cars]
 
-    core_fields = ["normalized_car_position", "completed_laps", "current_time_ms",
-                   "distance_traveled", "current_sector_index", "is_valid_lap"]
+    core_fields = [
+        "normalized_car_position",
+        "completed_laps",
+        "current_time_ms",
+        "distance_traveled",
+        "current_sector_index",
+        "is_valid_lap",
+    ]
     valid_core_fields = sum(1 for field in core_fields if result.get(field) is not None)
     result["quality_score"] = round(valid_core_fields / len(core_fields), 3)
     result["invalid_reasons"] = sorted(dict.fromkeys(invalid_reasons))
@@ -495,8 +504,6 @@ def _sanitize_static_payload(result: Dict[str, Any]) -> Dict[str, Any]:
     invalid_reasons = _apply_field_specs(result, _STATIC_FIELDS)
     result["invalid_reasons"] = sorted(dict.fromkeys(invalid_reasons))
     return result
-
-
 
 
 def decode_physics_ac(data: bytes) -> Optional[Physics]:
@@ -694,23 +701,23 @@ _GE_GEAR_RPM_WINDOW = 1484
 # SMEvoElectronics × 4 (128 B each) at 1872..2384
 # Copies: current values, min_limit, max_limit, is_modifiable (flags)
 _GE_ELECTRONICS = 1872
-_GE_ELECTRONICS_MIN = 2000   # _GE_ELECTRONICS + 128
-_GE_ELECTRONICS_MAX = 2128   # _GE_ELECTRONICS_MIN + 128
+_GE_ELECTRONICS_MIN = 2000  # _GE_ELECTRONICS + 128
+_GE_ELECTRONICS_MAX = 2128  # _GE_ELECTRONICS_MIN + 128
 _GE_ELECTRONICS_MODIFIABLE = 2256  # _GE_ELECTRONICS_MAX + 128
-_EL_TC_LEVEL = 0        # int8_t — traction-control level (0 = off)
-_EL_ABS_LEVEL = 2       # int8_t — ABS intervention level (0 = off)
+_EL_TC_LEVEL = 0  # int8_t — traction-control level (0 = off)
+_EL_ABS_LEVEL = 2  # int8_t — ABS intervention level (0 = off)
 # 3-byte pad to 4-byte boundary before float
-_EL_BRAKE_BIAS = 8      # float  — front brake-bias ratio (e.g. 0.56 = 56 % front)
-_EL_ENGINE_MAP = 12     # int8_t — engine map / power mode index
+_EL_BRAKE_BIAS = 8  # float  — front brake-bias ratio (e.g. 0.56 = 56 % front)
+_EL_ENGINE_MAP = 12  # int8_t — engine map / power mode index
 # 3-byte pad, then float turbo_level at 16, int8 ers_deploy at 20, pad, float ers_recharge at 24
-_EL_DIFF_POWER = 31     # int8_t — differential lock level under power
-_EL_DIFF_COAST = 32     # int8_t — differential lock level on coast
-_EL_FRONT_BUMP_DAMPER = 33   # int8_t — front bump (compression) damper stiffness level
+_EL_DIFF_POWER = 31  # int8_t — differential lock level under power
+_EL_DIFF_COAST = 32  # int8_t — differential lock level on coast
+_EL_FRONT_BUMP_DAMPER = 33  # int8_t — front bump (compression) damper stiffness level
 _EL_FRONT_REBOUND_DAMPER = 34  # int8_t — front rebound damper stiffness level
-_EL_REAR_BUMP_DAMPER = 35    # int8_t — rear bump (compression) damper stiffness level
-_EL_REAR_REBOUND_DAMPER = 36   # int8_t — rear rebound damper stiffness level
+_EL_REAR_BUMP_DAMPER = 35  # int8_t — rear bump (compression) damper stiffness level
+_EL_REAR_REBOUND_DAMPER = 36  # int8_t — rear rebound damper stiffness level
 _EL_PITLIMITER_ON = 38  # bool   — pit-speed limiter active
-_EL_PERF_MODE = 39      # int8_t — active performance / power mode index
+_EL_PERF_MODE = 39  # int8_t — active performance / power mode index
 _GE_TOTAL_LAP_COUNT = 2384
 _GE_CURRENT_POS = 2388
 _GE_TOTAL_DRIVERS = 2392
@@ -731,17 +738,17 @@ _GE_RACE_CUT_CURRENT_DELTA = 2472
 # session_state SMEvoSessionState (256 B) at 2476. The fields below use
 # MSVC ``#pragma pack(push, 4)`` layout: the two fixed strings are followed
 # by aligned int32 fields, and the struct itself remains padded to 256 bytes.
-_GE_SESSION_PHASE_NAME = 2476       # +0, char[33]
-_GE_SESSION_TIME_LEFT = 2509        # +33, char[15]
-_GE_SESSION_TIME_LEFT_MS = 2524     # +48, int32_t
-_GE_SESSION_WAIT_TIME = 2528        # +52, char[15]
-_GE_SESSION_TOTAL_LAP = 2544        # +68, int32_t (1-byte pad before it)
-_GE_SESSION_CURRENT_LAP = 2548     # +72, int32_t
-_GE_SESSION_LIGHTS_ON = 2552       # +76, int32_t
-_GE_SESSION_LIGHTS_MODE = 2556     # +80, int32_t
-_GE_SESSION_LAP_LENGTH_KM = 2560   # +84, float
-_GE_SESSION_END_FLAG = 2564        # +88, int32_t
-_GE_SESSION_TIME_TO_NEXT = 2568    # +92, char[15]
+_GE_SESSION_PHASE_NAME = 2476  # +0, char[33]
+_GE_SESSION_TIME_LEFT = 2509  # +33, char[15]
+_GE_SESSION_TIME_LEFT_MS = 2524  # +48, int32_t
+_GE_SESSION_WAIT_TIME = 2528  # +52, char[15]
+_GE_SESSION_TOTAL_LAP = 2544  # +68, int32_t (1-byte pad before it)
+_GE_SESSION_CURRENT_LAP = 2548  # +72, int32_t
+_GE_SESSION_LIGHTS_ON = 2552  # +76, int32_t
+_GE_SESSION_LIGHTS_MODE = 2556  # +80, int32_t
+_GE_SESSION_LAP_LENGTH_KM = 2560  # +84, float
+_GE_SESSION_END_FLAG = 2564  # +88, int32_t
+_GE_SESSION_TIME_TO_NEXT = 2568  # +92, char[15]
 # bool fields begin at +107 (the remainder of this 256-byte struct is padding)
 # timing_state SMEvoTimingState (256 B) at 2732
 # The captured ACE 0.8.0.1 fixture contains populated timing strings and
@@ -749,16 +756,16 @@ _GE_SESSION_TIME_TO_NEXT = 2568    # +92, char[15]
 # tests/fixtures/captured_provenance.json for the evidence and redactions.
 # For live lap validation use ``peek_graphics_validity()`` which reads
 # the working ``is_valid_lap`` bool at offset 3121 instead.
-_GE_TIMING_CURRENT_LAPTIME = 2732       # +0, char[15]
-_GE_TIMING_DELTA_CURRENT = 2747        # +15, char[15]
-_GE_TIMING_DELTA_CURRENT_P = 2764     # +32, int32_t (2-byte pad)
-_GE_TIMING_LAST_LAPTIME = 2768        # +36, char[15]
-_GE_TIMING_DELTA_LAST = 2783           # +51, char[15]
-_GE_TIMING_DELTA_LAST_P = 2800         # +68, int32_t (2-byte pad)
-_GE_TIMING_BEST_LAPTIME = 2804        # +72, char[15]
-_GE_TIMING_IDEAL_LAPTIME = 2819       # +87, char[15]
-_GE_TIMING_TOTAL_TIME = 2834          # +102, char[15]
-_GE_TIMING_IS_INVALID = 2849          # +117, bool
+_GE_TIMING_CURRENT_LAPTIME = 2732  # +0, char[15]
+_GE_TIMING_DELTA_CURRENT = 2747  # +15, char[15]
+_GE_TIMING_DELTA_CURRENT_P = 2764  # +32, int32_t (2-byte pad)
+_GE_TIMING_LAST_LAPTIME = 2768  # +36, char[15]
+_GE_TIMING_DELTA_LAST = 2783  # +51, char[15]
+_GE_TIMING_DELTA_LAST_P = 2800  # +68, int32_t (2-byte pad)
+_GE_TIMING_BEST_LAPTIME = 2804  # +72, char[15]
+_GE_TIMING_IDEAL_LAPTIME = 2819  # +87, char[15]
+_GE_TIMING_TOTAL_TIME = 2834  # +102, char[15]
+_GE_TIMING_IS_INVALID = 2849  # +117, bool
 _GE_PLAYER_PING = 2988
 _GE_PLAYER_LATENCY = 2992
 _GE_PLAYER_CPU_USAGE = 2996
@@ -779,7 +786,7 @@ def _read_cstring(data: bytes, offset: int, max_length: int) -> str:
     """Read a null-terminated ASCII string of at most ``max_length`` bytes."""
     if offset + max_length > len(data):
         return ""
-    raw = data[offset:offset + max_length]
+    raw = data[offset : offset + max_length]
     null_idx = raw.find(b"\x00")
     if null_idx >= 0:
         raw = raw[:null_idx]
@@ -819,7 +826,7 @@ def _sanity_check_graphics_evo(
         return False
     if not (1 <= max_gears <= 12):
         return False
-    if best_laptime_ms < -1:          # -1 = not set, otherwise must be >= 0
+    if best_laptime_ms < -1:  # -1 = not set, otherwise must be >= 0
         return False
     if last_laptime_ms < -1:
         return False
@@ -897,22 +904,38 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         best_laptime_ms = struct.unpack_from("<i", data, _GE_BEST_LAPTIME_MS)[0]
 
         # ── Session State (definitive lap counting)
-        session_phase_name = struct.unpack_from("<33s", data, _GE_SESSION_PHASE_NAME)[0].decode('utf-8', 'ignore').rstrip('\x00')
+        session_phase_name = (
+            struct.unpack_from("<33s", data, _GE_SESSION_PHASE_NAME)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
         session_time_left_ms = struct.unpack_from("<i", data, _GE_SESSION_TIME_LEFT_MS)[0]
         session_total_lap = struct.unpack_from("<i", data, _GE_SESSION_TOTAL_LAP)[0]
         session_current_lap = struct.unpack_from("<i", data, _GE_SESSION_CURRENT_LAP)[0]
         session_lap_length_km = struct.unpack_from("<f", data, _GE_SESSION_LAP_LENGTH_KM)[0]
 
         # ── Timing State (definitive timing data)
-        timing_current_laptime = struct.unpack_from("<15s", data, _GE_TIMING_CURRENT_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
-        timing_delta_current = struct.unpack_from("<15s", data, _GE_TIMING_DELTA_CURRENT)[0].decode('utf-8', 'ignore').rstrip('\x00')
+        timing_current_laptime = (
+            struct.unpack_from("<15s", data, _GE_TIMING_CURRENT_LAPTIME)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
+        timing_delta_current = (
+            struct.unpack_from("<15s", data, _GE_TIMING_DELTA_CURRENT)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
         timing_delta_current_p = struct.unpack_from("<i", data, _GE_TIMING_DELTA_CURRENT_P)[0]
-        timing_last_laptime = struct.unpack_from("<15s", data, _GE_TIMING_LAST_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
-        timing_delta_last = struct.unpack_from("<15s", data, _GE_TIMING_DELTA_LAST)[0].decode('utf-8', 'ignore').rstrip('\x00')
+        timing_last_laptime = (
+            struct.unpack_from("<15s", data, _GE_TIMING_LAST_LAPTIME)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
+        timing_delta_last = (
+            struct.unpack_from("<15s", data, _GE_TIMING_DELTA_LAST)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
         timing_delta_last_p = struct.unpack_from("<i", data, _GE_TIMING_DELTA_LAST_P)[0]
-        timing_best_laptime = struct.unpack_from("<15s", data, _GE_TIMING_BEST_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
-        timing_ideal_laptime = struct.unpack_from("<15s", data, _GE_TIMING_IDEAL_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
-        timing_total_time = struct.unpack_from("<15s", data, _GE_TIMING_TOTAL_TIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
+        timing_best_laptime = (
+            struct.unpack_from("<15s", data, _GE_TIMING_BEST_LAPTIME)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
+        timing_ideal_laptime = (
+            struct.unpack_from("<15s", data, _GE_TIMING_IDEAL_LAPTIME)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
+        timing_total_time = (
+            struct.unpack_from("<15s", data, _GE_TIMING_TOTAL_TIME)[0].decode("utf-8", "ignore").rstrip("\x00")
+        )
         timing_is_invalid = bool(struct.unpack_from("<?", data, _GE_TIMING_IS_INVALID)[0])
         flag = struct.unpack_from("<i", data, _GE_FLAG)[0]
         global_flag = struct.unpack_from("<i", data, _GE_GLOBAL_FLAG)[0]
@@ -944,10 +967,18 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
             electronics_engine_map = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_ENGINE_MAP)[0])
             electronics_diff_power = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_DIFF_POWER)[0])
             electronics_diff_coast = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_DIFF_COAST)[0])
-            electronics_front_bump_damper = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_FRONT_BUMP_DAMPER)[0])
-            electronics_front_rebound_damper = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_FRONT_REBOUND_DAMPER)[0])
-            electronics_rear_bump_damper = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_REAR_BUMP_DAMPER)[0])
-            electronics_rear_rebound_damper = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_REAR_REBOUND_DAMPER)[0])
+            electronics_front_bump_damper = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_FRONT_BUMP_DAMPER)[0]
+            )
+            electronics_front_rebound_damper = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_FRONT_REBOUND_DAMPER)[0]
+            )
+            electronics_rear_bump_damper = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_REAR_BUMP_DAMPER)[0]
+            )
+            electronics_rear_rebound_damper = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_REAR_REBOUND_DAMPER)[0]
+            )
             electronics_pitlimiter = bool(data[_GE_ELECTRONICS + _EL_PITLIMITER_ON])
             electronics_perf_mode = int(struct.unpack_from("<b", data, _GE_ELECTRONICS + _EL_PERF_MODE)[0])
         else:
@@ -972,10 +1003,18 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
             electronics_engine_map_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_ENGINE_MAP)[0])
             electronics_diff_power_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_DIFF_POWER)[0])
             electronics_diff_coast_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_DIFF_COAST)[0])
-            electronics_front_bump_damper_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_FRONT_BUMP_DAMPER)[0])
-            electronics_front_rebound_damper_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_FRONT_REBOUND_DAMPER)[0])
-            electronics_rear_bump_damper_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_REAR_BUMP_DAMPER)[0])
-            electronics_rear_rebound_damper_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_REAR_REBOUND_DAMPER)[0])
+            electronics_front_bump_damper_min = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_FRONT_BUMP_DAMPER)[0]
+            )
+            electronics_front_rebound_damper_min = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_FRONT_REBOUND_DAMPER)[0]
+            )
+            electronics_rear_bump_damper_min = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_REAR_BUMP_DAMPER)[0]
+            )
+            electronics_rear_rebound_damper_min = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_REAR_REBOUND_DAMPER)[0]
+            )
             electronics_perf_mode_min = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MIN + _EL_PERF_MODE)[0])
         else:
             electronics_tc_level_min = None
@@ -998,10 +1037,18 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
             electronics_engine_map_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_ENGINE_MAP)[0])
             electronics_diff_power_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_DIFF_POWER)[0])
             electronics_diff_coast_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_DIFF_COAST)[0])
-            electronics_front_bump_damper_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_FRONT_BUMP_DAMPER)[0])
-            electronics_front_rebound_damper_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_FRONT_REBOUND_DAMPER)[0])
-            electronics_rear_bump_damper_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_REAR_BUMP_DAMPER)[0])
-            electronics_rear_rebound_damper_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_REAR_REBOUND_DAMPER)[0])
+            electronics_front_bump_damper_max = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_FRONT_BUMP_DAMPER)[0]
+            )
+            electronics_front_rebound_damper_max = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_FRONT_REBOUND_DAMPER)[0]
+            )
+            electronics_rear_bump_damper_max = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_REAR_BUMP_DAMPER)[0]
+            )
+            electronics_rear_rebound_damper_max = int(
+                struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_REAR_REBOUND_DAMPER)[0]
+            )
             electronics_perf_mode_max = int(struct.unpack_from("<b", data, _GE_ELECTRONICS_MAX + _EL_PERF_MODE)[0])
         else:
             electronics_tc_level_max = None
@@ -1025,9 +1072,13 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
             electronics_diff_power_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_DIFF_POWER])
             electronics_diff_coast_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_DIFF_COAST])
             electronics_front_bump_damper_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_FRONT_BUMP_DAMPER])
-            electronics_front_rebound_damper_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_FRONT_REBOUND_DAMPER])
+            electronics_front_rebound_damper_modifiable = bool(
+                data[_GE_ELECTRONICS_MODIFIABLE + _EL_FRONT_REBOUND_DAMPER]
+            )
             electronics_rear_bump_damper_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_REAR_BUMP_DAMPER])
-            electronics_rear_rebound_damper_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_REAR_REBOUND_DAMPER])
+            electronics_rear_rebound_damper_modifiable = bool(
+                data[_GE_ELECTRONICS_MODIFIABLE + _EL_REAR_REBOUND_DAMPER]
+            )
             electronics_pitlimiter_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_PITLIMITER_ON])
             electronics_perf_mode_modifiable = bool(data[_GE_ELECTRONICS_MODIFIABLE + _EL_PERF_MODE])
         else:
@@ -1075,7 +1126,7 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         "car_model": car_model,
         # ── Authoritative track progress (the headline result)
         "npos": npos,
-        "normalized_car_position": npos,             # legacy-compat alias
+        "normalized_car_position": npos,  # legacy-compat alias
         "normalized_position_source": "graphics_npos",
         "has_authoritative_progress": True,
         # ── Powertrain / inputs
@@ -1108,15 +1159,15 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         "g_forces_z": g_z,
         # ── Lap timing
         "current_lap_time_ms": current_lap_time_ms,
-        "current_time_ms": current_lap_time_ms,      # legacy-compat alias
+        "current_time_ms": current_lap_time_ms,  # legacy-compat alias
         "predicted_lap_time_ms": predicted_lap_time_ms,
         "delta_time_ms": delta_time_ms,
         "last_laptime_ms": last_laptime_ms,
-        "last_time_ms": last_laptime_ms,             # legacy-compat alias
+        "last_time_ms": last_laptime_ms,  # legacy-compat alias
         "best_laptime_ms": best_laptime_ms,
-        "best_time_ms": best_laptime_ms,             # legacy-compat alias
+        "best_time_ms": best_laptime_ms,  # legacy-compat alias
         "total_lap_count": total_lap_count,
-        "completed_laps": total_lap_count,           # legacy-compat alias
+        "completed_laps": total_lap_count,  # legacy-compat alias
         # ── Session State (definitive)
         "session_phase": session_phase_name,
         "session_time_left_ms": session_time_left_ms,
@@ -1137,14 +1188,14 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         "is_invalid": timing_is_invalid,
         # ── Race state
         "current_pos": current_pos,
-        "position": current_pos,                     # legacy-compat alias
+        "position": current_pos,  # legacy-compat alias
         "total_drivers": total_drivers,
         "flag": flag,
         "flag_name": _enum_name(AC_FLAG_TYPE, flag),
         "global_flag": global_flag,
         "car_location": car_location,
         "is_in_pit_box": is_in_pit_box,
-        "is_in_pit": is_in_pit_box,                  # legacy-compat alias
+        "is_in_pit": is_in_pit_box,  # legacy-compat alias
         "is_in_pit_lane": is_in_pit_lane,
         "is_valid_lap": is_valid_lap,
         # ── Fuel / energy
@@ -1225,25 +1276,25 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
 # fixed struct, remainder is reserved.
 STATIC_EVO_MIN_SIZE = 208
 
-_SE_SM_VERSION         = 0    # char[15]
-_SE_AC_EVO_VERSION     = 15   # char[15]
-_SE_SESSION            = 32   # int (enum ACEVO_SESSION_TYPE)
-_SE_SESSION_NAME       = 36   # char[33]
-_SE_EVENT_ID           = 69   # uint8_t
-_SE_SESSION_ID         = 70   # uint8_t
-_SE_STARTING_GRIP      = 72   # int (enum ACEVO_STARTING_GRIP)
-_SE_AMB_TEMP_C         = 76   # float
-_SE_GROUND_TEMP_C      = 80   # float
-_SE_IS_STATIC_WEATHER  = 84   # bool
-_SE_IS_TIMED_RACE      = 85   # bool
-_SE_IS_ONLINE          = 86   # bool
-_SE_NUMBER_OF_SESSIONS = 88   # int
-_SE_NATION             = 92   # char[33]
-_SE_LONGITUDE          = 128  # float
-_SE_LATITUDE           = 132  # float
-_SE_TRACK              = 136  # char[33]
-_SE_TRACK_CONFIG       = 169  # char[33]
-_SE_TRACK_LENGTH_M     = 204  # float
+_SE_SM_VERSION = 0  # char[15]
+_SE_AC_EVO_VERSION = 15  # char[15]
+_SE_SESSION = 32  # int (enum ACEVO_SESSION_TYPE)
+_SE_SESSION_NAME = 36  # char[33]
+_SE_EVENT_ID = 69  # uint8_t
+_SE_SESSION_ID = 70  # uint8_t
+_SE_STARTING_GRIP = 72  # int (enum ACEVO_STARTING_GRIP)
+_SE_AMB_TEMP_C = 76  # float
+_SE_GROUND_TEMP_C = 80  # float
+_SE_IS_STATIC_WEATHER = 84  # bool
+_SE_IS_TIMED_RACE = 85  # bool
+_SE_IS_ONLINE = 86  # bool
+_SE_NUMBER_OF_SESSIONS = 88  # int
+_SE_NATION = 92  # char[33]
+_SE_LONGITUDE = 128  # float
+_SE_LATITUDE = 132  # float
+_SE_TRACK = 136  # char[33]
+_SE_TRACK_CONFIG = 169  # char[33]
+_SE_TRACK_LENGTH_M = 204  # float
 
 
 # ACEVO_SESSION_TYPE enum names (best-effort; the doc enumerates these but
@@ -1284,24 +1335,24 @@ def decode_static_evo(data: bytes) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        sm_version     = _read_cstring(data, _SE_SM_VERSION, 15)
+        sm_version = _read_cstring(data, _SE_SM_VERSION, 15)
         ac_evo_version = _read_cstring(data, _SE_AC_EVO_VERSION, 15)
-        session        = struct.unpack_from("<i", data, _SE_SESSION)[0]
-        session_name   = _read_cstring(data, _SE_SESSION_NAME, 33)
-        event_id       = data[_SE_EVENT_ID]
-        session_id     = data[_SE_SESSION_ID]
-        starting_grip  = struct.unpack_from("<i", data, _SE_STARTING_GRIP)[0]
-        amb_temp_c     = struct.unpack_from("<f", data, _SE_AMB_TEMP_C)[0]
-        ground_temp_c  = struct.unpack_from("<f", data, _SE_GROUND_TEMP_C)[0]
-        is_static_wx   = bool(data[_SE_IS_STATIC_WEATHER])
-        is_timed_race  = bool(data[_SE_IS_TIMED_RACE])
-        is_online      = bool(data[_SE_IS_ONLINE])
-        num_sessions   = struct.unpack_from("<i", data, _SE_NUMBER_OF_SESSIONS)[0]
-        nation         = _read_cstring(data, _SE_NATION, 33)
-        longitude      = struct.unpack_from("<f", data, _SE_LONGITUDE)[0]
-        latitude       = struct.unpack_from("<f", data, _SE_LATITUDE)[0]
-        track          = _read_cstring(data, _SE_TRACK, 33)
-        track_config   = _read_cstring(data, _SE_TRACK_CONFIG, 33)
+        session = struct.unpack_from("<i", data, _SE_SESSION)[0]
+        session_name = _read_cstring(data, _SE_SESSION_NAME, 33)
+        event_id = data[_SE_EVENT_ID]
+        session_id = data[_SE_SESSION_ID]
+        starting_grip = struct.unpack_from("<i", data, _SE_STARTING_GRIP)[0]
+        amb_temp_c = struct.unpack_from("<f", data, _SE_AMB_TEMP_C)[0]
+        ground_temp_c = struct.unpack_from("<f", data, _SE_GROUND_TEMP_C)[0]
+        is_static_wx = bool(data[_SE_IS_STATIC_WEATHER])
+        is_timed_race = bool(data[_SE_IS_TIMED_RACE])
+        is_online = bool(data[_SE_IS_ONLINE])
+        num_sessions = struct.unpack_from("<i", data, _SE_NUMBER_OF_SESSIONS)[0]
+        nation = _read_cstring(data, _SE_NATION, 33)
+        longitude = struct.unpack_from("<f", data, _SE_LONGITUDE)[0]
+        latitude = struct.unpack_from("<f", data, _SE_LATITUDE)[0]
+        track = _read_cstring(data, _SE_TRACK, 33)
+        track_config = _read_cstring(data, _SE_TRACK_CONFIG, 33)
         track_length_m = struct.unpack_from("<f", data, _SE_TRACK_LENGTH_M)[0]
     except (struct.error, IndexError):
         return None
@@ -1328,7 +1379,7 @@ def decode_static_evo(data: bytes) -> Optional[Dict[str, Any]]:
         # ── Versions
         "sm_version": sm_version,
         "ac_evo_version": ac_evo_version,
-        "ac_version": ac_evo_version,                 # legacy-compat alias
+        "ac_version": ac_evo_version,  # legacy-compat alias
         # ── Session identity
         "session": session,
         "session_name_enum": ACEVO_SESSION_TYPE.get(session, str(session)),
@@ -1353,7 +1404,7 @@ def decode_static_evo(data: bytes) -> Optional[Dict[str, Any]]:
         "track_configuration": track_config,
         "track_length_m": track_length_m,
         "track_length_km": track_length_m / 1000.0 if track_length_m > 0 else 0.0,
-        "track_spline_length": track_length_m,        # legacy-compat alias (ACC name)
+        "track_spline_length": track_length_m,  # legacy-compat alias (ACC name)
     }
 
 
@@ -1374,7 +1425,7 @@ def decode_physics_fallback(data: bytes) -> Dict[str, Any]:
     for i in range(0, min(len(data), 200), 4):
         if i + 4 <= len(data):
             try:
-                f = struct.unpack_from('<f', data, i)[0]
+                f = struct.unpack_from("<f", data, i)[0]
                 if not (f != f or abs(f) > 1e6):
                     floats.append(round(f, 6))
             except Exception:
@@ -1383,7 +1434,7 @@ def decode_physics_fallback(data: bytes) -> Dict[str, Any]:
     for i in range(0, min(len(data), 200), 4):
         if i + 4 <= len(data):
             try:
-                val = struct.unpack_from('<i', data, i)[0]
+                val = struct.unpack_from("<i", data, i)[0]
                 if abs(val) < 100000:
                     ints.append(val)
             except Exception:
@@ -1408,16 +1459,16 @@ def decode_graphics_fallback(data: bytes) -> Dict[str, Any]:
     }
 
     try:
-        ascii_part = ''.join(chr(b) if 32 <= b <= 126 else '.' for b in data[:200])
+        ascii_part = "".join(chr(b) if 32 <= b <= 126 else "." for b in data[:200])
         result["ascii_start"] = ascii_part
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
     floats = []
     for i in range(0, min(len(data), 200), 4):
         if i + 4 <= len(data):
             try:
-                f = struct.unpack_from('<f', data, i)[0]
+                f = struct.unpack_from("<f", data, i)[0]
                 if not (f != f or abs(f) > 1e6):
                     floats.append(round(f, 6))
             except Exception:
@@ -1434,7 +1485,7 @@ def decode_static_fallback(data: bytes) -> Dict[str, Any]:
     result = {"_decoder": "fallback", "size": len(data)}
 
     result["bytes"] = list(data[:100])
-    result["ascii"] = ''.join(chr(b) if 32 <= b <= 126 else '.' for b in data[:100])
+    result["ascii"] = "".join(chr(b) if 32 <= b <= 126 else "." for b in data[:100])
 
     return result
 
@@ -1457,7 +1508,7 @@ _PEEK_TOTAL_LAP_COUNT = 2384
 _PEEK_LAST_LAPTIME = 2396
 _PEEK_STATUS = 4
 _PEEK_SESSION_PHASE = 2476
-_PEEK_IS_VALID_LAP    = 3121
+_PEEK_IS_VALID_LAP = 3121
 
 # Minimum buffer size needed for the peek.
 _PEEK_MIN_SIZE = _PEEK_IS_VALID_LAP + 1  # 3122
@@ -1479,8 +1530,8 @@ def peek_graphics_validity(data: bytes) -> Optional[Dict[str, Any]]:
         current_lap_time_ms = struct.unpack_from("<i", data, _PEEK_CURRENT_LAP_TIME)[0]
         total_lap_count = struct.unpack_from("<i", data, _PEEK_TOTAL_LAP_COUNT)[0]
         last_laptime_ms = struct.unpack_from("<i", data, _PEEK_LAST_LAPTIME)[0]
-        session_phase = data[_PEEK_SESSION_PHASE:_PEEK_SESSION_PHASE + 33].split(b"\x00", 1)[0].decode(
-            "utf-8", "ignore"
+        session_phase = (
+            data[_PEEK_SESSION_PHASE : _PEEK_SESSION_PHASE + 33].split(b"\x00", 1)[0].decode("utf-8", "ignore")
         )
         is_valid_lap = bool(data[_PEEK_IS_VALID_LAP])
     except (struct.error, IndexError):
@@ -1506,6 +1557,7 @@ def decode_physics(data: bytes) -> Dict[str, Any]:
     physics = decode_physics_ac(data)
     if physics:
         from dataclasses import asdict
+
         return _sanitize_physics_payload({"_decoder": "ac_structure", **asdict(physics)})
     return decode_physics_fallback(data)
 

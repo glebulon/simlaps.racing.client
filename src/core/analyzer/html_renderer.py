@@ -20,11 +20,7 @@ def _load_vendor_script(filename: str) -> str:
 
 def _escape_json_for_script(data_json: str) -> str:
     """Keep serialized JSON inside a JavaScript script data context."""
-    return (
-        data_json.replace("<", r"\u003c")
-        .replace(">", r"\u003e")
-        .replace("&", r"\u0026")
-    )
+    return data_json.replace("<", r"\u003c").replace(">", r"\u003e").replace("&", r"\u0026")
 
 
 async def render_html(
@@ -77,24 +73,22 @@ async def render_html(
             }
             for c in lap["corners"]
         ]
-        laps_json.append({
-            "lap_num": lap["lap_num"],
-            "start_frame": lap["start_frame"],
-            "end_frame": lap["end_frame"],
-            "lap_time_s": round(lap["lap_time_s"], 3),
-            "lap_time_str": lap["lap_time_str"],
-            "max_speed": round(lap["max_speed"], 1),
-            "avg_speed": round(lap["avg_speed"], 1),
-            "fuel_used": (
-                round(lap["fuel_used"], 3)
-                if lap.get("fuel_used") is not None
-                else None
-            ),
-            "is_valid": lap.get("is_valid", True),
-            "confidence_label": lap.get("confidence_label"),
-            "track": track_slim,
-            "corners": corners_json,
-        })
+        laps_json.append(
+            {
+                "lap_num": lap["lap_num"],
+                "start_frame": lap["start_frame"],
+                "end_frame": lap["end_frame"],
+                "lap_time_s": round(lap["lap_time_s"], 3),
+                "lap_time_str": lap["lap_time_str"],
+                "max_speed": round(lap["max_speed"], 1),
+                "avg_speed": round(lap["avg_speed"], 1),
+                "fuel_used": (round(lap["fuel_used"], 3) if lap.get("fuel_used") is not None else None),
+                "is_valid": lap.get("is_valid", True),
+                "confidence_label": lap.get("confidence_label"),
+                "track": track_slim,
+                "corners": corners_json,
+            }
+        )
 
     ref_corners_json = [
         {
@@ -113,27 +107,30 @@ async def render_html(
     for cid, speeds in data["corner_speeds"].items():
         corner_speeds_json[str(cid)] = {str(k): v for k, v in speeds.items()}
 
-    data_json = json.dumps({
-        "meta": data["meta"],
-        "hz": data["hz"],
-        "track_key": data["track_key"],
-        "track_name": data["track_name"],
-        "config_key": data["config_key"],
-        "config_name": data["config_name"],
-        "track_label": data["track_label"],
-        "laps": laps_json,
-        "best_lap_num": data["best_lap_num"],
-        "reference_lap_num": data.get("reference_lap_num"),
-        "comparison_lap_num": data.get("comparison_lap_num"),
-        "comparison_available": data.get("comparison_available", False),
-        "valid_lap_nums": data.get("valid_lap_nums", []),
-        "analysis_mode": data.get("analysis_mode"),
-        "analysis_confidence": data.get("analysis_confidence"),
-        "analysis_notes": data.get("analysis_notes", []),
-        "ref_corners": ref_corners_json,
-        "corner_data": corner_data_json,
-        "corner_speeds": corner_speeds_json,
-    }, ensure_ascii=True)
+    data_json = json.dumps(
+        {
+            "meta": data["meta"],
+            "hz": data["hz"],
+            "track_key": data["track_key"],
+            "track_name": data["track_name"],
+            "config_key": data["config_key"],
+            "config_name": data["config_name"],
+            "track_label": data["track_label"],
+            "laps": laps_json,
+            "best_lap_num": data["best_lap_num"],
+            "reference_lap_num": data.get("reference_lap_num"),
+            "comparison_lap_num": data.get("comparison_lap_num"),
+            "comparison_available": data.get("comparison_available", False),
+            "valid_lap_nums": data.get("valid_lap_nums", []),
+            "analysis_mode": data.get("analysis_mode"),
+            "analysis_confidence": data.get("analysis_confidence"),
+            "analysis_notes": data.get("analysis_notes", []),
+            "ref_corners": ref_corners_json,
+            "corner_data": corner_data_json,
+            "corner_speeds": corner_speeds_json,
+        },
+        ensure_ascii=True,
+    )
 
     html_content = build_html_template(
         data_json,
@@ -156,9 +153,7 @@ def build_html_template(
 ) -> str:
     """Build the full HTML report template with all chart sections."""
     chart_js = chart_js or _load_vendor_script("chart.umd.min.js")
-    annotation_js = annotation_js or _load_vendor_script(
-        "chartjs-plugin-annotation.min.js"
-    )
+    annotation_js = annotation_js or _load_vendor_script("chartjs-plugin-annotation.min.js")
     data_json = _escape_json_for_script(data_json)
     template = r"""<!DOCTYPE html>
 <html lang="en">
@@ -698,7 +693,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 </body>
-</html>"""
+</html>"""  # noqa: E501
     # Resolve all markers from the original template in one pass. This keeps
     # marker text in either trusted scripts or report data from changing the
     # other substitution.

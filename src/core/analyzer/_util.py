@@ -1,4 +1,5 @@
 """Shared utility functions extracted from telemetry_analyzer.py."""
+
 import math
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -18,6 +19,7 @@ _CORNER_MEASUREMENT_WINDOW_AFTER = 0.025
 
 
 # ── Array / scalar helpers ─────────────────────────────────────────────────
+
 
 def _safe_4(arr: list, default: float = 0.0) -> List[float]:
     """Safely extract 4-element array."""
@@ -85,11 +87,7 @@ def _median3(values: List[Optional[float]]) -> List[Optional[float]]:
     """Apply a 3-point median filter to a numeric series."""
     smoothed: List[Optional[float]] = []
     for idx in range(len(values)):
-        window = [
-            value
-            for value in values[max(0, idx - 1):min(len(values), idx + 2)]
-            if value is not None
-        ]
+        window = [value for value in values[max(0, idx - 1) : min(len(values), idx + 2)] if value is not None]
         if not window:
             smoothed.append(None)
             continue
@@ -111,6 +109,7 @@ def _local_average(points: List[Dict], center_idx: int, field: str, radius: int 
 
 
 # ── Frame data helpers ─────────────────────────────────────────────────────
+
 
 def get_physics(frame: FrameData) -> Dict[str, Any]:
     """Get physics data from frame."""
@@ -143,6 +142,7 @@ def get_graphics(frame: FrameData) -> Dict[str, Any]:
 
 
 # ── Analysis mode / confidence ────────────────────────────────────────────
+
 
 def _decide_analysis_mode(
     authoritative_progress_ratio: float,
@@ -181,6 +181,7 @@ def _confidence_label(score: float) -> str:
 
 
 # ── Profile sanity ────────────────────────────────────────────────────────
+
 
 def _profile_corner_sanity_notes(
     laps: List[Dict],
@@ -235,6 +236,7 @@ def _profile_corner_sanity_notes(
 
 # ── Corner measurement window ─────────────────────────────────────────────
 
+
 def _corner_measurement_window(spec: Dict[str, Any]) -> Tuple[float, float]:
     """Return a fixed lap_progress range centred on the corner profile.
 
@@ -275,6 +277,7 @@ def _trend_direction(values: List[float], threshold: float) -> str:
 
 # ── Track profile selection ───────────────────────────────────────────────
 
+
 def _select_track_profile_for_analysis(
     track_name: Optional[str],
     config_name: Optional[str] = None,
@@ -293,6 +296,7 @@ def _select_track_profile_for_analysis(
 
 
 # ── Car state extraction ──────────────────────────────────────────────────
+
 
 def extract_car_state(pt: Dict) -> Optional[Dict]:
     """Extract car state data from a track point."""
@@ -371,6 +375,7 @@ def extract_car_state(pt: Dict) -> Optional[Dict]:
 
 # ── Classification / formatting helpers ───────────────────────────────────
 
+
 def variation_label(delta_kmh: float) -> str:
     if delta_kmh >= 25:
         return "HIGH"
@@ -386,8 +391,8 @@ def classify_corner_issue(entry_delta: float, apex_delta: float, exit_delta: flo
     classification when multiple phases are significantly off.  If all deltas
     are below 1 km/h the corner is marked MINOR.
     """
-    _MIN_DELTA = 2.0   # km/h — below this, don't single out a phase
-    _TRIVIAL = 1.0     # km/h — all below this = MINOR
+    _MIN_DELTA = 2.0  # km/h — below this, don't single out a phase
+    _TRIVIAL = 1.0  # km/h — all below this = MINOR
 
     abs_entry = abs(entry_delta)
     abs_apex = abs(apex_delta)
@@ -479,7 +484,9 @@ def format_car_state(state: Optional[Dict]) -> str:
     fx_vals = [float(state.get(f"fx_{x}", 0) or 0) for x in ["fl", "fr", "rl", "rr"]]
     fy_vals = [float(state.get(f"fy_{x}", 0) or 0) for x in ["fl", "fr", "rl", "rr"]]
     slip_ratio_vals = [float(state.get(f"slip_ratio_{x}", 0) or 0) for x in ["fl", "fr", "rl", "rr"]]
-    slip_angle_vals = [float(state.get(f"slip_angle_{x}", 0) or 0) * (180.0 / math.pi) for x in ["fl", "fr", "rl", "rr"]]
+    slip_angle_vals = [
+        float(state.get(f"slip_angle_{x}", 0) or 0) * (180.0 / math.pi) for x in ["fl", "fr", "rl", "rr"]
+    ]
     brake_torque_vals = [float(state.get(f"brake_torque_{x}", 0) or 0) for x in ["fl", "fr", "rl", "rr"]]
 
     front_fx = (fx_vals[0] + fx_vals[1]) / 2 if len(fx_vals) >= 2 else 0
@@ -564,6 +571,7 @@ def balance_hint(state: Optional[Dict]) -> str:
 
 
 # ── Internal average helper ───────────────────────────────────────────────
+
 
 def _avg(values: List[float]) -> float:
     return sum(values) / len(values) if values else 0.0

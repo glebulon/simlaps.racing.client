@@ -1,4 +1,5 @@
 """Car tuning catalog - maps car identifiers to their available setup parameters."""
+
 from __future__ import annotations
 
 import json
@@ -26,9 +27,9 @@ def _load_catalog() -> dict:
     global _CATALOG
     if _CATALOG is None:
         try:
-            catalog_text = resources.files("src.core").joinpath(
-                "data", "car_tuning_catalog.json"
-            ).read_text(encoding="utf-8")
+            catalog_text = (
+                resources.files("src.core").joinpath("data", "car_tuning_catalog.json").read_text(encoding="utf-8")
+            )
             _CATALOG = json.loads(catalog_text)
         except (FileNotFoundError, ModuleNotFoundError, OSError, TypeError):
             # Keep source checkouts and PyInstaller bundles working when the
@@ -108,7 +109,5 @@ def format_tuning_block(car_model: str) -> str:
             label = p.get("label", "")
             suffix = f"  [{count} selectable settings]" if count > 1 else ""
             lines.append(f"- {label}{suffix}")
-    lines.append(
-        "When recommending setup changes, only suggest adjustments from the above list."
-    )
+    lines.append("When recommending setup changes, only suggest adjustments from the above list.")
     return "\n".join(lines)

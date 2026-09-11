@@ -44,9 +44,7 @@ def test_frozen_runtime_dotenv_uses_external_sidecar(tmp_path, monkeypatch):
     assert calls == [((str(env_path),), {"override": False})]
 
 
-def test_frozen_runtime_dotenv_never_reads_pyinstaller_extraction_dir(
-    tmp_path, monkeypatch
-):
+def test_frozen_runtime_dotenv_never_reads_pyinstaller_extraction_dir(tmp_path, monkeypatch):
     executable = tmp_path / "SimLapsClient.exe"
     executable.touch()
     meipass = tmp_path / "_MEIPASS"
@@ -79,12 +77,10 @@ def test_process_environment_wins_over_frozen_sidecar(tmp_path, monkeypatch):
 
     security._load_runtime_dotenv()
 
-    assert security.os.environ["APP_SECRET"] == "process-value"
+    assert security.os.environ["APP_SECRET"] == "process-value"  # noqa: S105
 
 
-def test_isolated_sidecar_value_resolves_when_process_value_is_absent(
-    tmp_path, monkeypatch
-):
+def test_isolated_sidecar_value_resolves_when_process_value_is_absent(tmp_path, monkeypatch):
     executable = tmp_path / "SimLapsClient.exe"
     executable.touch()
     (tmp_path / ".env").write_text("APP_SECRET=sidecar-value\n", encoding="utf-8")
@@ -94,9 +90,7 @@ def test_isolated_sidecar_value_resolves_when_process_value_is_absent(
 
     security._load_runtime_dotenv()
 
-    assert security._resolve_secret(security.os.environ.get("APP_SECRET"), "embedded") == (
-        "sidecar-value"
-    )
+    assert security._resolve_secret(security.os.environ.get("APP_SECRET"), "embedded") == ("sidecar-value")
 
 
 def test_source_import_loads_only_isolated_dotenv_and_process_wins(tmp_path):
@@ -119,7 +113,7 @@ def test_source_import_loads_only_isolated_dotenv_and_process_wins(tmp_path):
     ]
     clean_env = os.environ.copy()
     clean_env.pop("APP_SECRET", None)
-    sidecar = subprocess.run(
+    sidecar = subprocess.run(  # noqa: S603
         command,
         cwd=project,
         env=clean_env,
@@ -130,7 +124,7 @@ def test_source_import_loads_only_isolated_dotenv_and_process_wins(tmp_path):
     assert sidecar.stdout.strip() == "isolated-file-value"
 
     process_env = clean_env | {"APP_SECRET": "isolated-process-value"}
-    process = subprocess.run(
+    process = subprocess.run(  # noqa: S603
         command,
         cwd=project,
         env=process_env,

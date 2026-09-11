@@ -27,6 +27,7 @@ _INVALID_WEBHOOK_URL = "Invalid Discord webhook URL"
 @dataclass
 class DiscordLapPayload:
     """Data structure for lap information."""
+
     track_name: str
     car_name: str
     lap_time_ms: int
@@ -43,14 +44,14 @@ class DiscordLapPayload:
 class DiscordNotifier:
     """
     Handles Discord webhook notifications for lap times.
-    
+
     Provides methods to post lap data and test webhook connectivity.
     """
 
     def __init__(self, webhook_url: str, timeout: float = 10.0):
         """
         Initialize Discord notifier.
-        
+
         Args:
             webhook_url: Discord webhook URL
             timeout: Request timeout in seconds
@@ -66,10 +67,10 @@ class DiscordNotifier:
     def create_lap_embed(self, lap_data: DiscordLapPayload) -> Dict[str, Any]:
         """
         Create Discord embed for lap data.
-        
+
         Args:
             lap_data: Lap information
-            
+
         Returns:
             Discord embed dictionary
         """
@@ -105,35 +106,27 @@ class DiscordNotifier:
 
         # Driver field (full width)
         field_name = "🫙 New PB" if lap_data.is_personal_best else "Lap Recorded"
-        fields.append({
-            "name": field_name,
-            "value": f"**Driver:** {lap_data.steam_name or 'Unknown'}\n🏎️ **Car:** {lap_data.car_name.replace('_', ' ').replace('ks_', '').title()} • 🏁 **Track:** {lap_data.track_name.replace('_', ' ').title()} • ⏱️ **Lap Time:** {format_lap_time(lap_data.lap_time_ms)}",
-            "inline": False
-        })
+        fields.append(
+            {
+                "name": field_name,
+                "value": f"**Driver:** {lap_data.steam_name or 'Unknown'}\n🏎️ **Car:** {lap_data.car_name.replace('_', ' ').replace('ks_', '').title()} • 🏁 **Track:** {lap_data.track_name.replace('_', ' ').title()} • ⏱️ **Lap Time:** {format_lap_time(lap_data.lap_time_ms)}",  # noqa: E501
+                "inline": False,
+            }
+        )
 
         # Sector Times (code block)
         if sectors_code:
-            fields.append({
-                "name": "📊 Sector Times",
-                "value": sectors_code,
-                "inline": False
-            })
+            fields.append({"name": "📊 Sector Times", "value": sectors_code, "inline": False})
 
         # Session Details
         if session_text:
-            fields.append({
-                "name": "📋 Session Details",
-                "value": session_text,
-                "inline": False
-            })
+            fields.append({"name": "📋 Session Details", "value": session_text, "inline": False})
 
         embed = {
             "title": title,
             "color": color,
             "fields": fields,
-            "footer": {
-                "text": "SimLaps Client"
-            },
+            "footer": {"text": "SimLaps Client"},
         }
 
         return embed
@@ -141,10 +134,10 @@ class DiscordNotifier:
     async def post_lap(self, lap_data: DiscordLapPayload) -> bool:
         """
         Post lap data to Discord webhook.
-        
+
         Args:
             lap_data: Lap information to post
-            
+
         Returns:
             True if successful, False otherwise
         """
@@ -152,15 +145,11 @@ class DiscordNotifier:
             log_debug(Component.DISCORD, f"post_lap called: {lap_data.lap_time_ms}ms on {lap_data.track_name}")
 
             embed = self.create_lap_embed(lap_data)
-            payload = {
-                "embeds": [embed]
-            }
+            payload = {"embeds": [embed]}
 
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
-                    self.webhook_url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"}
+                    self.webhook_url, json=payload, headers={"Content-Type": "application/json"}
                 )
 
                 log_debug(Component.DISCORD, f"Response status: {response.status_code}")
@@ -185,7 +174,7 @@ class DiscordNotifier:
     async def send_test_message(self) -> bool:
         """
         Send a test message to verify webhook connectivity.
-        
+
         Returns:
             True if successful, False otherwise
         """
@@ -208,10 +197,10 @@ class DiscordNotifier:
     def validate_webhook_url(url: str) -> bool:
         """
         Validate Discord webhook URL format.
-        
+
         Args:
             url: Webhook URL to validate
-            
+
         Returns:
             True if URL format is valid
         """
@@ -245,24 +234,21 @@ class DiscordNotifier:
         if not parsed.path.startswith(_WEBHOOK_PATH_PREFIX):
             return False
 
-        components = parsed.path[len(_WEBHOOK_PATH_PREFIX):].split("/")
+        components = parsed.path[len(_WEBHOOK_PATH_PREFIX) :].split("/")
         if len(components) != 2:
             return False
 
         webhook_id, token = components
-        return bool(
-            _WEBHOOK_ID_RE.fullmatch(webhook_id)
-            and _WEBHOOK_TOKEN_RE.fullmatch(token)
-        )
+        return bool(_WEBHOOK_ID_RE.fullmatch(webhook_id) and _WEBHOOK_TOKEN_RE.fullmatch(token))
 
 
 def create_discord_notifier(webhook_url: str) -> Optional[DiscordNotifier]:
     """
     Create Discord notifier instance with validation.
-    
+
     Args:
         webhook_url: Discord webhook URL
-        
+
     Returns:
         DiscordNotifier instance or None if invalid URL
     """

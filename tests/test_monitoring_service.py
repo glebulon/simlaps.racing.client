@@ -136,9 +136,7 @@ async def test_run_game_monitor_triggers_stop_when_game_gone():
 
     with patch("src.ui.services.monitoring_service.is_game_running", return_value=False):
         with patch("asyncio.sleep", new=AsyncMock()):
-            task = asyncio.create_task(
-                service._run_game_monitor(on_change, is_capturing)
-            )
+            task = asyncio.create_task(service._run_game_monitor(on_change, is_capturing))
             await asyncio.wait_for(task, timeout=2.0)
 
     on_change.assert_awaited_once_with(False)
@@ -151,9 +149,7 @@ async def test_run_game_monitor_cancelled_gracefully():
 
     on_change = AsyncMock()
 
-    task = asyncio.create_task(
-        service._run_game_monitor(on_change, lambda: False)
-    )
+    task = asyncio.create_task(service._run_game_monitor(on_change, lambda: False))
     await asyncio.sleep(0.1)
     task.cancel()
     await asyncio.sleep(0.1)

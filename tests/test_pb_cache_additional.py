@@ -29,15 +29,11 @@ async def test_preload_from_api_handles_timeout_and_request_error() -> None:
     cache = PBCache("https://simlaps.racing")
 
     with patch("httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-            side_effect=httpx.TimeoutException("timeout")
-        )
+        mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=httpx.TimeoutException("timeout"))
         assert await cache.preload_from_api("steam") is False
 
     with patch("httpx.AsyncClient") as mock_client:
-        mock_client.return_value.__aenter__.return_value.get = AsyncMock(
-            side_effect=httpx.RequestError("request")
-        )
+        mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=httpx.RequestError("request"))
         assert await cache.preload_from_api("steam") is False
 
 
@@ -106,12 +102,8 @@ async def test_timestamps_are_normalized_to_utc_for_stats() -> None:
     api_pb = cache.get_personal_best("spa", "car")
     assert api_pb is not None
     assert api_pb.updated_at == datetime(2024, 1, 1, 10, tzinfo=timezone.utc)
-    assert cache.get_personal_best("imola", "car").updated_at == datetime(
-        2024, 1, 1, 11, tzinfo=timezone.utc
-    )
-    assert cache.get_personal_best("mugello", "car").updated_at == datetime(
-        2024, 1, 1, 12, tzinfo=timezone.utc
-    )
+    assert cache.get_personal_best("imola", "car").updated_at == datetime(2024, 1, 1, 11, tzinfo=timezone.utc)
+    assert cache.get_personal_best("mugello", "car").updated_at == datetime(2024, 1, 1, 12, tzinfo=timezone.utc)
 
     assert cache.check_and_update_pb("monza", "car", 110000) is True
     local_pb = cache.get_personal_best("monza", "car")

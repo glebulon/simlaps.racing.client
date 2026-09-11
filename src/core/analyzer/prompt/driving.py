@@ -24,10 +24,9 @@ def build_corner_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
     best_lap = ctx.best_lap
-    assert best_lap is not None
+    assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
     corner_speeds = ctx.corner_speeds
     analysis_confidence = ctx.analysis_confidence
@@ -65,18 +64,13 @@ def build_corner_sections(
         if not rc or not cc:
             continue
         seg_delta = corner_segment_time(cc, hz) - corner_segment_time(rc, hz)
-        is_low_conf = (
-            rc.get("confidence_label") == "low" or
-            cc.get("confidence_label") == "low"
-        )
+        is_low_conf = rc.get("confidence_label") == "low" or cc.get("confidence_label") == "low"
         if is_low_conf and abs(seg_delta) > 3.0:
             continue
         _corner_seg_deltas[cid] = seg_delta
     _TOP_CORNER_COUNT = 5
     top_corner_ids = {
-        cid for cid, _ in sorted(
-            _corner_seg_deltas.items(), key=lambda item: item[1], reverse=True
-        )[:_TOP_CORNER_COUNT]
+        cid for cid, _ in sorted(_corner_seg_deltas.items(), key=lambda item: item[1], reverse=True)[:_TOP_CORNER_COUNT]
     }
     # Only truncate when ranking produced data and there are more corners
     # than the cutoff; otherwise emit full breakdowns for everything.
@@ -115,10 +109,7 @@ def build_corner_sections(
             continue
 
         if truncate_corners and cid not in top_corner_ids:
-            _seg = (
-                corner_segment_time(comparison_corner, hz) -
-                corner_segment_time(reference_corner, hz)
-            )
+            _seg = corner_segment_time(comparison_corner, hz) - corner_segment_time(reference_corner, hz)
             _apex_d = comparison_corner["apex_speed"] - reference_corner["apex_speed"]
             compact_corner_lines.append(
                 f"  C{cid} {name}: apex {reference_corner['apex_speed']:.1f} vs "
@@ -131,7 +122,9 @@ def build_corner_sections(
         worst_apex_lap_num, _ = min(corners_for_lap, key=lambda item: item[1]["apex_speed"])
 
         lines.append(f"--- {name} (Corner {cid}) ---")
-        lines.append(f"  Apex speed range: {variation:.1f} km/h (spread: {variation:.1f} km/h)  {variation_label(variation)}")
+        lines.append(
+            f"  Apex speed range: {variation:.1f} km/h (spread: {variation:.1f} km/h)  {variation_label(variation)}"
+        )
         if variation > 5.0:
             lines.append(f"  >> INCONSISTENT APEX SPEED: {variation:.1f} km/h spread across laps")
 
@@ -144,14 +137,8 @@ def build_corner_sections(
         apex_delta = comparison_corner["apex_speed"] - reference_corner["apex_speed"]
         exit_delta = comparison_corner["exit_speed"] - reference_corner["exit_speed"]
 
-        lines.append(
-            f"  Reference lap: Lap {reference_lap_num}  "
-            f"{corner_segment_time(reference_corner, hz):.2f}s"
-        )
-        lines.append(
-            f"  Compare lap:   Lap {comparison_lap_num}  "
-            f"{corner_segment_time(comparison_corner, hz):.2f}s"
-        )
+        lines.append(f"  Reference lap: Lap {reference_lap_num}  {corner_segment_time(reference_corner, hz):.2f}s")
+        lines.append(f"  Compare lap:   Lap {comparison_lap_num}  {corner_segment_time(comparison_corner, hz):.2f}s")
         lines.append(
             f"  Entry  -- Lap {reference_lap_num}: {reference_corner['entry_speed']:.1f}  |  "
             f"Lap {comparison_lap_num}: {comparison_corner['entry_speed']:.1f}  |  "
@@ -168,13 +155,9 @@ def build_corner_sections(
             f"D {exit_delta:+.1f} km/h"
         )
 
-        seg_delta = (
-            corner_segment_time(comparison_corner, hz) -
-            corner_segment_time(reference_corner, hz)
-        )
+        seg_delta = corner_segment_time(comparison_corner, hz) - corner_segment_time(reference_corner, hz)
         is_low_conf = (
-            reference_corner.get("confidence_label") == "low" or
-            comparison_corner.get("confidence_label") == "low"
+            reference_corner.get("confidence_label") == "low" or comparison_corner.get("confidence_label") == "low"
         )
         if is_low_conf and abs(seg_delta) > 3.0:
             lines.append(f"  Segment delta (compare - ref): {seg_delta:+.2f}s  >> SUSPECT")
@@ -202,10 +185,7 @@ def build_corner_sections(
                 f"{format_car_state(fastest_apex_st)} | "
                 f"{format_car_state(fastest_exit)}"
             )
-            lines.append(
-                f"    Balance hint @apex (Lap {reference_lap_num}): "
-                f"{balance_hint(fastest_apex_st)}"
-            )
+            lines.append(f"    Balance hint @apex (Lap {reference_lap_num}): {balance_hint(fastest_apex_st)}")
 
         slowest_entry = comparison_corner.get("entry_state")
         slowest_apex_st = comparison_corner.get("apex_state")
@@ -217,13 +197,10 @@ def build_corner_sections(
                 f"{format_car_state(slowest_apex_st)} | "
                 f"{format_car_state(slowest_exit)}"
             )
-            lines.append(
-                f"    Balance hint @apex (Lap {comparison_lap_num}): "
-                f"{balance_hint(slowest_apex_st)}"
-            )
+            lines.append(f"    Balance hint @apex (Lap {comparison_lap_num}): {balance_hint(slowest_apex_st)}")
 
         # ── Steering smoothness per corner (1.4)
-        _steer_data: Dict[int, List[Dict[str, Any]]] = {}
+        _steer_data: Dict[int, List[Dict[str, Any]]] = {}  # noqa: F821
         for lap in laps:
             corner = lap_corner_map[lap["lap_num"]].get(cid)
             if corner:
@@ -243,7 +220,7 @@ def build_corner_sections(
                     )
 
         # ── Throttle exit profile per corner (1.5)
-        _throttle_data: Dict[int, List[Dict[str, Any]]] = {}
+        _throttle_data: Dict[int, List[Dict[str, Any]]] = {}  # noqa: F821
         for lap in laps:
             corner = lap_corner_map[lap["lap_num"]].get(cid)
             if corner:
@@ -254,7 +231,9 @@ def build_corner_sections(
             lines.append("  Throttle exit profile:")
             for ln, te_list in sorted(_throttle_data.items()):
                 for _te in te_list:
-                    _tfull = f"{_te['time_to_full_throttle']:.2f}s" if _te["time_to_full_throttle"] is not None else "never"
+                    _tfull = (
+                        f"{_te['time_to_full_throttle']:.2f}s" if _te["time_to_full_throttle"] is not None else "never"
+                    )
                     _mod_flag = ""
                     if _te["modulation_count"] > 3:
                         _mod_flag = "  >> MODULATED THROTTLE"
@@ -280,13 +259,10 @@ def build_straight_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
     best_lap = ctx.best_lap
-    assert best_lap is not None
+    assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
-    corner_speeds = ctx.corner_speeds
-    analysis_confidence = ctx.analysis_confidence
     reference_lap_num = ctx.reference_lap_num
     comparison_lap_num = ctx.comparison_lap_num
     hz = ctx.hz
@@ -354,8 +330,7 @@ def build_straight_sections(
             _entry_d = (_cmp_entry_next - _ref_entry_next) if _cmp_entry_next is not None else 0.0
             if abs(_exit_d) > 2.0 or abs(_entry_d) > 2.0:
                 _correlation_lines.append(
-                    f"  {name_a} → {name_b}: "
-                    f"exit D {_exit_d:+.1f} km/h → entry D {_entry_d:+.1f} km/h"
+                    f"  {name_a} → {name_b}: exit D {_exit_d:+.1f} km/h → entry D {_entry_d:+.1f} km/h"
                 )
     if _correlation_lines:
         lines.append("EXIT-TO-ENTRY CORRELATION (corner exit impact on next corner):")
@@ -368,9 +343,7 @@ def build_straight_sections(
     for lap in laps:
         _total_coast_frames = 0
         for corner in lap.get("corners", []):
-            _phases = analyze_corner_phases(
-                lap["track"], corner, lap["start_frame"], hz
-            )
+            _phases = analyze_corner_phases(lap["track"], corner, lap["start_frame"], hz)
             if _phases:
                 _total_coast_frames += _phases["coast_frames"]
         _total_coast_s = _total_coast_frames / hz if hz > 0 else 0.0
@@ -385,11 +358,11 @@ def build_straight_sections(
         lines.append("(coasting = neither brake nor gas near apex; pure time loss)")
         lines.extend(_coast_lines)
         _best_coast = min(
-            (float(l.split(":")[1].split("s")[0].strip()) for l in _coast_lines),
+            (float(l.split(":")[1].split("s")[0].strip()) for l in _coast_lines),  # noqa: E741
             default=0.0,
         )
         _worst_coast = max(
-            (float(l.split(":")[1].split("s")[0].strip()) for l in _coast_lines),
+            (float(l.split(":")[1].split("s")[0].strip()) for l in _coast_lines),  # noqa: E741
             default=0.0,
         )
         if _worst_coast - _best_coast > 0.3:
@@ -406,13 +379,10 @@ def build_braking_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
     best_lap = ctx.best_lap
-    assert best_lap is not None
+    assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
-    corner_speeds = ctx.corner_speeds
-    analysis_confidence = ctx.analysis_confidence
     reference_lap_num = ctx.reference_lap_num
     comparison_lap_num = ctx.comparison_lap_num
     hz = ctx.hz
@@ -433,9 +403,7 @@ def build_braking_sections(
             corner = lap_corner_map[lap["lap_num"]].get(cid)
             if not corner:
                 continue
-            phases = analyze_corner_phases(
-                lap["track"], corner, lap["start_frame"], hz
-            )
+            phases = analyze_corner_phases(lap["track"], corner, lap["start_frame"], hz)
             if phases:
                 _total_phase_rows += 1
                 if phases["brake_onset_dt"] is None:
@@ -465,9 +433,7 @@ def build_braking_sections(
             corner = lap_corner_map[lap["lap_num"]].get(cid)
             if not corner:
                 continue
-            phases = analyze_corner_phases(
-                lap["track"], corner, lap["start_frame"], hz
-            )
+            phases = analyze_corner_phases(lap["track"], corner, lap["start_frame"], hz)
             if phases:
                 phase_data_per_lap.append((lap["lap_num"], phases))
 
@@ -523,7 +489,9 @@ def build_braking_sections(
                         hints.append(f"compare lap trail brakes {abs(tb_diff):.0%} MORE into corner")
                 # Coasting comparison
                 if slow_ph["coast_frames"] > fast_ph["coast_frames"] + 2:
-                    hints.append(f"compare lap coasts {slow_ph['coast_frames'] - fast_ph['coast_frames']} more frames near apex")
+                    hints.append(
+                        f"compare lap coasts {slow_ph['coast_frames'] - fast_ph['coast_frames']} more frames near apex"
+                    )
                 # Peak brake G comparison
                 g_diff = fast_ph["peak_brake_g"] - slow_ph["peak_brake_g"]
                 if abs(g_diff) > 0.15:
@@ -544,15 +512,10 @@ def build_grip_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
     best_lap = ctx.best_lap
-    assert best_lap is not None
+    assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
-    corner_speeds = ctx.corner_speeds
-    analysis_confidence = ctx.analysis_confidence
-    reference_lap_num = ctx.reference_lap_num
-    comparison_lap_num = ctx.comparison_lap_num
     hz = ctx.hz
     lines: List[str] = []
     # ── Tyre grip-degradation across the stint
@@ -590,9 +553,7 @@ def build_grip_sections(
             lines.append(f"  >> {flag}")
 
         if len(deg_per_lap) < 3:
-            lines.append(
-                "  (Need at least 3 laps to detect a stint trend; current sample is short.)"
-            )
+            lines.append("  (Need at least 3 laps to detect a stint trend; current sample is short.)")
 
         lines.append("")
 
@@ -653,11 +614,15 @@ def build_grip_sections(
 
         flags = []
         if session_peak_g > 0.5 and avg_peak < session_peak_g * 0.75:
-            flags.append(f"UNDERUTILIZED: peak G only {avg_peak:.2f} vs session max {session_peak_g:.2f} -- driver has more grip available")
+            flags.append(
+                f"UNDERUTILIZED: peak G only {avg_peak:.2f} vs session max {session_peak_g:.2f} -- driver has more grip available"  # noqa: E501
+            )
         if avg_fill < 55:
             flags.append(f"LOW GRIP FILL ({avg_fill:.0f}%) -- coasting or not loading tires through the corner")
         if avg_combined < 30 and any(g["peak_long_g"] > 0.5 for _, g in grip_per_lap):
-            flags.append(f"LOW COMBINED BRAKING ({avg_combined:.0f}%) -- not trail braking effectively into this corner")
+            flags.append(
+                f"LOW COMBINED BRAKING ({avg_combined:.0f}%) -- not trail braking effectively into this corner"
+            )
 
         for flag in flags:
             lines.append(f"    >> {flag}")
@@ -670,13 +635,10 @@ def build_time_loss_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
     best_lap = ctx.best_lap
-    assert best_lap is not None
+    assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
-    corner_speeds = ctx.corner_speeds
-    analysis_confidence = ctx.analysis_confidence
     reference_lap_num = ctx.reference_lap_num
     comparison_lap_num = ctx.comparison_lap_num
     hz = ctx.hz
@@ -724,7 +686,9 @@ def build_time_loss_sections(
             if _best_seg is None or _bl_seg is None:
                 continue
             _gap = _corner_gaps.get(cid, 0.0)
-            lines.append(f"    C{cid} {name}: best segment {_best_seg:.2f}s  |  best lap segment {_bl_seg:.2f}s  |  gap {_gap:+.2f}s")
+            lines.append(
+                f"    C{cid} {name}: best segment {_best_seg:.2f}s  |  best lap segment {_bl_seg:.2f}s  |  gap {_gap:+.2f}s"  # noqa: E501
+            )
         lines.append("")
 
     # ── Time-loss ranking (cap implausible deltas that are capture artifacts)
@@ -744,10 +708,7 @@ def build_time_loss_sections(
         cmp_corner = lap_corner_map.get(comparison_lap_num, {}).get(cid)
         if ref_corner and cmp_corner:
             delta = corner_segment_time(cmp_corner, hz) - corner_segment_time(ref_corner, hz)
-            is_low_conf = (
-                ref_corner.get("confidence_label") == "low" or
-                cmp_corner.get("confidence_label") == "low"
-            )
+            is_low_conf = ref_corner.get("confidence_label") == "low" or cmp_corner.get("confidence_label") == "low"
             if is_low_conf and abs(delta) > _SUSPECT_SEGMENT_DELTA:
                 suspect_corners.append(spec.get("name") or f"Corner {cid}")
                 delta = max(-_SUSPECT_SEGMENT_DELTA, min(_SUSPECT_SEGMENT_DELTA, delta))
@@ -756,7 +717,7 @@ def build_time_loss_sections(
                 delta = max(-_MAX_PLAUSIBLE_SEGMENT_DELTA, min(_MAX_PLAUSIBLE_SEGMENT_DELTA, delta))
             ranked.append((delta, spec.get("name") or f"Corner {cid}", cid))
     ranked.sort(reverse=True)
-    for delta, name, cid in ranked:
+    for delta, name, cid in ranked:  # noqa: B007
         lines.append(f"  {name:<30} {delta:+.2f}s")
     if suspect_corners:
         lines.append(

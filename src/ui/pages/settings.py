@@ -19,7 +19,7 @@ from ..components.mount_safe import mounted_page, safe_update
 class SettingsPage(ft.Container):
     """
     Settings page for configuring the application.
-    
+
     Note: No API key field - authentication uses signed payloads with
     an embedded app secret.
     """
@@ -322,9 +322,7 @@ class SettingsPage(ft.Container):
 
     def _discord_enabled_changed(self, e) -> None:
         """Keep the Discord-only PB filter inactive when posting is off."""
-        self._discord_pb_only_switch.disabled = not bool(
-            self._discord_enabled_switch.value
-        )
+        self._discord_pb_only_switch.disabled = not bool(self._discord_enabled_switch.value)
         safe_update(self._discord_pb_only_switch)
 
     async def _test_connection(self, e):
@@ -334,9 +332,7 @@ class SettingsPage(ft.Container):
         safe_update(self._connection_status)
 
         if self.on_test_connection:
-            success, message = await self.on_test_connection(
-                self._server_url_field.value
-            )
+            success, message = await self.on_test_connection(self._server_url_field.value)
             if success:
                 self._connection_status.value = "Connected"
                 self._connection_status.color = "#51cf66"

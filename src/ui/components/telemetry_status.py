@@ -14,6 +14,7 @@ from .mount_safe import safe_update
 
 class TelemetryStatus(Enum):
     """Telemetry status states."""
+
     IDLE = "idle"
     CAPTURING = "capturing"
     ANALYZING = "analyzing"

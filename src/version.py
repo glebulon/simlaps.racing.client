@@ -34,4 +34,3 @@ def get_version() -> str:
 def get_version_tuple() -> tuple[int, int, int]:
     """Get version as tuple for comparison."""
     return (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH)
-

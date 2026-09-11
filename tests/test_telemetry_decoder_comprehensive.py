@@ -48,7 +48,7 @@ class TestBinaryReader:
 
     def test_binary_reader_initialization(self):
         """Test BinaryReader initialization."""
-        data = b'\x00\x01\x02\x03'
+        data = b"\x00\x01\x02\x03"
         reader = R(data)
 
         assert reader._b is not None
@@ -57,7 +57,7 @@ class TestBinaryReader:
     def test_binary_reader_read_float(self):
         """Test reading float from binary data."""
         # Pack a float: 3.14
-        data = struct.pack('<f', 3.14)
+        data = struct.pack("<f", 3.14)
         reader = R(data)
 
         result = reader.f()
@@ -66,7 +66,7 @@ class TestBinaryReader:
 
     def test_binary_reader_read_int(self):
         """Test reading int from binary data."""
-        data = struct.pack('<i', 42)
+        data = struct.pack("<i", 42)
         reader = R(data)
 
         result = reader.i()
@@ -76,7 +76,7 @@ class TestBinaryReader:
     def test_binary_reader_read_coords(self):
         """Test reading Coords from binary data."""
         # Pack three floats for x, y, z
-        data = struct.pack('<fff', 1.0, 2.0, 3.0)
+        data = struct.pack("<fff", 1.0, 2.0, 3.0)
         reader = R(data)
 
         result = reader.coords()
@@ -87,7 +87,7 @@ class TestBinaryReader:
 
     def test_binary_reader_read_float_array(self):
         """Test reading float array from binary data."""
-        data = struct.pack('<ffff', 1.0, 2.0, 3.0, 4.0)
+        data = struct.pack("<ffff", 1.0, 2.0, 3.0, 4.0)
         reader = R(data)
 
         result = reader.fa(4)
@@ -100,16 +100,16 @@ class TestBinaryReader:
         """Test reading string from binary data."""
         test_str = "Hello"
         # R class uses utf-16-le encoding
-        data = test_str.encode('utf-16-le') + b'\x00' * (100 - len(test_str.encode('utf-16-le')))
+        data = test_str.encode("utf-16-le") + b"\x00" * (100 - len(test_str.encode("utf-16-le")))
         reader = R(data)
 
         result = reader.s(5)  # Read 5 characters
 
-        assert test_str in result or result.strip('\x00') == test_str
+        assert test_str in result or result.strip("\x00") == test_str
 
     def test_binary_reader_skip(self):
         """Test skipping bytes in binary data."""
-        data = b'\x00\x01\x02\x03\x04\x05'
+        data = b"\x00\x01\x02\x03\x04\x05"
         reader = R(data)
 
         reader.skip(2)
@@ -119,7 +119,7 @@ class TestBinaryReader:
     def test_binary_reader_coords_list(self):
         """Test reading list of Coords."""
         # Pack 4 sets of coords (12 floats total)
-        data = struct.pack('<' + 'f' * 12, *[float(i) for i in range(12)])
+        data = struct.pack("<" + "f" * 12, *[float(i) for i in range(12)])
         reader = R(data)
 
         result = reader.coords_list(4)
@@ -135,7 +135,7 @@ class TestPhysicsFallbackDecoder:
     def test_decode_physics_fallback_basic(self):
         """Test fallback decoder with basic data."""
         # Create some test data with recognizable float values
-        data = struct.pack('<fff', 3.14, 2.71, 1.41)
+        data = struct.pack("<fff", 3.14, 2.71, 1.41)
 
         result = decode_physics_fallback(data)
 
@@ -147,14 +147,14 @@ class TestPhysicsFallbackDecoder:
 
     def test_decode_physics_fallback_empty(self):
         """Test fallback decoder with empty data."""
-        result = decode_physics_fallback(b'')
+        result = decode_physics_fallback(b"")
 
         assert result["_decoder"] == "fallback"
         assert result["size"] == 0
 
     def test_decode_physics_fallback_large_data(self):
         """Test fallback decoder with data larger than 200 bytes."""
-        data = b'\x00' * 300
+        data = b"\x00" * 300
 
         result = decode_physics_fallback(data)
 
@@ -168,7 +168,7 @@ class TestGraphicsFallbackDecoder:
 
     def test_decode_graphics_fallback_basic(self):
         """Test graphics fallback with basic data."""
-        data = b'Hello World' + b'\x00' * 50
+        data = b"Hello World" + b"\x00" * 50
 
         result = decode_graphics_fallback(data)
 
@@ -179,7 +179,7 @@ class TestGraphicsFallbackDecoder:
 
     def test_decode_graphics_fallback_empty(self):
         """Test graphics fallback with empty data."""
-        result = decode_graphics_fallback(b'')
+        result = decode_graphics_fallback(b"")
 
         assert result["_decoder"] == "fallback"
         assert result["size"] == 0
@@ -190,7 +190,7 @@ class TestStaticFallbackDecoder:
 
     def test_decode_static_fallback_basic(self):
         """Test static fallback with basic data."""
-        data = b'Hello World'
+        data = b"Hello World"
 
         result = decode_static_fallback(data)
 
@@ -201,7 +201,7 @@ class TestStaticFallbackDecoder:
 
     def test_decode_static_fallback_empty(self):
         """Test static fallback with empty data."""
-        result = decode_static_fallback(b'')
+        result = decode_static_fallback(b"")
 
         assert result["_decoder"] == "fallback"
         assert result["size"] == 0
@@ -277,9 +277,9 @@ class TestPhysicsToDict:
             tyre_temp_m=[80.0, 80.0, 80.0, 80.0],
             tyre_temp_o=[80.0, 80.0, 80.0, 80.0],
             is_ai_controlled=False,
-            tyre_contact_point=[Coords(0,0,0), Coords(0,0,0), Coords(0,0,0), Coords(0,0,0)],
-            tyre_contact_normal=[Coords(0,0,0), Coords(0,0,0), Coords(0,0,0), Coords(0,0,0)],
-            tyre_contact_heading=[Coords(0,0,0), Coords(0,0,0), Coords(0,0,0), Coords(0,0,0)],
+            tyre_contact_point=[Coords(0, 0, 0), Coords(0, 0, 0), Coords(0, 0, 0), Coords(0, 0, 0)],
+            tyre_contact_normal=[Coords(0, 0, 0), Coords(0, 0, 0), Coords(0, 0, 0), Coords(0, 0, 0)],
+            tyre_contact_heading=[Coords(0, 0, 0), Coords(0, 0, 0), Coords(0, 0, 0), Coords(0, 0, 0)],
             brake_bias=0.5,
             local_velocity=Coords(x=0.0, y=0.0, z=0.0),
             # AC Evo precision fields
@@ -324,14 +324,12 @@ class TestPhysicsToDict:
         assert "error" in result
 
 
-
-
 class TestACPhysicsDecoder:
     """Test AC/ACC physics structure decoder."""
 
     def test_decode_physics_ac_with_invalid_data(self):
         """Test AC decoder with invalid/short data."""
-        data = b'\x00' * 100  # Too short for AC physics
+        data = b"\x00" * 100  # Too short for AC physics
 
         result = decode_physics_ac(data)
 
@@ -339,7 +337,7 @@ class TestACPhysicsDecoder:
 
     def test_decode_physics_ac_with_empty_data(self):
         """Test AC decoder with empty data."""
-        result = decode_physics_ac(b'')
+        result = decode_physics_ac(b"")
 
         assert result is None
 
@@ -350,7 +348,7 @@ class TestDecodePhysics:
     def test_decode_physics_with_valid_structure(self):
         """Test decode_physics returns properly formatted result."""
         # Create minimal data that will trigger fallback
-        data = struct.pack('<fff', 100.0, 0.5, 3.0)  # speed, gas, brake
+        data = struct.pack("<fff", 100.0, 0.5, 3.0)  # speed, gas, brake
 
         result = decode_physics(data)
 
@@ -359,7 +357,7 @@ class TestDecodePhysics:
 
     def test_decode_physics_with_empty_data(self):
         """Test decode_physics with empty data."""
-        result = decode_physics(b'')
+        result = decode_physics(b"")
 
         assert isinstance(result, dict)
         assert result["size"] == 0

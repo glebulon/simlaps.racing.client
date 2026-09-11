@@ -44,7 +44,7 @@ def get_venv_executable(name: str) -> str:
 
 # Import version from source
 sys.path.insert(0, str(REPO_ROOT / "src"))
-from version import VERSION
+from version import VERSION  # noqa: E402
 
 # Configuration
 APP_NAME = "SimLapsClient"
@@ -62,7 +62,7 @@ SECURITY_FILE = REPO_ROOT / "src" / "core" / "security.py"
 # Build-time embedded secret: generated Cython module compiled to a native
 # extension so release artifacts carry no plaintext credential.
 SECRET_STAGE_DIR = BUILD_DIR / "secret_stage"
-EMBEDDED_SECRET_MODULE = "_embedded_secret"
+EMBEDDED_SECRET_MODULE = "_embedded_secret"  # noqa: S105
 PLACEHOLDER_SECRETS = frozenset({"blahtopsecret"})
 
 
@@ -79,9 +79,7 @@ def _validate_cleanup_target(path: Path, allowed_root: Path) -> Path:
     try:
         lexical.relative_to(root)
     except ValueError as exc:
-        raise RuntimeError(
-            f"Refusing to clean path outside {root}: {candidate}"
-        ) from exc
+        raise RuntimeError(f"Refusing to clean path outside {root}: {candidate}") from exc
 
     if candidate.is_symlink():
         return candidate
@@ -89,9 +87,7 @@ def _validate_cleanup_target(path: Path, allowed_root: Path) -> Path:
     try:
         candidate.resolve(strict=False).relative_to(root)
     except ValueError as exc:
-        raise RuntimeError(
-            f"Refusing to clean redirected path outside {root}: {candidate}"
-        ) from exc
+        raise RuntimeError(f"Refusing to clean redirected path outside {root}: {candidate}") from exc
     return candidate
 
 
@@ -128,18 +124,13 @@ def _clean_cached_files() -> None:
         "venv-sim-laps-client",
         "venv.bak",
     }
-    for current_root, dir_names, file_names in os.walk(
-        REPO_ROOT, topdown=True, followlinks=False
-    ):
+    for current_root, dir_names, file_names in os.walk(REPO_ROOT, topdown=True, followlinks=False):
         current = Path(current_root)
         retained_dirs = []
         for name in dir_names:
             child = current / name
             relative_child = child.relative_to(REPO_ROOT)
-            if (
-                name in skipped_names
-                or relative_child == Path("tests") / "output"
-            ):
+            if name in skipped_names or relative_child == Path("tests") / "output":
                 continue
             if child.is_symlink() or _is_virtual_environment(child):
                 continue
@@ -210,7 +201,9 @@ def check_dependencies():
                 # Invoke via python -m for reliability.
                 result = subprocess.run(
                     [sys.executable, "-m", "pyarmor.cli", "--version"],
-                    capture_output=True, text=True, cwd=REPO_ROOT,
+                    capture_output=True,
+                    text=True,
+                    cwd=REPO_ROOT,
                 )
                 if result.returncode != 0:
                     missing.append(package)
@@ -249,7 +242,7 @@ def generate_secret_module_source(secret: str) -> str:
     """Generate Cython source that reconstructs *secret* from XOR pads."""
     data = secret.encode("utf-8")
     pad_a = secrets.token_bytes(len(data))
-    pad_b = bytes(a ^ b for a, b in zip(pad_a, data))
+    pad_b = bytes(a ^ b for a, b in zip(pad_a, data, strict=False))
 
     def fmt(raw: bytes) -> str:
         return "".join(f"\\x{byte:02x}" for byte in raw)
@@ -275,9 +268,7 @@ def stage_embedded_secret() -> bool:
 
     stage_dir = Path(SECRET_STAGE_DIR)
     stage_dir.mkdir(parents=True, exist_ok=True)
-    (stage_dir / f"{EMBEDDED_SECRET_MODULE}.pyx").write_text(
-        generate_secret_module_source(secret), encoding="utf-8"
-    )
+    (stage_dir / f"{EMBEDDED_SECRET_MODULE}.pyx").write_text(generate_secret_module_source(secret), encoding="utf-8")
     (stage_dir / "setup.py").write_text(
         "from setuptools import Extension, setup\n"
         "from Cython.Build import cythonize\n"
@@ -318,16 +309,21 @@ def obfuscate_source():
     # PyArmor obfuscation command (using free features only)
     # Invoke via python -m pyarmor.cli for venv-path resilience
     cmd = [
-        sys.executable, "-m", "pyarmor.cli",
+        sys.executable,
+        "-m",
+        "pyarmor.cli",
         "gen",
-        "--output", OBFUSCATED_DIR,
-        "--obf-code", "1",  # Obfuscate each function code object (free tier)
-        "--obf-module", "1",  # Obfuscate whole module code (free tier)
+        "--output",
+        OBFUSCATED_DIR,
+        "--obf-code",
+        "1",  # Obfuscate each function code object (free tier)
+        "--obf-module",
+        "1",  # Obfuscate whole module code (free tier)
         *(REPO_ROOT / path for path in files_to_obfuscate),
     ]
 
     print(f"  Running: pyarmor gen --output {OBFUSCATED_DIR} ...")
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)  # noqa: S603
 
     if result.returncode != 0:
         print(f"  PyArmor error: {result.stderr}")
@@ -340,16 +336,17 @@ def obfuscate_source():
 
             # Try with minimal arguments
             simple_cmd = [
-                sys.executable, "-m", "pyarmor.cli",
+                sys.executable,
+                "-m",
+                "pyarmor.cli",
                 "gen",
-                "--output", OBFUSCATED_DIR,
+                "--output",
+                OBFUSCATED_DIR,
                 *(REPO_ROOT / path for path in files_to_obfuscate),
             ]
 
             print(f"  Running: pyarmor gen --output {OBFUSCATED_DIR} ...")
-            result = subprocess.run(
-                simple_cmd, capture_output=True, text=True, cwd=REPO_ROOT
-            )
+            result = subprocess.run(simple_cmd, capture_output=True, text=True, cwd=REPO_ROOT)  # noqa: S603
 
             if result.returncode != 0:
                 print(f"  Simple PyArmor also failed: {result.stderr}")
@@ -381,7 +378,8 @@ def build_executable():
         pyinstaller_exe,
         "--onefile",
         "--windowed",  # No console window (GUI app)
-        "--name", APP_NAME,
+        "--name",
+        APP_NAME,
         "--clean",
         "--noconfirm",
     ]
@@ -401,10 +399,12 @@ def build_executable():
     # libraries from the frozen application's extraction directory.
     analyzer_vendor_path = REPO_ROOT / "src" / "core" / "analyzer" / "vendor"
     if analyzer_vendor_path.is_dir():
-        cmd.extend([
-            "--add-data",
-            f"{analyzer_vendor_path};src/core/analyzer/vendor",
-        ])
+        cmd.extend(
+            [
+                "--add-data",
+                f"{analyzer_vendor_path};src/core/analyzer/vendor",
+            ]
+        )
 
     # Never bundle .env as data. The credential is supplied by the compiled
     # native extension staged by main().
@@ -454,22 +454,38 @@ def build_executable():
 
     # Add data files for Flet
     # Flet requires its runtime files and desktop app to be included
-    cmd.extend([
-        "--collect-all", "flet",
-        "--collect-all", "flet_core",
-        "--collect-all", "flet_runtime",
-        "--collect-all", "flet_desktop",
-        "--collect-binaries", "flet",
-        "--collect-binaries", "flet_runtime",
-        "--collect-binaries", "flet_desktop",
-        "--collect-data", "flet",
-        "--collect-data", "flet_runtime",
-        "--collect-data", "flet_desktop",
-        "--collect-all", "src",
-        "--collect-all", "src.core",
-        "--collect-all", "src.ui",
-        "--collect-all", "src.utils",
-    ])
+    cmd.extend(
+        [
+            "--collect-all",
+            "flet",
+            "--collect-all",
+            "flet_core",
+            "--collect-all",
+            "flet_runtime",
+            "--collect-all",
+            "flet_desktop",
+            "--collect-binaries",
+            "flet",
+            "--collect-binaries",
+            "flet_runtime",
+            "--collect-binaries",
+            "flet_desktop",
+            "--collect-data",
+            "flet",
+            "--collect-data",
+            "flet_runtime",
+            "--collect-data",
+            "flet_desktop",
+            "--collect-all",
+            "src",
+            "--collect-all",
+            "src.core",
+            "--collect-all",
+            "src.ui",
+            "--collect-all",
+            "src.utils",
+        ]
+    )
 
     # Add obfuscated src directory first so it shadows the plain sources.
     if OBFUSCATED_DIR.exists():
@@ -477,18 +493,24 @@ def build_executable():
 
     # Add the source and artifact paths so imports and outputs remain rooted
     # at the repository even when called from another CWD.
-    cmd.extend([
-        "--distpath", str(DIST_DIR),
-        "--workpath", str(BUILD_DIR),
-        "--specpath", str(REPO_ROOT),
-        "--paths", str(src_dir),
-    ])
+    cmd.extend(
+        [
+            "--distpath",
+            str(DIST_DIR),
+            "--workpath",
+            str(BUILD_DIR),
+            "--specpath",
+            str(REPO_ROOT),
+            "--paths",
+            str(src_dir),
+        ]
+    )
 
     # Add entry point
     cmd.append(str(entry))
 
     print(f"  Running: {' '.join(cmd[:10])}...")
-    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
+    result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)  # noqa: S603
 
     if result.returncode != 0:
         print(f"  PyInstaller error: {result.stderr}")
@@ -510,7 +532,7 @@ def create_spec_file():
     """Create a PyInstaller spec file for more control."""
     entry_point = repr(str(ENTRY_POINT))
     icon_path = repr(str(ICON_PATH)) if ICON_PATH.exists() else "None"
-    spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
+    spec_content = f"""# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
@@ -521,7 +543,7 @@ a = Analysis(
     datas=[],
     hiddenimports=[
         'flet',
-        'flet_core', 
+        'flet_core',
         'flet_runtime',
         'httpx',
         'httpcore',
@@ -566,7 +588,7 @@ exe = EXE(
     entitlements_file=None,
     icon={icon_path},
 )
-'''
+"""
 
     spec_path = REPO_ROOT / f"{APP_NAME}.spec"
     with open(spec_path, "w", encoding="utf-8") as f:
@@ -581,7 +603,9 @@ def main():
     parser = argparse.ArgumentParser(description="Build SimLaps Client")
     parser.add_argument("--clean", action="store_true", help="Clean build artifacts")
     parser.add_argument("--spec", action="store_true", help="Create spec file only")
-    parser.add_argument("--no-obfuscate", action="store_true", help="Build without PyArmor obfuscation (faster, for testing)")
+    parser.add_argument(
+        "--no-obfuscate", action="store_true", help="Build without PyArmor obfuscation (faster, for testing)"
+    )
 
     args = parser.parse_args()
 

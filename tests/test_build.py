@@ -38,9 +38,7 @@ def test_clean_from_foreign_cwd_does_not_touch_caller_artifacts(tmp_path):
     isolated_project = tmp_path / "project"
     (isolated_project / "src").mkdir(parents=True)
     (isolated_project / "build.py").write_bytes(BUILD_SCRIPT.read_bytes())
-    (isolated_project / "src" / "version.py").write_bytes(
-        (REPO_ROOT / "src" / "version.py").read_bytes()
-    )
+    (isolated_project / "src" / "version.py").write_bytes((REPO_ROOT / "src" / "version.py").read_bytes())
     caller_root = tmp_path / "caller"
     caller_root.mkdir()
     caller_build = caller_root / "build"
@@ -52,7 +50,7 @@ def test_clean_from_foreign_cwd_does_not_touch_caller_artifacts(tmp_path):
     build_sentinel.write_text("keep", encoding="utf-8")
     dist_sentinel.write_text("keep", encoding="utf-8")
 
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: S603
         [sys.executable, str(isolated_project / "build.py"), "--clean"],
         cwd=caller_root,
         capture_output=True,
@@ -65,9 +63,7 @@ def test_clean_from_foreign_cwd_does_not_touch_caller_artifacts(tmp_path):
     assert dist_sentinel.exists()
 
 
-def test_build_command_uses_repository_cwd_and_absolute_paths(
-    tmp_path, build_module, monkeypatch
-):
+def test_build_command_uses_repository_cwd_and_absolute_paths(tmp_path, build_module, monkeypatch):
     calls = []
 
     class FailedBuild:
@@ -97,9 +93,7 @@ def test_build_command_uses_repository_cwd_and_absolute_paths(
     assert "_embedded_secret" in command
 
 
-def test_clean_unlinks_redirected_artifact_without_deleting_target(
-    tmp_path, build_module, monkeypatch
-):
+def test_clean_unlinks_redirected_artifact_without_deleting_target(tmp_path, build_module, monkeypatch):
     fake_repo = tmp_path / "repo"
     fake_repo.mkdir()
     outside = tmp_path / "outside"

@@ -25,12 +25,10 @@ def _read_version_wiring_from_pyproject(pyproject_path: Path) -> tuple[bool, str
             continue
 
         if in_project_section:
-            match = re.match(r'dynamic\s*=\s*\[(.*)\]', line)
+            match = re.match(r"dynamic\s*=\s*\[(.*)\]", line)
             if match:
                 dynamic_entries = [
-                    entry.strip().strip('"').strip("'")
-                    for entry in match.group(1).split(",")
-                    if entry.strip()
+                    entry.strip().strip('"').strip("'") for entry in match.group(1).split(",") if entry.strip()
                 ]
                 project_uses_dynamic_version = "version" in dynamic_entries
 

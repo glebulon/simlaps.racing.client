@@ -23,8 +23,9 @@ from src.core.telemetry_capture import FrameData
 from src.models import SharedSessionManager
 
 
-def create_mock_frame(frame_num: int, speed: float = 100.0, position: float = 0.0,
-                       last_lap_time_ms: int = None) -> FrameData:
+def create_mock_frame(
+    frame_num: int, speed: float = 100.0, position: float = 0.0, last_lap_time_ms: int = None
+) -> FrameData:
     """Create a mock telemetry frame for testing.
 
     Progress data is placed in ``graphics`` (the authoritative source).
@@ -131,9 +132,8 @@ class TestDetectLaps:
         """Test lap detection using SHM timing state (last_lap_time_ms changes)."""
         frames = []
         for lap in range(3):
-            for i in range(100):
-                frames.append(create_mock_frame(len(frames), speed=100.0, position=0.5,
-                                                last_lap_time_ms=lap * 90000))
+            for _i in range(100):
+                frames.append(create_mock_frame(len(frames), speed=100.0, position=0.5, last_lap_time_ms=lap * 90000))
 
         track = build_track(frames, hz=10.0)
         lap_bounds = detect_laps(track, hz=10.0)
@@ -260,7 +260,7 @@ class TestCornerDetection:
                 {"id": 1, "start": 0.20, "end": 0.30, "name": "Corner 1"},
                 {"id": 2, "start": 0.45, "end": 0.55, "name": "Corner 2"},
                 {"id": 3, "start": 0.70, "end": 0.80, "name": "Corner 3"},
-            ]
+            ],
         }
 
         corners = detect_profiled_corners(track, 0, 200, track_profile, hz=10.0)
@@ -450,17 +450,17 @@ class TestHelperFunctions:
 
     def test_sanitize_slip_infinity(self):
         """_sanitize_slip returns 0.0 for positive infinity."""
-        result = _sanitize_slip(float('inf'))
+        result = _sanitize_slip(float("inf"))
         assert result == 0.0
 
     def test_sanitize_slip_negative_infinity(self):
         """_sanitize_slip returns 0.0 for negative infinity."""
-        result = _sanitize_slip(float('-inf'))
+        result = _sanitize_slip(float("-inf"))
         assert result == 0.0
 
     def test_sanitize_slip_nan(self):
         """_sanitize_slip returns 0.0 for NaN."""
-        result = _sanitize_slip(float('nan'))
+        result = _sanitize_slip(float("nan"))
         assert result == 0.0
 
 
@@ -513,6 +513,7 @@ class TestExtractCarState:
         }
 
         from src.core.telemetry_analyzer import extract_car_state
+
         state = extract_car_state(pt)
 
         assert state is not None
@@ -525,6 +526,7 @@ class TestExtractCarState:
         pt = {"speed": 100.0, "frame": 0}
 
         from src.core.telemetry_analyzer import extract_car_state
+
         state = extract_car_state(pt)
 
         assert state is not None
@@ -534,6 +536,7 @@ class TestExtractCarState:
     def test_extract_car_state_none(self):
         """Test extracting car state from None."""
         from src.core.telemetry_analyzer import extract_car_state
+
         state = extract_car_state(None)
 
         assert state is None
@@ -804,16 +807,18 @@ class TestAnalyzeCornerPhases:
         track = []
         # Create track with braking before corner
         for i in range(100):
-            track.append({
-                "frame": i,
-                "speed": 150 - i if i < 50 else 100,
-                "brake": 0.5 if 30 <= i < 50 else 0.0,
-                "steer": 0.1 if i >= 50 else 0.0,
-                "gas": 0.0 if i < 70 else 0.5,
-                "acc_g_z": -0.8 if 30 <= i < 50 else 0.0,
-                "x": i * 10,
-                "z": 0,
-            })
+            track.append(
+                {
+                    "frame": i,
+                    "speed": 150 - i if i < 50 else 100,
+                    "brake": 0.5 if 30 <= i < 50 else 0.0,
+                    "steer": 0.1 if i >= 50 else 0.0,
+                    "gas": 0.0 if i < 70 else 0.5,
+                    "acc_g_z": -0.8 if 30 <= i < 50 else 0.0,
+                    "x": i * 10,
+                    "z": 0,
+                }
+            )
 
         corner = {
             "start_frame": 50,
@@ -852,12 +857,14 @@ class TestAnalyzeGripUtilization:
 
         track = []
         for i in range(50):
-            track.append({
-                "frame": i,
-                "acc_g_x": 0.8 if 10 <= i < 30 else 0.1,
-                "acc_g_z": -0.5 if 10 <= i < 20 else 0.0,
-                "brake": 0.5 if 10 <= i < 20 else 0.0,
-            })
+            track.append(
+                {
+                    "frame": i,
+                    "acc_g_x": 0.8 if 10 <= i < 30 else 0.1,
+                    "acc_g_z": -0.5 if 10 <= i < 20 else 0.0,
+                    "brake": 0.5 if 10 <= i < 20 else 0.0,
+                }
+            )
 
         corner = {"start_frame": 10, "end_frame": 40}
 
@@ -950,14 +957,22 @@ class TestTyreGripDegradation:
         wear_per_wheel = end_wear / 100.0  # tyre_wear is 0..1, the analyzer scales by 100
 
         common_tyre = {
-            "tyre_temp_fl": core_temp, "tyre_temp_fr": core_temp,
-            "tyre_temp_rl": core_temp, "tyre_temp_rr": core_temp,
-            "tyre_wear_fl": wear_per_wheel, "tyre_wear_fr": wear_per_wheel,
-            "tyre_wear_rl": wear_per_wheel, "tyre_wear_rr": wear_per_wheel,
-            "tyre_dirty_fl": dirty, "tyre_dirty_fr": dirty,
-            "tyre_dirty_rl": dirty, "tyre_dirty_rr": dirty,
-            "slip_angle_fl": slip_rad, "slip_angle_fr": slip_rad,
-            "slip_angle_rl": slip_rad, "slip_angle_rr": slip_rad,
+            "tyre_temp_fl": core_temp,
+            "tyre_temp_fr": core_temp,
+            "tyre_temp_rl": core_temp,
+            "tyre_temp_rr": core_temp,
+            "tyre_wear_fl": wear_per_wheel,
+            "tyre_wear_fr": wear_per_wheel,
+            "tyre_wear_rl": wear_per_wheel,
+            "tyre_wear_rr": wear_per_wheel,
+            "tyre_dirty_fl": dirty,
+            "tyre_dirty_fr": dirty,
+            "tyre_dirty_rl": dirty,
+            "tyre_dirty_rr": dirty,
+            "slip_angle_fl": slip_rad,
+            "slip_angle_fr": slip_rad,
+            "slip_angle_rl": slip_rad,
+            "slip_angle_rr": slip_rad,
         }
         cornering = {**common_tyre, "acc_g_x": lat_g_peak}
         straight = {**common_tyre, "acc_g_x": 0.0}
@@ -970,9 +985,7 @@ class TestTyreGripDegradation:
         """analyze_lap_tyre_state returns expected per-lap aggregates."""
         from src.core.telemetry_analyzer import analyze_lap_tyre_state
 
-        lap = self._make_lap(
-            1, lat_g_peak=2.1, core_temp=85.0, slip_deg=4.0, end_wear=0.5
-        )
+        lap = self._make_lap(1, lat_g_peak=2.1, core_temp=85.0, slip_deg=4.0, end_wear=0.5)
         state = analyze_lap_tyre_state(lap["track"])
 
         assert state is not None
@@ -1040,10 +1053,7 @@ class TestTyreGripDegradation:
         """No noise-level changes across 3 laps → all trends FLAT, no flags."""
         from src.core.telemetry_analyzer import analyze_tyre_grip_degradation
 
-        laps = [
-            self._make_lap(i, lat_g_peak=2.10, core_temp=82.0, slip_deg=3.0, end_wear=0.20 * i)
-            for i in (1, 2, 3)
-        ]
+        laps = [self._make_lap(i, lat_g_peak=2.10, core_temp=82.0, slip_deg=3.0, end_wear=0.20 * i) for i in (1, 2, 3)]
         result = analyze_tyre_grip_degradation(laps)
 
         assert result["trends"]["peak_lat_g"] == "FLAT"
@@ -1064,18 +1074,18 @@ class TestTelemetryAnalyzer:
 
         # Load the captured startup frames
         frames = []
-        with open('tests/fixtures/sample_telemetry.jsonl', 'r') as f:
+        with open("tests/fixtures/sample_telemetry.jsonl", "r") as f:
             for i, line in enumerate(f):
                 if i >= 50:
                     break
                 frame_json = json.loads(line)
-                physics_raw = bytes.fromhex(frame_json['physics_raw'])
+                physics_raw = bytes.fromhex(frame_json["physics_raw"])
                 decoded = decode_physics(physics_raw)
                 physics_dict = physics_to_dict(decoded)
 
                 frame = FrameData(
-                    timestamp=frame_json['timestamp'],
-                    frame_number=frame_json['frame_number'],
+                    timestamp=frame_json["timestamp"],
+                    frame_number=frame_json["frame_number"],
                     physics=physics_dict,
                 )
                 frames.append(frame)
@@ -1084,9 +1094,9 @@ class TestTelemetryAnalyzer:
         result = await analyzer.analyze(frames, hz=10.0, output_prefix="test")
 
         assert result is not None
-        assert hasattr(result, 'html_path')
-        assert hasattr(result, 'ai_prompt_path')
-        assert hasattr(result, 'laps_detected')
+        assert hasattr(result, "html_path")
+        assert hasattr(result, "ai_prompt_path")
+        assert hasattr(result, "laps_detected")
 
     @pytest.mark.asyncio
     async def test_analyze_insufficient_frames(self):
@@ -1125,10 +1135,7 @@ class TestTelemetryAnalyzer:
         game_boundaries = [0, 100, 200]
 
         result = await analyzer.analyze(
-            frames,
-            hz=10.0,
-            game_lap_boundaries=game_boundaries,
-            output_prefix="test_game_laps"
+            frames, hz=10.0, game_lap_boundaries=game_boundaries, output_prefix="test_game_laps"
         )
 
         assert result is not None
@@ -1211,9 +1218,7 @@ class TestTelemetryAnalyzer:
         assert result.laps_detected == 5
         data = html_spy.await_args.args[0]
         assert [lap["lap_num"] for lap in data["laps"]] == [1, 2, 3, 4, 5]
-        assert [lap["lap_time_s"] for lap in data["laps"]] == pytest.approx(
-            [66.393, 65.559, 66.174, 64.428, 78.888]
-        )
+        assert [lap["lap_time_s"] for lap in data["laps"]] == pytest.approx([66.393, 65.559, 66.174, 64.428, 78.888])
         assert [lap["is_valid"] for lap in data["laps"]] == [True, True, False, True, False]
         assert [lap["end_frame"] for lap in data["laps"]] == [60, 120, 180, 240, 300]
         assert any("realigned" in note for note in data["analysis_notes"])
@@ -1259,9 +1264,7 @@ class TestTelemetryAnalyzer:
 
         data = html_spy.await_args.args[0]
         assert [lap["lap_num"] for lap in data["laps"]] == [1, 2, 3, 4]
-        valid_lap_numbers = {
-            lap["lap_num"] for lap in data["laps"] if lap["is_valid"]
-        }
+        valid_lap_numbers = {lap["lap_num"] for lap in data["laps"] if lap["is_valid"]}
         assert data["best_lap_num"] == 3
         assert data["reference_lap_num"] in valid_lap_numbers
         assert data["comparison_lap_num"] in valid_lap_numbers
@@ -1335,10 +1338,7 @@ class TestTelemetryAnalyzer:
             lap_count=1,
             avg_fuel_per_lap=None,
         )
-        frames = [
-            create_mock_frame(i, speed=100.0, position=(i % 100) / 100)
-            for i in range(220)
-        ]
+        frames = [create_mock_frame(i, speed=100.0, position=(i % 100) / 100) for i in range(220)]
         analyzer = TelemetryAnalyzer(output_dir=str(tmp_path), session_manager=manager)
 
         with (
@@ -1369,10 +1369,7 @@ class TestTelemetryAnalyzer:
         """Structural boundaries delimit timed laps without becoming reports."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
-        frames = [
-            create_mock_frame(i, speed=100.0, position=(i % 50) / 50)
-            for i in range(180)
-        ]
+        frames = [create_mock_frame(i, speed=100.0, position=(i % 50) / 50) for i in range(180)]
         analyzer = TelemetryAnalyzer(output_dir="tests/output")
         markers = [
             (50, 120000, 0, "OUTLAP"),
@@ -1399,6 +1396,7 @@ class TestTelemetryAnalyzer:
         manager = SharedSessionManager()
         # Lap times must come from logs (graphics SHM is not authoritative).
         from src.models.shared_session import LapTimingData
+
         for lap_num, time_ms in [(1, 200000.0), (2, 190000.0), (3, 180000.0), (4, 170000.0)]:
             manager._session_data.lap_timing[lap_num] = LapTimingData(
                 lap_number=lap_num, completed_lap_time=time_ms, completed_lap_time_source="logs"
@@ -1437,6 +1435,7 @@ class TestTelemetryAnalyzer:
         manager = SharedSessionManager()
         # Lap times must come from logs (graphics SHM is not authoritative).
         from src.models.shared_session import LapTimingData
+
         for lap_num, time_ms in [(1, 999000.0), (2, 150000.0), (3, 140000.0), (4, 130000.0), (5, 129000.0)]:
             manager._session_data.lap_timing[lap_num] = LapTimingData(
                 lap_number=lap_num, completed_lap_time=time_ms, completed_lap_time_source="logs"
@@ -1521,13 +1520,15 @@ class TestFixedMeasurementWindow:
         # Build a simple track where a corner lives at progress 0.20-0.30
         track = []
         for i in range(200):
-            track.append({
-                "frame": i,
-                "norm_pos": i / 200.0,
-                "speed": 80.0 if 0.20 <= (i / 200.0) < 0.30 else 100.0,
-                "x": float(i),
-                "z": 0.0,
-            })
+            track.append(
+                {
+                    "frame": i,
+                    "norm_pos": i / 200.0,
+                    "speed": 80.0 if 0.20 <= (i / 200.0) < 0.30 else 100.0,
+                    "x": float(i),
+                    "z": 0.0,
+                }
+            )
 
         profile = {
             "corners": [
@@ -1575,12 +1576,14 @@ class TestFixedMeasurementWindow:
 
         track = []
         for i in range(200):
-            track.append({
-                "frame": i,
-                "speed": 80.0 if 40 <= i < 60 else 100.0,
-                "x": float(i),
-                "z": 0.0,
-            })
+            track.append(
+                {
+                    "frame": i,
+                    "speed": 80.0 if 40 <= i < 60 else 100.0,
+                    "x": float(i),
+                    "z": 0.0,
+                }
+            )
 
         profile = {
             "corners": [
@@ -1603,17 +1606,19 @@ class TestFixedMeasurementWindow:
         # Canonical track with uniform progress and time_s
         samples = []
         for i in range(100):
-            samples.append({
-                "frame": i,
-                "lap_progress": i / 100.0,
-                "time_s": i / 10.0,
-                "speed": 70.0 if 0.20 <= (i / 100.0) < 0.30 else 120.0,
-                "brake": 0.5 if 0.22 <= (i / 100.0) < 0.26 else 0.0,
-                "gas": 0.0,
-                "steer": 0.0,
-                "x": float(i),
-                "z": 0.0,
-            })
+            samples.append(
+                {
+                    "frame": i,
+                    "lap_progress": i / 100.0,
+                    "time_s": i / 10.0,
+                    "speed": 70.0 if 0.20 <= (i / 100.0) < 0.30 else 120.0,
+                    "brake": 0.5 if 0.22 <= (i / 100.0) < 0.26 else 0.0,
+                    "gas": 0.0,
+                    "steer": 0.0,
+                    "x": float(i),
+                    "z": 0.0,
+                }
+            )
 
         canonical_lap = {
             "samples": samples,
@@ -1818,27 +1823,49 @@ class TestFixedMeasurementWindow:
         params = get_tuning_params(car_model)
         assert params is not None, "Mustang GT3 should match catalog"
         param_labels = [p["label"].lower() for p in params]
-        assert any("brake bias" in l for l in param_labels), "Mustang GT3 catalog should list brake bias"
+        assert any("brake bias" in l for l in param_labels), "Mustang GT3 catalog should list brake bias"  # noqa: E741
 
         corner = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         lap = {
-            "lap_num": 1, "lap_time_s": 90.0, "lap_time_str": "1:30.00",
-            "max_speed": 200.0, "avg_speed": 140.0,
-            "start_frame": 0, "end_frame": 100,
-            "corners": [corner], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 90.0,
+            "lap_time_str": "1:30.00",
+            "max_speed": 200.0,
+            "avg_speed": 140.0,
+            "start_frame": 0,
+            "end_frame": 100,
+            "corners": [corner],
+            "track": [],
         }
         data = {
-            "hz": 10.0, "laps": [lap, {**lap, "lap_num": 2}],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
-            "ref_corners": [{"id": 1, "name": "T1"}], "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
-            "plausible_frame_ratio": 1.0, "track_label": "Test Track",
+            "hz": 10.0,
+            "laps": [lap, {**lap, "lap_num": 2}],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
+            "ref_corners": [{"id": 1, "name": "T1"}],
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
             "car": car_model,
         }
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
@@ -1859,24 +1886,46 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         lap = {
-            "lap_num": 1, "lap_time_s": 90.0, "lap_time_str": "1:30.00",
-            "max_speed": 200.0, "avg_speed": 140.0,
-            "start_frame": 0, "end_frame": 100,
-            "corners": [corner], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 90.0,
+            "lap_time_str": "1:30.00",
+            "max_speed": 200.0,
+            "avg_speed": 140.0,
+            "start_frame": 0,
+            "end_frame": 100,
+            "corners": [corner],
+            "track": [],
         }
         data = {
-            "hz": 10.0, "laps": [lap, {**lap, "lap_num": 2}],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
-            "ref_corners": [{"id": 1, "name": "T1"}], "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
-            "plausible_frame_ratio": 1.0, "track_label": "Test Track",
+            "hz": 10.0,
+            "laps": [lap, {**lap, "lap_num": 2}],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
+            "ref_corners": [{"id": 1, "name": "T1"}],
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
             "car": "",
         }
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
@@ -1896,8 +1945,15 @@ class TestFixedMeasurementWindow:
 
         # Detected lap corners — no 'start'/'end' progress keys
         detected_corners = [
-            {"id": 1, "name": "T1", "start_frame": 10, "end_frame": 30,
-             "apex_frame": 20, "apex_speed": 80, "lap_pos": 0.15},
+            {
+                "id": 1,
+                "name": "T1",
+                "start_frame": 10,
+                "end_frame": 30,
+                "apex_frame": 20,
+                "apex_speed": 80,
+                "lap_pos": 0.15,
+            },
         ]
         # Should not raise KeyError — empty list means no analysis, no crash
         result = analyze_suspension([], detected_corners)
@@ -1907,8 +1963,12 @@ class TestFixedMeasurementWindow:
         profile_corners = [
             {"id": 1, "name": "T1", "start": 0.10, "end": 0.20},
         ]
-        laps = [{"lap_num": 1, "track": [{"lap_progress": 0.15, "sus_fl": 5.0,
-                             "sus_fr": 5.0, "sus_rl": 5.0, "sus_rr": 5.0}]}]
+        laps = [
+            {
+                "lap_num": 1,
+                "track": [{"lap_progress": 0.15, "sus_fl": 5.0, "sus_fr": 5.0, "sus_rl": 5.0, "sus_rr": 5.0}],
+            }
+        ]
         result = analyze_suspension(laps, profile_corners)
         assert isinstance(result, dict)
 
@@ -1923,11 +1983,21 @@ class TestFixedMeasurementWindow:
         samples = []
         for i in range(200):
             t = i / 199.0
-            samples.append({
-                "frame": i, "time_s": i / 10.0, "lap_progress": t, "lap_pos": t,
-                "speed": 100.0, "x": 0.0, "z": 0.0, "heading": 0.0,
-                "steer": 0.0, "brake": 0.0, "gas": 1.0,
-            })
+            samples.append(
+                {
+                    "frame": i,
+                    "time_s": i / 10.0,
+                    "lap_progress": t,
+                    "lap_pos": t,
+                    "speed": 100.0,
+                    "x": 0.0,
+                    "z": 0.0,
+                    "heading": 0.0,
+                    "steer": 0.0,
+                    "brake": 0.0,
+                    "gas": 1.0,
+                }
+            )
         canonical_lap = {"samples": samples, "progress_start": 0.0, "progress_end": 1.0}
         profile = {
             "corners": [
@@ -1935,7 +2005,10 @@ class TestFixedMeasurementWindow:
             ]
         }
         corners = _detect_profiled_corners_canonical(
-            canonical_lap["samples"], profile, hz=10.0, authoritative_progress=True,
+            canonical_lap["samples"],
+            profile,
+            hz=10.0,
+            authoritative_progress=True,
         )
         # With a tiny window [0.01, 0.02], the measurement window may have
         # 0-1 points. segment_time_s must be None, not 0.0.
@@ -1963,23 +2036,38 @@ class TestFixedMeasurementWindow:
 
         lap_track = [
             {
-                "frame": i, "norm_pos": i / 7199.0, "speed": 100.0 + (i % 37),
-                "x": 0.0, "z": 0.0, "heading": 0.0, "steer": 0.05, "brake": 0.1, "gas": 0.5,
+                "frame": i,
+                "norm_pos": i / 7199.0,
+                "speed": 100.0 + (i % 37),
+                "x": 0.0,
+                "z": 0.0,
+                "heading": 0.0,
+                "steer": 0.05,
+                "brake": 0.1,
+                "gas": 0.5,
             }
             for i in range(7200)
         ]
         fine = _build_canonical_lap(
-            lap_track, lap_start_frame=0, hz=10.0,
+            lap_track,
+            lap_start_frame=0,
+            hz=10.0,
             bins=_canonical_bins_for_profile(dense_profile),
         )
         fine_corners = _detect_profiled_corners_canonical(
-            fine["samples"], dense_profile, hz=10.0, authoritative_progress=True,
+            fine["samples"],
+            dense_profile,
+            hz=10.0,
+            authoritative_progress=True,
         )
         assert len(fine_corners) == 72
 
         coarse = _build_canonical_lap(lap_track, lap_start_frame=0, hz=10.0, bins=200)
         coarse_corners = _detect_profiled_corners_canonical(
-            coarse["samples"], dense_profile, hz=10.0, authoritative_progress=True,
+            coarse["samples"],
+            dense_profile,
+            hz=10.0,
+            authoritative_progress=True,
         )
         assert len(coarse_corners) == 0
 
@@ -1992,52 +2080,105 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner1_lap1 = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 3.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 3.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner1_lap2 = {
-            "id": 1, "name": "T1", "apex_speed": 85.0, "entry_speed": 100.0,
-            "exit_speed": 95.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.5, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 85.0,
+            "entry_speed": 100.0,
+            "exit_speed": 95.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.5,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner2_lap1 = {
-            "id": 2, "name": "T2", "apex_speed": 70.0, "entry_speed": 90.0,
-            "exit_speed": 80.0, "start_frame": 50, "end_frame": 80, "apex_frame": 65,
-            "segment_time_s": 4.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 2,
+            "name": "T2",
+            "apex_speed": 70.0,
+            "entry_speed": 90.0,
+            "exit_speed": 80.0,
+            "start_frame": 50,
+            "end_frame": 80,
+            "apex_frame": 65,
+            "segment_time_s": 4.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner2_lap2 = {
-            "id": 2, "name": "T2", "apex_speed": 75.0, "entry_speed": 90.0,
-            "exit_speed": 85.0, "start_frame": 50, "end_frame": 80, "apex_frame": 65,
-            "segment_time_s": 3.5, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 2,
+            "name": "T2",
+            "apex_speed": 75.0,
+            "entry_speed": 90.0,
+            "exit_speed": 85.0,
+            "start_frame": 50,
+            "end_frame": 80,
+            "apex_frame": 65,
+            "segment_time_s": 3.5,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
 
         lap1 = {
-            "lap_num": 1, "lap_time_s": 100.0, "lap_time_str": "1:40.00",
-            "max_speed": 200.0, "avg_speed": 150.0,
-            "start_frame": 0, "end_frame": 1000,
-            "corners": [corner1_lap1, corner2_lap1], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 100.0,
+            "lap_time_str": "1:40.00",
+            "max_speed": 200.0,
+            "avg_speed": 150.0,
+            "start_frame": 0,
+            "end_frame": 1000,
+            "corners": [corner1_lap1, corner2_lap1],
+            "track": [],
         }
         lap2 = {
-            "lap_num": 2, "lap_time_s": 105.0, "lap_time_str": "1:45.00",
-            "max_speed": 195.0, "avg_speed": 145.0,
-            "start_frame": 0, "end_frame": 1050,
-            "corners": [corner1_lap2, corner2_lap2], "track": [],
+            "lap_num": 2,
+            "lap_time_s": 105.0,
+            "lap_time_str": "1:45.00",
+            "max_speed": 195.0,
+            "avg_speed": 145.0,
+            "start_frame": 0,
+            "end_frame": 1050,
+            "corners": [corner1_lap2, corner2_lap2],
+            "track": [],
         }
 
         data = {
-            "hz": 10.0, "laps": [lap1, lap2],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
+            "hz": 10.0,
+            "laps": [lap1, lap2],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
             "ref_corners": [{"id": 1, "name": "T1"}, {"id": 2, "name": "T2"}],
-            "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
             "plausible_frame_ratio": 1.0,
-            "track_label": "Test Track", "car": "Test Car",
+            "track_label": "Test Track",
+            "car": "Test Car",
         }
 
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
@@ -2062,53 +2203,106 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner1_lap1 = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 4.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 4.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         # Lap 2 has an impossibly short segment (0.5s vs 4.0s) — artifact
         corner1_lap2 = {
-            "id": 1, "name": "T1", "apex_speed": 85.0, "entry_speed": 100.0,
-            "exit_speed": 95.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 0.5, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 85.0,
+            "entry_speed": 100.0,
+            "exit_speed": 95.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 0.5,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner2_lap1 = {
-            "id": 2, "name": "T2", "apex_speed": 70.0, "entry_speed": 90.0,
-            "exit_speed": 80.0, "start_frame": 50, "end_frame": 80, "apex_frame": 65,
-            "segment_time_s": 3.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 2,
+            "name": "T2",
+            "apex_speed": 70.0,
+            "entry_speed": 90.0,
+            "exit_speed": 80.0,
+            "start_frame": 50,
+            "end_frame": 80,
+            "apex_frame": 65,
+            "segment_time_s": 3.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner2_lap2 = {
-            "id": 2, "name": "T2", "apex_speed": 75.0, "entry_speed": 90.0,
-            "exit_speed": 85.0, "start_frame": 50, "end_frame": 80, "apex_frame": 65,
-            "segment_time_s": 2.5, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 2,
+            "name": "T2",
+            "apex_speed": 75.0,
+            "entry_speed": 90.0,
+            "exit_speed": 85.0,
+            "start_frame": 50,
+            "end_frame": 80,
+            "apex_frame": 65,
+            "segment_time_s": 2.5,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
 
         lap1 = {
-            "lap_num": 1, "lap_time_s": 100.0, "lap_time_str": "1:40.00",
-            "max_speed": 200.0, "avg_speed": 150.0,
-            "start_frame": 0, "end_frame": 1000,
-            "corners": [corner1_lap1, corner2_lap1], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 100.0,
+            "lap_time_str": "1:40.00",
+            "max_speed": 200.0,
+            "avg_speed": 150.0,
+            "start_frame": 0,
+            "end_frame": 1000,
+            "corners": [corner1_lap1, corner2_lap1],
+            "track": [],
         }
         lap2 = {
-            "lap_num": 2, "lap_time_s": 105.0, "lap_time_str": "1:45.00",
-            "max_speed": 195.0, "avg_speed": 145.0,
-            "start_frame": 0, "end_frame": 1050,
-            "corners": [corner1_lap2, corner2_lap2], "track": [],
+            "lap_num": 2,
+            "lap_time_s": 105.0,
+            "lap_time_str": "1:45.00",
+            "max_speed": 195.0,
+            "avg_speed": 145.0,
+            "start_frame": 0,
+            "end_frame": 1050,
+            "corners": [corner1_lap2, corner2_lap2],
+            "track": [],
         }
 
         data = {
-            "hz": 10.0, "laps": [lap1, lap2],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
+            "hz": 10.0,
+            "laps": [lap1, lap2],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
             "ref_corners": [{"id": 1, "name": "T1"}, {"id": 2, "name": "T2"}],
-            "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
             "plausible_frame_ratio": 1.0,
-            "track_label": "Test Track", "car": "Test Car",
+            "track_label": "Test Track",
+            "car": "Test Car",
         }
 
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
@@ -2129,24 +2323,47 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         lap = {
-            "lap_num": 1, "lap_time_s": 90.0, "lap_time_str": "1:30.00",
-            "max_speed": 200.0, "avg_speed": 140.0,
-            "start_frame": 0, "end_frame": 100,
-            "corners": [corner], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 90.0,
+            "lap_time_str": "1:30.00",
+            "max_speed": 200.0,
+            "avg_speed": 140.0,
+            "start_frame": 0,
+            "end_frame": 100,
+            "corners": [corner],
+            "track": [],
         }
         data = {
-            "hz": 10.0, "laps": [lap, {**lap, "lap_num": 2}],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
-            "ref_corners": [{"id": 1, "name": "T1"}], "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
-            "plausible_frame_ratio": 1.0, "track_label": "Test Track", "car": "Test Car",
+            "hz": 10.0,
+            "laps": [lap, {**lap, "lap_num": 2}],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
+            "ref_corners": [{"id": 1, "name": "T1"}],
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
+            "car": "Test Car",
         }
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
         path = await analyzer._generate_ai_prompt(data, output_prefix="test_decomp")
@@ -2163,38 +2380,74 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner1 = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner2 = {
-            "id": 2, "name": "T2", "apex_speed": 70.0, "entry_speed": 90.0,
-            "exit_speed": 80.0, "start_frame": 50, "end_frame": 80, "apex_frame": 65,
-            "segment_time_s": 3.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 2,
+            "name": "T2",
+            "apex_speed": 70.0,
+            "entry_speed": 90.0,
+            "exit_speed": 80.0,
+            "start_frame": 50,
+            "end_frame": 80,
+            "apex_frame": 65,
+            "segment_time_s": 3.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         lap1 = {
-            "lap_num": 1, "lap_time_s": 100.0, "lap_time_str": "1:40.00",
-            "max_speed": 200.0, "avg_speed": 150.0,
-            "start_frame": 0, "end_frame": 1000,
-            "corners": [corner1, corner2], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 100.0,
+            "lap_time_str": "1:40.00",
+            "max_speed": 200.0,
+            "avg_speed": 150.0,
+            "start_frame": 0,
+            "end_frame": 1000,
+            "corners": [corner1, corner2],
+            "track": [],
         }
         corner2_lap2 = {**corner2, "segment_time_s": 3.5}
         lap2 = {
-            "lap_num": 2, "lap_time_s": 105.0, "lap_time_str": "1:45.00",
-            "max_speed": 195.0, "avg_speed": 145.0,
-            "start_frame": 0, "end_frame": 1050,
-            "corners": [corner1, corner2_lap2], "track": [],
+            "lap_num": 2,
+            "lap_time_s": 105.0,
+            "lap_time_str": "1:45.00",
+            "max_speed": 195.0,
+            "avg_speed": 145.0,
+            "start_frame": 0,
+            "end_frame": 1050,
+            "corners": [corner1, corner2_lap2],
+            "track": [],
         }
         data = {
-            "hz": 10.0, "laps": [lap1, lap2],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
+            "hz": 10.0,
+            "laps": [lap1, lap2],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
             "ref_corners": [{"id": 1, "name": "T1"}, {"id": 2, "name": "T2"}],
-            "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
-            "plausible_frame_ratio": 1.0, "track_label": "Test Track", "car": "Test Car",
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
+            "car": "Test Car",
         }
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
         path = await analyzer._generate_ai_prompt(data, output_prefix="test_straight")
@@ -2211,49 +2464,103 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner1_lap1 = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner2_lap1 = {
-            "id": 2, "name": "T2", "apex_speed": 70.0, "entry_speed": 95.0,
-            "exit_speed": 80.0, "start_frame": 50, "end_frame": 80, "apex_frame": 65,
-            "segment_time_s": 3.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 2,
+            "name": "T2",
+            "apex_speed": 70.0,
+            "entry_speed": 95.0,
+            "exit_speed": 80.0,
+            "start_frame": 50,
+            "end_frame": 80,
+            "apex_frame": 65,
+            "segment_time_s": 3.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner1_lap2 = {
-            "id": 1, "name": "T1", "apex_speed": 75.0, "entry_speed": 100.0,
-            "exit_speed": 80.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.5, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 75.0,
+            "entry_speed": 100.0,
+            "exit_speed": 80.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.5,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         corner2_lap2 = {
-            "id": 2, "name": "T2", "apex_speed": 65.0, "entry_speed": 85.0,
-            "exit_speed": 75.0, "start_frame": 50, "end_frame": 80, "apex_frame": 65,
-            "segment_time_s": 3.5, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 2,
+            "name": "T2",
+            "apex_speed": 65.0,
+            "entry_speed": 85.0,
+            "exit_speed": 75.0,
+            "start_frame": 50,
+            "end_frame": 80,
+            "apex_frame": 65,
+            "segment_time_s": 3.5,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         lap1 = {
-            "lap_num": 1, "lap_time_s": 100.0, "lap_time_str": "1:40.00",
-            "max_speed": 200.0, "avg_speed": 150.0,
-            "start_frame": 0, "end_frame": 1000,
-            "corners": [corner1_lap1, corner2_lap1], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 100.0,
+            "lap_time_str": "1:40.00",
+            "max_speed": 200.0,
+            "avg_speed": 150.0,
+            "start_frame": 0,
+            "end_frame": 1000,
+            "corners": [corner1_lap1, corner2_lap1],
+            "track": [],
         }
         lap2 = {
-            "lap_num": 2, "lap_time_s": 105.0, "lap_time_str": "1:45.00",
-            "max_speed": 195.0, "avg_speed": 145.0,
-            "start_frame": 0, "end_frame": 1050,
-            "corners": [corner1_lap2, corner2_lap2], "track": [],
+            "lap_num": 2,
+            "lap_time_s": 105.0,
+            "lap_time_str": "1:45.00",
+            "max_speed": 195.0,
+            "avg_speed": 145.0,
+            "start_frame": 0,
+            "end_frame": 1050,
+            "corners": [corner1_lap2, corner2_lap2],
+            "track": [],
         }
         data = {
-            "hz": 10.0, "laps": [lap1, lap2],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
+            "hz": 10.0,
+            "laps": [lap1, lap2],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
             "ref_corners": [{"id": 1, "name": "T1"}, {"id": 2, "name": "T2"}],
-            "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
-            "plausible_frame_ratio": 1.0, "track_label": "Test Track", "car": "Test Car",
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
+            "car": "Test Car",
         }
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
         path = await analyzer._generate_ai_prompt(data, output_prefix="test_corr")
@@ -2271,37 +2578,62 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         # Build track with coasting near apex (frames 18-22: no gas, no brake)
         track = []
         for i in range(100):
-            track.append({
-                "frame": i,
-                "speed": 80.0,
-                "gas": 0.0 if 18 <= i <= 22 else 0.5,
-                "gas_percent": 0.0 if 18 <= i <= 22 else 0.5,
-                "brake": 0.0,
-                "steer": 0.0,
-                "acc_g_x": 0.0,
-                "acc_g_z": 0.0,
-            })
+            track.append(
+                {
+                    "frame": i,
+                    "speed": 80.0,
+                    "gas": 0.0 if 18 <= i <= 22 else 0.5,
+                    "gas_percent": 0.0 if 18 <= i <= 22 else 0.5,
+                    "brake": 0.0,
+                    "steer": 0.0,
+                    "acc_g_x": 0.0,
+                    "acc_g_z": 0.0,
+                }
+            )
         lap = {
-            "lap_num": 1, "lap_time_s": 100.0, "lap_time_str": "1:40.00",
-            "max_speed": 200.0, "avg_speed": 150.0,
-            "start_frame": 0, "end_frame": 100,
-            "corners": [corner], "track": track,
+            "lap_num": 1,
+            "lap_time_s": 100.0,
+            "lap_time_str": "1:40.00",
+            "max_speed": 200.0,
+            "avg_speed": 150.0,
+            "start_frame": 0,
+            "end_frame": 100,
+            "corners": [corner],
+            "track": track,
         }
         data = {
-            "hz": 10.0, "laps": [lap, {**lap, "lap_num": 2}],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
-            "ref_corners": [{"id": 1, "name": "T1"}], "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
-            "plausible_frame_ratio": 1.0, "track_label": "Test Track", "car": "Test Car",
+            "hz": 10.0,
+            "laps": [lap, {**lap, "lap_num": 2}],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
+            "ref_corners": [{"id": 1, "name": "T1"}],
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
+            "car": "Test Car",
         }
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
         path = await analyzer._generate_ai_prompt(data, output_prefix="test_coast")
@@ -2317,24 +2649,47 @@ class TestFixedMeasurementWindow:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         corner = {
-            "id": 1, "name": "T1", "apex_speed": 80.0, "entry_speed": 100.0,
-            "exit_speed": 90.0, "start_frame": 10, "end_frame": 30, "apex_frame": 20,
-            "segment_time_s": 2.0, "confidence_label": "high",
-            "entry_state": None, "apex_state": None, "exit_state": None,
+            "id": 1,
+            "name": "T1",
+            "apex_speed": 80.0,
+            "entry_speed": 100.0,
+            "exit_speed": 90.0,
+            "start_frame": 10,
+            "end_frame": 30,
+            "apex_frame": 20,
+            "segment_time_s": 2.0,
+            "confidence_label": "high",
+            "entry_state": None,
+            "apex_state": None,
+            "exit_state": None,
         }
         lap = {
-            "lap_num": 1, "lap_time_s": 90.0, "lap_time_str": "1:30.00",
-            "max_speed": 200.0, "avg_speed": 140.0,
-            "start_frame": 0, "end_frame": 100,
-            "corners": [corner], "track": [],
+            "lap_num": 1,
+            "lap_time_s": 90.0,
+            "lap_time_str": "1:30.00",
+            "max_speed": 200.0,
+            "avg_speed": 140.0,
+            "start_frame": 0,
+            "end_frame": 100,
+            "corners": [corner],
+            "track": [],
         }
         data = {
-            "hz": 10.0, "laps": [lap, {**lap, "lap_num": 2}],
-            "best_lap_num": 1, "reference_lap_num": 1, "comparison_lap_num": 2,
-            "ref_corners": [{"id": 1, "name": "T1"}], "corner_data": {}, "corner_speeds": {},
-            "analysis_mode": "full", "analysis_confidence": "high",
-            "analysis_notes": [], "authoritative_progress_ratio": 1.0,
-            "plausible_frame_ratio": 1.0, "track_label": "Test Track", "car": "Test Car",
+            "hz": 10.0,
+            "laps": [lap, {**lap, "lap_num": 2}],
+            "best_lap_num": 1,
+            "reference_lap_num": 1,
+            "comparison_lap_num": 2,
+            "ref_corners": [{"id": 1, "name": "T1"}],
+            "corner_data": {},
+            "corner_speeds": {},
+            "analysis_mode": "full",
+            "analysis_confidence": "high",
+            "analysis_notes": [],
+            "authoritative_progress_ratio": 1.0,
+            "plausible_frame_ratio": 1.0,
+            "track_label": "Test Track",
+            "car": "Test Car",
         }
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=SharedSessionManager())
         path = await analyzer._generate_ai_prompt(data, output_prefix="test_format")

@@ -6,15 +6,15 @@ import requests
 _META = (
     "string:9:prototype:Undefined,"
     "string:9:__proto__:object:3:"
-        "string:9:prototype:Undefined,"
-        "string:9:__proto__:Null,"
-        "string:11:constructor:fn:"
-            "string:8:[native]"
-            "string:20:function-name:Object"
-        "object:0:,,"
+    "string:9:prototype:Undefined,"
+    "string:9:__proto__:Null,"
     "string:11:constructor:fn:"
-        "string:8:[native]"
-        "string:20:function-name:Object"
+    "string:8:[native]"
+    "string:20:function-name:Object"
+    "object:0:,,"
+    "string:11:constructor:fn:"
+    "string:8:[native]"
+    "string:20:function-name:Object"
     "string:12:[CIRCULAR:2],"
 )
 
@@ -47,7 +47,7 @@ def compute_payload_hash(payload: dict) -> str:
         parts.append(_serialize_value(core_fields[k]))
         parts.append(",")
     serialized = "".join(parts)
-    return hashlib.sha1(serialized.encode("utf-8")).hexdigest()
+    return hashlib.sha1(serialized.encode("utf-8")).hexdigest()  # noqa: S324
 
 
 def submit_payload(payload: dict, token: str) -> dict:
@@ -69,14 +69,14 @@ def submit_payload(payload: dict, token: str) -> dict:
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "same-origin",
         "sec-gpc": "1",
-        "user-agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36",
+        "user-agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Mobile Safari/537.36",  # noqa: E501
     }
 
-    resp = requests.post(
+    resp = requests.post(  # noqa: S113
         "https://app.acecareermode.com/functions/licenses/submitLicenseResult",
         headers=headers,
         json=full,
-        verify=False,
+        verify=False,  # noqa: S501
     )
     try:
         return resp.json()

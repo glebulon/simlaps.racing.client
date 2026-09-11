@@ -478,18 +478,22 @@ def test_graphics_retains_multiple_unconsumed_lap_completions() -> None:
 def test_lap_completion_matching_tolerates_rounding_once_and_rejects_outside() -> None:
     """Cross-source timing drift is accepted once, but never reused."""
     manager = SharedSessionManager()
-    manager.update_from_graphics_shm({
-        "total_lap_count": 0,
-        "current_lap_time_ms": 100000,
-        "last_laptime_ms": 0,
-        "is_valid_lap": False,
-    })
-    manager.update_from_graphics_shm({
-        "total_lap_count": 1,
-        "current_lap_time_ms": 10,
-        "last_laptime_ms": 100000,
-        "is_valid_lap": True,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 100000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": False,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 1,
+            "current_lap_time_ms": 10,
+            "last_laptime_ms": 100000,
+            "is_valid_lap": True,
+        }
+    )
 
     completion = manager.get_lap_completion_by_time(100001, consume=True)
     assert completion is not None
@@ -531,9 +535,7 @@ def test_graphics_publishes_equal_and_near_equal_consecutive_completions() -> No
 def test_hybrid_capabilities_survive_same_car_reset_and_clear_on_car_change() -> None:
     manager = SharedSessionManager()
     manager.update_player_identification_from_logs({"car_uuid": "car-a"})
-    manager.update_from_static_shm(
-        {"car_uuid": "car-a", "has_ers": True, "has_kers": False}
-    )
+    manager.update_from_static_shm({"car_uuid": "car-a", "has_ers": True, "has_kers": False})
     assert manager.get_hybrid_flags() == (True, False)
 
     manager.reset()
@@ -585,10 +587,12 @@ def test_log_heuristic_valid_overwrites_shm_invalid() -> None:
     manager = SharedSessionManager()
 
     # SHM reports lap 2 as invalid (per-frame flag while lap was in progress)
-    manager.update_from_graphics_shm({
-        "session_current_lap": 2,
-        "is_invalid": True,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 2,
+            "is_invalid": True,
+        }
+    )
     assert manager.get_lap_validity(2) is False
 
     # Log parser emits lap 2 with heuristic VALID (no authoritative onSplit)
@@ -622,12 +626,14 @@ def test_log_heuristic_valid_wins_over_shm_invalid() -> None:
     manager = SharedSessionManager()
 
     # Lap 1 finishes; lap 2 starts and is immediately invalidated per SHM.
-    manager.update_from_graphics_shm({
-        "session_current_lap": 0,
-        "total_lap_count": 1,
-        "is_valid_lap": False,
-        "current_lap_time_ms": 44573,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 0,
+            "total_lap_count": 1,
+            "is_valid_lap": False,
+            "current_lap_time_ms": 44573,
+        }
+    )
 
     # SHM must derive lap 2 and mark it invalid while in progress.
     assert manager.get_lap_validity(2) is False
@@ -695,10 +701,12 @@ def test_shm_valid_does_not_block_log_outlap() -> None:
     manager = SharedSessionManager()
 
     # SHM reports lap 3 as valid (normal in-progress frame)
-    manager.update_from_graphics_shm({
-        "session_current_lap": 3,
-        "is_invalid": False,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 3,
+            "is_invalid": False,
+        }
+    )
     assert manager.get_lap_validity(3) is True
 
     # Log parser emits lap 3 as OUTLAP (heuristic structural classification)
@@ -726,10 +734,12 @@ def test_authoritative_log_valid_overrides_shm_invalid() -> None:
     manager = SharedSessionManager()
 
     # SHM reports lap 5 as invalid
-    manager.update_from_graphics_shm({
-        "session_current_lap": 5,
-        "is_invalid": True,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 5,
+            "is_invalid": True,
+        }
+    )
     assert manager.get_lap_validity(5) is False
 
     # Log parser emits lap 5 with authoritative VALID (Relevant onSplit said valid)
@@ -759,10 +769,12 @@ def test_shm_invalid_does_not_block_log_invalid_split() -> None:
     because INVALID_SPLIT is a log-specific classification that SHM cannot provide."""
     manager = SharedSessionManager()
 
-    manager.update_from_graphics_shm({
-        "session_current_lap": 2,
-        "is_invalid": True,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 2,
+            "is_invalid": True,
+        }
+    )
 
     lap = LapData(
         lap_number=2,
@@ -788,24 +800,30 @@ def test_shm_validity_repeated_frames_are_idempotent() -> None:
     manager = SharedSessionManager()
 
     # First frame: lap 1, invalid=False
-    manager.update_from_graphics_shm({
-        "session_current_lap": 1,
-        "is_invalid": False,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 1,
+            "is_invalid": False,
+        }
+    )
     assert manager.get_lap_validity(1) is True
 
     # Second frame: same state — validity should remain unchanged
-    manager.update_from_graphics_shm({
-        "session_current_lap": 1,
-        "is_invalid": False,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 1,
+            "is_invalid": False,
+        }
+    )
     assert manager.get_lap_validity(1) is True
 
     # Third frame: is_invalid transitions to True — should update
-    manager.update_from_graphics_shm({
-        "session_current_lap": 1,
-        "is_invalid": True,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 1,
+            "is_invalid": True,
+        }
+    )
     assert manager.get_lap_validity(1) is False
 
 
@@ -998,10 +1016,7 @@ def test_concurrent_updates_are_thread_safe() -> None:
     # Graphics times are stored in LapTimingData.completed_lap_time and serve
     # as fallback in get_all_lap_times when no log-sourced times exist.
     with manager._lock:
-        timing_count = sum(
-            1 for t in manager._session_data.lap_timing.values()
-            if t.completed_lap_time is not None
-        )
+        timing_count = sum(1 for t in manager._session_data.lap_timing.values() if t.completed_lap_time is not None)
     lap_validity = manager.get_all_lap_validity()
     all_lap_times = manager.get_all_lap_times()
     assert timing_count == 49
@@ -1024,10 +1039,7 @@ def test_concurrent_access_performance() -> None:
     # Guard against major regressions while avoiding flaky micro-bench assertions.
     assert elapsed < 8.0
     with manager._lock:
-        timing_count = sum(
-            1 for t in manager._session_data.lap_timing.values()
-            if t.completed_lap_time is not None
-        )
+        timing_count = sum(1 for t in manager._session_data.lap_timing.values() if t.completed_lap_time is not None)
     assert timing_count == 1500
 
 
@@ -1078,14 +1090,16 @@ def test_shm_is_valid_lap_false_with_active_timing_marks_invalid() -> None:
     """is_valid_lap=False with current_lap_time_ms > 0 must mark lap invalid."""
     manager = SharedSessionManager()
 
-    manager.update_from_graphics_shm({
-        "total_lap_count": 1,
-        "is_valid_lap": False,
-        "current_lap_time_ms": 40374,
-        "session_current_lap": 0,
-        "is_invalid": None,
-        "timing_is_invalid": None,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 1,
+            "is_valid_lap": False,
+            "current_lap_time_ms": 40374,
+            "session_current_lap": 0,
+            "is_invalid": None,
+            "timing_is_invalid": None,
+        }
+    )
 
     validity = manager.get_lap_validity_data(2)
     assert validity is not None
@@ -1097,14 +1111,16 @@ def test_shm_is_valid_lap_false_with_zero_lap_time_skipped() -> None:
     """is_valid_lap=False with current_lap_time_ms == 0 means timing inactive, not invalid."""
     manager = SharedSessionManager()
 
-    manager.update_from_graphics_shm({
-        "total_lap_count": 0,
-        "is_valid_lap": False,
-        "current_lap_time_ms": 0,
-        "session_current_lap": 0,
-        "is_invalid": None,
-        "timing_is_invalid": None,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "is_valid_lap": False,
+            "current_lap_time_ms": 0,
+            "session_current_lap": 0,
+            "is_invalid": None,
+            "timing_is_invalid": None,
+        }
+    )
 
     assert manager.get_lap_validity_data(1) is None
 
@@ -1116,14 +1132,16 @@ def test_log_heuristic_valid_wins_over_shm_invalid_peek_path() -> None:
     is_valid_lap arrives via total_lap_count derivation."""
     manager = SharedSessionManager()
 
-    manager.update_from_graphics_shm({
-        "total_lap_count": 1,
-        "is_valid_lap": False,
-        "current_lap_time_ms": 40374,
-        "session_current_lap": 0,
-        "is_invalid": None,
-        "timing_is_invalid": None,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 1,
+            "is_valid_lap": False,
+            "current_lap_time_ms": 40374,
+            "session_current_lap": 0,
+            "is_invalid": None,
+            "timing_is_invalid": None,
+        }
+    )
     assert manager.get_lap_validity(2) is False
 
     lap = LapData(
@@ -1148,6 +1166,7 @@ def test_log_heuristic_valid_wins_over_shm_invalid_peek_path() -> None:
 
 # ── Regression: SHM stale last_laptime_ms scrubbing ────────────────────────
 
+
 def test_shm_stale_last_laptime_scrubbed_when_no_laps_completed() -> None:
     """Regression: stale ``last_laptime_ms`` from a previous game session
     must NOT be stored as a completed lap time for lap 1 of a new session.
@@ -1160,25 +1179,25 @@ def test_shm_stale_last_laptime_scrubbed_when_no_laps_completed() -> None:
 
     # Simulate SHM data at session start: lap 1 in progress, no laps completed,
     # but last_laptime_ms carries a stale value from the previous session.
-    manager.update_from_graphics_shm({
-        "session_current_lap": 0,       # fallback path
-        "total_lap_count": 0,           # no laps completed yet
-        "last_laptime_ms": 83456,       # stale! (1:23.456 from old session)
-        "current_lap_time_ms": 5000,
-        "best_laptime_ms": 0,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 0,  # fallback path
+            "total_lap_count": 0,  # no laps completed yet
+            "last_laptime_ms": 83456,  # stale! (1:23.456 from old session)
+            "current_lap_time_ms": 5000,
+            "best_laptime_ms": 0,
+        }
+    )
 
     timing = manager.get_lap_timing_data(1)
     assert timing is not None
     # The stale last_laptime_ms must NOT become a completed_lap_time.
     assert timing.completed_lap_time is None, (
-        f"Stale last_laptime_ms should have been scrubbed, "
-        f"but completed_lap_time={timing.completed_lap_time}"
+        f"Stale last_laptime_ms should have been scrubbed, but completed_lap_time={timing.completed_lap_time}"
     )
     # last_lap_time_ms should also be zeroed.
     assert timing.last_lap_time_ms == 0, (
-        f"Stale last_laptime_ms should have been scrubbed, "
-        f"but last_lap_time_ms={timing.last_lap_time_ms}"
+        f"Stale last_laptime_ms should have been scrubbed, but last_lap_time_ms={timing.last_lap_time_ms}"
     )
 
 
@@ -1189,18 +1208,19 @@ def test_shm_stale_last_laptime_not_scrubbed_when_laps_exist() -> None:
     manager = SharedSessionManager()
 
     # Simulate SHM data mid-session: lap 3 in progress, 2 laps completed.
-    manager.update_from_graphics_shm({
-        "session_current_lap": 3,
-        "total_lap_count": 2,
-        "last_laptime_ms": 120123,      # legitimate last lap time
-        "current_lap_time_ms": 61234,
-        "best_laptime_ms": 119999,
-    })
+    manager.update_from_graphics_shm(
+        {
+            "session_current_lap": 3,
+            "total_lap_count": 2,
+            "last_laptime_ms": 120123,  # legitimate last lap time
+            "current_lap_time_ms": 61234,
+            "best_laptime_ms": 119999,
+        }
+    )
 
     timing = manager.get_lap_timing_data(3)
     assert timing is not None
     # Legitimate last_laptime_ms must be preserved.
     assert timing.last_lap_time_ms == 120123, (
-        f"Legitimate last_laptime_ms should be preserved, "
-        f"but got {timing.last_lap_time_ms}"
+        f"Legitimate last_laptime_ms should be preserved, but got {timing.last_lap_time_ms}"
     )

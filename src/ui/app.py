@@ -52,6 +52,7 @@ from .services.user_bootstrap_service import UserBootstrapService
 
 class AppPage(Enum):
     """Application pages."""
+
     HOME = "home"
     SETTINGS = "settings"
     HISTORY = "history"
@@ -60,7 +61,7 @@ class AppPage(Enum):
 class SimLapsApp:
     """
     Main application controller.
-    
+
     No authentication required - uses signed payloads with embedded secret.
     User identity is detected from game logs (Steam ID).
     """
@@ -186,9 +187,9 @@ class SimLapsApp:
 
     def _get_icon_path(self) -> Optional[str]:
         """Get the path to the app icon (ICO for window icon)."""
-        if getattr(sys, 'frozen', False):
+        if getattr(sys, "frozen", False):
             # Running as compiled executable - check _MEIPASS for bundled files
-            if hasattr(sys, '_MEIPASS'):
+            if hasattr(sys, "_MEIPASS"):
                 icon_path = os.path.join(sys._MEIPASS, "assets", "icon.ico")
                 if os.path.exists(icon_path):
                     return icon_path
@@ -357,10 +358,10 @@ class SimLapsApp:
 
             if sys.platform == "win32":
                 # Use os.startfile which is more reliable for opening folders on Windows
-                os.startfile(output_path)
+                os.startfile(output_path)  # noqa: S606
                 log_debug(Component.APP, "Opened telemetry directory via os.startfile")
             else:
-                subprocess.Popen(["open", output_path])
+                subprocess.Popen(["open", output_path])  # noqa: S603, S607
                 log_debug(Component.APP, "Opened telemetry directory via subprocess")
         except Exception as ex:
             log_exception(Component.APP, "Failed to open telemetry location", ex, output_path=output_path)
@@ -435,9 +436,7 @@ class SimLapsApp:
 
         def _remove_if_current(_ref) -> None:
             current = bindings.get(lap_id)
-            if current is not None and (
-                current[0] is _ref or current[1] is _ref
-            ):
+            if current is not None and (current[0] is _ref or current[1] is _ref):
                 bindings.pop(lap_id, None)
 
         try:
@@ -445,12 +444,15 @@ class SimLapsApp:
         except TypeError:
             # LapData is weak-referenceable in production.  Keep this small
             # fallback for test doubles/custom callbacks that are not.
-            lap_ref = lambda: lap
+            def lap_ref():
+                return lap
 
         try:
             entry_ref = weakref.ref(entry, _remove_if_current)
         except TypeError:
-            entry_ref = lambda: entry
+
+            def entry_ref():
+                return entry
 
         bindings[lap_id] = (lap_ref, entry_ref)
 
@@ -465,9 +467,7 @@ class SimLapsApp:
         lap_ref, entry_ref = binding
         bound_lap = lap_ref() if callable(lap_ref) else lap_ref
         entry = entry_ref() if callable(entry_ref) else entry_ref
-        if bound_lap is not lap or entry is None or not any(
-            retained is entry for retained in self._history_entries
-        ):
+        if bound_lap is not lap or entry is None or not any(retained is entry for retained in self._history_entries):
             bindings.pop(id(lap), None)
             return None
         return entry
@@ -517,11 +517,7 @@ class SimLapsApp:
             # LapProcessingService appends exactly one entry for a presented
             # timed lap.  Capture the object it appended before any later
             # session can reuse ACE's lap number.
-            new_entries = [
-                entry
-                for entry in self._history_entries
-                if id(entry) not in existing_entry_ids
-            ]
+            new_entries = [entry for entry in self._history_entries if id(entry) not in existing_entry_ids]
             if len(new_entries) == 1:
                 self._bind_history_entry_to_lap(lap, new_entries[0])
             self._prune_history_entry_bindings()
@@ -643,7 +639,7 @@ class SimLapsApp:
 
     async def _stop_telemetry_capture(self, reason: str = "session_end", discard: bool = False):
         """Stop telemetry capture and generate analysis when game session ends.
-        
+
         Args:
             reason: Reason for stopping (session_end, manual, heartbeat_timeout, etc.)
             discard: If True, drop captured frames without running analysis.
@@ -707,9 +703,7 @@ class SimLapsApp:
             home_page=self._home_page,
             log_path=self._config.log_path,
             on_game_status_change=self._on_game_status_change,
-            is_telemetry_capturing=lambda: bool(
-                self._telemetry_capture and self._telemetry_capture.is_capturing()
-            ),
+            is_telemetry_capturing=lambda: bool(self._telemetry_capture and self._telemetry_capture.is_capturing()),
         )
 
     def stop_monitoring(self):
@@ -801,6 +795,7 @@ async def main(page: ft.Page):
 
     # Start log capture early
     from .components.debug_logs import start_log_capture
+
     start_log_capture()
 
     app = SimLapsApp(page)

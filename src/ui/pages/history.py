@@ -15,6 +15,7 @@ from ..components.mount_safe import safe_update
 @dataclass
 class HistoryEntry:
     """A historical lap entry."""
+
     track: str
     car: str
     lap_time_ms: int
@@ -100,6 +101,7 @@ class HistoryPage(ft.Container):
 
         # Debug logging
         from ...utils.structured_logger import Component, log_debug
+
         log_debug(Component.HISTORY, "History stats", total=total, submitted=submitted, valid=valid)
         for i, entry in enumerate(self._entries):
             log_debug(Component.HISTORY, f"Entry {i}", submitted=entry.was_submitted, valid=entry.was_valid)
@@ -164,12 +166,12 @@ class HistoryPage(ft.Container):
             time_str = "--:--"
             date_str = "---"
 
-        status_icon = ft.Icons.CHECK_CIRCLE if entry.was_submitted else (
-            ft.Icons.CANCEL if not entry.was_valid else ft.Icons.SCHEDULE
+        status_icon = (
+            ft.Icons.CHECK_CIRCLE
+            if entry.was_submitted
+            else (ft.Icons.CANCEL if not entry.was_valid else ft.Icons.SCHEDULE)
         )
-        status_color = "#51cf66" if entry.was_submitted else (
-            "#888888" if not entry.was_valid else "#ffd43b"
-        )
+        status_color = "#51cf66" if entry.was_submitted else ("#888888" if not entry.was_valid else "#ffd43b")
 
         return ft.Container(
             content=ft.Row(

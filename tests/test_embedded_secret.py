@@ -10,13 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import build
 from src.core import security
 
-TEST_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+TEST_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"  # noqa: S105
 
 
 class TestGenerateSecretModuleSource:
     def test_roundtrip_reconstructs_secret(self):
         namespace = {}
-        exec(build.generate_secret_module_source(TEST_SECRET), namespace)
+        exec(build.generate_secret_module_source(TEST_SECRET), namespace)  # noqa: S102
 
         assert namespace["get_secret"]() == TEST_SECRET.encode("utf-8")
 

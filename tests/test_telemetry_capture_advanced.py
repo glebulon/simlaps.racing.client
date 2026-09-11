@@ -18,7 +18,7 @@ from src.core.telemetry_capture import (
 class TestTelemetryCaptureLoop:
     """Test capture loop behavior."""
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_loop_connection_retry(self, mock_kernel32):
         """Test capture loop with connection retry."""
         # Mock initial failure, then success
@@ -26,7 +26,7 @@ class TestTelemetryCaptureLoop:
         mock_kernel32.OpenFileMappingW.side_effect = [0, mock_handle, mock_handle]
         mock_kernel32.MapViewOfFile.return_value = MagicMock()
 
-        capture = TelemetryCapture(hz=10.0)
+        TelemetryCapture(hz=10.0)
 
         # Try to open regions
         for key in REGIONS:
@@ -36,7 +36,7 @@ class TestTelemetryCaptureLoop:
         # Should eventually connect
         assert True  # Test passes if no exception
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_loop_heartbeat(self, mock_kernel32):
         """Test capture loop heartbeat mechanism."""
         mock_handle = MagicMock()
@@ -51,7 +51,7 @@ class TestTelemetryCaptureLoop:
 
         assert capture._last_heartbeat > 0
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_loop_timeout_detection(self, mock_kernel32):
         """Test capture loop timeout detection."""
         mock_handle = MagicMock()
@@ -63,6 +63,7 @@ class TestTelemetryCaptureLoop:
 
         # Set old heartbeat
         import time
+
         capture._last_heartbeat = time.time() - 10  # 10 seconds ago
 
         # Should detect timeout
@@ -110,7 +111,7 @@ class TestSessionManagement:
 class TestErrorRecovery:
     """Test error recovery mechanisms."""
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_reader_recovery_after_error(self, mock_kernel32):
         """Test region reader recovery after read error."""
         mock_handle = MagicMock()
@@ -128,7 +129,7 @@ class TestErrorRecovery:
 
         assert reader._view is not None
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_continues_after_region_loss(self, mock_kernel32):
         """Test capture continues after losing a region."""
         mock_handle = MagicMock()
@@ -138,7 +139,7 @@ class TestErrorRecovery:
         capture = TelemetryCapture(hz=10.0)
         mock_reader = MagicMock()
         mock_reader.size = 1024
-        mock_reader.read_raw.side_effect = [b'\x00' * 1024, Exception("Read error"), b'\x00' * 1024]
+        mock_reader.read_raw.side_effect = [b"\x00" * 1024, Exception("Read error"), b"\x00" * 1024]
 
         capture._readers = {"physics": mock_reader}
 
@@ -198,15 +199,10 @@ class TestFrameBuffering:
         capture = TelemetryCapture(hz=10.0)
 
         # Check if max_frames attribute exists
-        if hasattr(capture, '_max_frames'):
-            max_frames = capture._max_frames
+        if hasattr(capture, "_max_frames"):
             # Add frames
             for i in range(50):
-                frame = FrameData(
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                    frame_number=i,
-                    physics={}
-                )
+                frame = FrameData(timestamp=datetime.now(timezone.utc).isoformat(), frame_number=i, physics={})
                 capture._frames.append(frame)
             # Should not exceed reasonable limit
             assert len(capture._frames) <= 10000  # Reasonable upper bound
@@ -220,11 +216,7 @@ class TestFrameBuffering:
 
         # Add frames
         for i in range(10):
-            frame = FrameData(
-                timestamp=datetime.now(timezone.utc).isoformat(),
-                frame_number=i,
-                physics={}
-            )
+            frame = FrameData(timestamp=datetime.now(timezone.utc).isoformat(), frame_number=i, physics={})
             capture._frames.append(frame)
 
         # Clear buffer
@@ -253,6 +245,7 @@ class TestOutputGeneration:
         prefix1 = capture._make_output_prefix()
         # Longer delay to ensure different second value
         import time
+
         time.sleep(1.1)
         prefix2 = capture._make_output_prefix()
 
@@ -292,24 +285,24 @@ class TestCallbackSystem:
 class TestRegionDiscovery:
     """Test region discovery and connection."""
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_discover_available_regions(self, mock_kernel32):
         """Test discovering available regions."""
         mock_handle = MagicMock()
         mock_kernel32.OpenFileMappingW.return_value = mock_handle
         mock_kernel32.MapViewOfFile.return_value = MagicMock()
 
-        capture = TelemetryCapture(hz=10.0)
+        TelemetryCapture(hz=10.0)
 
         # Try to connect to regions
         for key in REGIONS:
             reader = RegionReader(key, REGIONS[key][1])
-            success = reader.open()
+            reader.open()
 
         # Should not error
         assert True
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_size_validation(self, mock_kernel32):
         """Test region size validation."""
         mock_handle = MagicMock()

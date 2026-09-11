@@ -34,7 +34,7 @@ class TestSecretManagement:
     def test_app_secret_matches_configured_fixture(self, configured_app_secret):
         """Test that loaded secret matches environment variable."""
         secret = get_app_secret()
-        expected = configured_app_secret.encode('utf-8')
+        expected = configured_app_secret.encode("utf-8")
         assert secret == expected
 
     def test_is_secret_configured_and_get_app_secret_without_secret(self):
@@ -146,29 +146,29 @@ class TestTimestampAndNonce:
 class TestGameDetection:
     """Test game process detection."""
 
-    @patch('src.core.security.PSUTIL_AVAILABLE', False)
+    @patch("src.core.security.PSUTIL_AVAILABLE", False)
     def test_is_game_running_no_psutil(self):
         """Test that is_game_running returns UNKNOWN when psutil unavailable."""
         result = is_game_running()
         assert result == GameProcessStatus.UNKNOWN
 
-    @patch('src.core.security.PSUTIL_AVAILABLE', True)
-    @patch('psutil.process_iter')
+    @patch("src.core.security.PSUTIL_AVAILABLE", True)
+    @patch("psutil.process_iter")
     def test_is_game_running_found(self, mock_process_iter):
         """Test detection when game process exists."""
         mock_proc = MagicMock()
-        mock_proc.info = {'name': 'AssettoCorsaEVO.exe'}
+        mock_proc.info = {"name": "AssettoCorsaEVO.exe"}
         mock_process_iter.return_value = [mock_proc]
 
         result = is_game_running()
         assert result == GameProcessStatus.RUNNING
 
-    @patch('src.core.security.PSUTIL_AVAILABLE', True)
-    @patch('psutil.process_iter')
+    @patch("src.core.security.PSUTIL_AVAILABLE", True)
+    @patch("psutil.process_iter")
     def test_is_game_running_not_found(self, mock_process_iter):
         """Test detection when game process not running."""
         mock_proc = MagicMock()
-        mock_proc.info = {'name': 'some_other_process.exe'}
+        mock_proc.info = {"name": "some_other_process.exe"}
         mock_process_iter.return_value = [mock_proc]
 
         result = is_game_running()

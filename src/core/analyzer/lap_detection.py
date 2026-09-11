@@ -1,4 +1,5 @@
 """Lap detection functions — extracted from telemetry_analyzer.py."""
+
 from typing import Dict, List, Optional
 
 from src.utils.structured_logger import Component, log_debug
@@ -16,21 +17,13 @@ def _detect_laps_by_timing_state(track: List[Dict], hz: float = 1.0) -> Optional
         # Zero/None means there is no completed lap (session start, pit
         # outlap, or mappings being cleared during shutdown). It is not a
         # finish-line transition and must not create a zero-second lap.
-        if (
-            not isinstance(last_laptime, (int, float))
-            or isinstance(last_laptime, bool)
-            or last_laptime <= 0
-        ):
+        if not isinstance(last_laptime, (int, float)) or isinstance(last_laptime, bool) or last_laptime <= 0:
             if prev_last_laptime is None:
                 saw_empty_last_laptime = True
             continue
         # Detect when last_laptime changes (lap completion event)
-        completed_transition = (
-            (prev_last_laptime is None and saw_empty_last_laptime)
-            or (
-                prev_last_laptime is not None
-                and last_laptime != prev_last_laptime
-            )
+        completed_transition = (prev_last_laptime is None and saw_empty_last_laptime) or (
+            prev_last_laptime is not None and last_laptime != prev_last_laptime
         )
         # ACE can synthesize a final lap time while tearing down a race (for
         # example after a disqualification) even though the player never

@@ -12,6 +12,7 @@ from enum import Enum
 
 class LogLevel(Enum):
     """Log levels for structured logging."""
+
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
@@ -21,6 +22,7 @@ class LogLevel(Enum):
 
 class Component(Enum):
     """Component identifiers for structured logging."""
+
     APP = "APP"
     TELEMETRY = "TELEMETRY"
     ANALYZER = "ANALYZER"
@@ -71,6 +73,7 @@ class StructuredLogger:
         # Always send to debug logs viewer
         if self._debug_enabled:
             from ..ui.components.debug_logs import add_debug_log
+
             add_debug_log(formatted)
 
         # Also print to console for critical levels
@@ -109,6 +112,7 @@ class StructuredLogger:
         # Add traceback to debug logs
         if self._debug_enabled:
             from ..ui.components.debug_logs import add_debug_log
+
             tb_lines = traceback.format_exception(
                 type(exception),
                 exception,
@@ -117,10 +121,7 @@ class StructuredLogger:
             for line in tb_lines:
                 for rendered_line in line.rstrip().splitlines():
                     if rendered_line.strip():
-                        add_debug_log(
-                            f"[{time.strftime('%H:%M:%S')}] "
-                            f"[{component.value}] [TRACEBACK] {rendered_line}"
-                        )
+                        add_debug_log(f"[{time.strftime('%H:%M:%S')}] [{component.value}] [TRACEBACK] {rendered_line}")
 
 
 # Global logger instance

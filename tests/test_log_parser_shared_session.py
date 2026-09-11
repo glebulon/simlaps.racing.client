@@ -91,6 +91,7 @@ def test_finalise_current_session_syncs_session_to_shared_manager() -> None:
 
 # ── Regression: _handle_session_start resets shared session ────────────────
 
+
 def test_handle_session_start_resets_shared_session_after_finalising() -> None:
     """Regression: ``_handle_session_start`` must call ``reset()`` on the
     shared session manager AFTER finalising the old session and BEFORE syncing
@@ -137,9 +138,7 @@ def test_handle_session_start_resets_shared_session_after_finalising() -> None:
     assert parser.current_session.car == "ks_ferrari_296_gt3"
 
     # Stale lap timing from old session must be cleared.
-    assert manager.get_best_lap_time() is None, (
-        "Stale best lap from old session should have been cleared by reset()"
-    )
+    assert manager.get_best_lap_time() is None, "Stale best lap from old session should have been cleared by reset()"
     assert manager.get_lap_timing_data(1) is None, (
         "Stale lap timing from old session should have been cleared by reset()"
     )
@@ -217,6 +216,5 @@ def test_handle_session_start_regex_mismatch_still_resets() -> None:
     assert result is False
     # But stale shared session data MUST still be cleared.
     assert manager.get_best_lap_time() is None, (
-        "Stale best lap should have been cleared by reset() "
-        "even when regex does not match"
+        "Stale best lap should have been cleared by reset() even when regex does not match"
     )

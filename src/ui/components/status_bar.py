@@ -14,6 +14,7 @@ from .mount_safe import safe_update
 
 class ConnectionStatus(Enum):
     """Connection status states."""
+
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
     CONNECTED = "connected"
@@ -134,7 +135,7 @@ class StatusBar(ft.Container):
     ):
         """
         Update the status bar.
-        
+
         Args:
             connection_status: New connection status
             message: Status message to display

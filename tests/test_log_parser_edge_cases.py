@@ -4,7 +4,6 @@ Edge case tests for log_parser to hit remaining uncovered lines.
 Targeting error handling, exception paths, and edge conditions.
 """
 
-
 import pytest
 
 from src.core.log_parser import LogParser
@@ -32,6 +31,7 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_emit_status_error_handling(self):
         """Test _emit_status handles callback errors."""
+
         async def failing_callback(msg):
             raise RuntimeError("Callback failed")
 
@@ -51,11 +51,7 @@ class TestErrorHandling:
         parser = LogParser(on_lap_complete=failing_callback)
         session = SessionData(track="spa", car="porsche")
         lap = LapData(
-            lap_number=1,
-            physics_lap_number=1,
-            lap_time_ms=100000,
-            lap_time_str="1:40.000",
-            lap_state=LapState.VALID
+            lap_number=1, physics_lap_number=1, lap_time_ms=100000, lap_time_str="1:40.000", lap_state=LapState.VALID
         )
 
         # Should not raise even if callback fails
@@ -147,11 +143,7 @@ class TestSessionTypeHandling:
     def test_qualifying_session(self):
         """Test behavior in qualifying session."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa",
-            car="porsche",
-            session_type="QUALIFYING"
-        )
+        parser.current_session = SessionData(track="spa", car="porsche", session_type="QUALIFYING")
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
@@ -161,7 +153,7 @@ class TestSessionTypeHandling:
         parser._ip.split_end_confirmed = True
 
         line = "New lap carId=abc123 time=1:38.456"
-        result = parser._handle_lap_complete(line)
+        parser._handle_lap_complete(line)
 
         # Qualifying-specific behavior
         assert True
@@ -169,11 +161,7 @@ class TestSessionTypeHandling:
     def test_race_session(self):
         """Test behavior in race session."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa",
-            car="porsche",
-            session_type="RACE"
-        )
+        parser.current_session = SessionData(track="spa", car="porsche", session_type="RACE")
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
@@ -183,7 +171,7 @@ class TestSessionTypeHandling:
         parser._ip.split_end_confirmed = True
 
         line = "New lap carId=abc123 time=1:38.456"
-        result = parser._handle_lap_complete(line)
+        parser._handle_lap_complete(line)
 
         # Race-specific behavior (e.g., no outlap clearing)
         assert True
@@ -196,6 +184,7 @@ class TestEmitGameStatusVariations:
     async def test_emit_game_status_stopping(self):
         """Test game status False (stopping)."""
         calls = []
+
         async def on_status(running):
             calls.append(running)
 
@@ -207,6 +196,7 @@ class TestEmitGameStatusVariations:
     @pytest.mark.asyncio
     async def test_emit_game_status_with_error(self):
         """Test game status with failing callback."""
+
         async def failing_callback(running):
             raise RuntimeError("Game status callback failed")
 
@@ -229,9 +219,7 @@ class TestOutlapFlagClearing:
         """
         parser = LogParser()
         parser.current_session = SessionData(
-            track="nurburgring touristenfahrten",
-            car="porsche",
-            session_type="PRACTICE"
+            track="nurburgring touristenfahrten", car="porsche", session_type="PRACTICE"
         )
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
@@ -250,11 +238,7 @@ class TestOutlapFlagClearing:
     def test_outlap_flag_not_cleared_on_non_first_split(self):
         """Outlap flag should only clear on S1 (split id=0), not other splits."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa",
-            car="porsche",
-            session_type="PRACTICE"
-        )
+        parser.current_session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
 
         # Set outlap flag
         parser._ip.is_outlap = True
@@ -281,8 +265,7 @@ class TestOutlapFlagClearing:
         parser._ip.is_outlap = True
 
         # Real AC Evo format: start-line crossing marker (start true, splittime 0)
-        line = ("[2026-06-05 23:41:15.072] [gameplay] [info] "
-                "On Split start true end false id 0 splittime 0")
+        line = "[2026-06-05 23:41:15.072] [gameplay] [info] On Split start true end false id 0 splittime 0"
         parser._handle_splits_practice(line)
 
         # A zero-time start marker is the special Tourist-layout transition.

@@ -27,18 +27,18 @@ pytestmark = pytest.mark.integration
 def load_frames(count: int = 100) -> list[FrameData]:
     """Load frames from sample telemetry file."""
     frames = []
-    with open('tests/fixtures/sample_telemetry.jsonl', 'r') as f:
+    with open("tests/fixtures/sample_telemetry.jsonl", "r") as f:
         for i, line in enumerate(f):
             if i >= count:
                 break
             frame_json = json.loads(line)
-            physics_raw = bytes.fromhex(frame_json['physics_raw'])
+            physics_raw = bytes.fromhex(frame_json["physics_raw"])
             decoded = decode_physics(physics_raw)
             physics_dict = physics_to_dict(decoded)
 
             frame = FrameData(
-                timestamp=frame_json['timestamp'],
-                frame_number=frame_json['frame_number'],
+                timestamp=frame_json["timestamp"],
+                frame_number=frame_json["frame_number"],
                 physics=physics_dict,
             )
             frames.append(frame)
@@ -65,9 +65,9 @@ class TestBuildTrack:
 
         # Check that track points have x and z coordinates
         for point in track[:5]:
-            assert 'x' in point
-            assert 'z' in point
-            assert 'frame' in point
+            assert "x" in point
+            assert "z" in point
+            assert "frame" in point
 
     def test_build_track_has_speed(self):
         """Test that track points have speed information."""
@@ -77,24 +77,25 @@ class TestBuildTrack:
 
         # Check that track points have speed
         for point in track[:5]:
-            assert 'speed' in point
-            assert isinstance(point['speed'], (int, float))
+            assert "speed" in point
+            assert isinstance(point["speed"], (int, float))
 
     def test_build_track_uses_graphics_progress(self):
         """Test that build_track uses graphics-based progress."""
         # Create mock frames with graphics progress data
         from tests.test_telemetry_analyzer_comprehensive import create_mock_frame
+
         frames = [create_mock_frame(i, position=i * 0.01, speed=50.0) for i in range(50)]
 
         track = build_track(frames, hz=10.0)
 
         # Check that track points have norm_pos from graphics
         for point in track[:5]:
-            assert 'norm_pos' in point
-            assert point['norm_pos'] is not None
+            assert "norm_pos" in point
+            assert point["norm_pos"] is not None
 
-        assert any(point.get('has_authoritative_progress') for point in track)
-        assert any(point.get('progress_source') == 'graphics' for point in track)
+        assert any(point.get("has_authoritative_progress") for point in track)
+        assert any(point.get("progress_source") == "graphics" for point in track)
 
     def test_build_track_start_idx(self):
         """Test that start_idx parameter works correctly."""
@@ -152,10 +153,10 @@ class TestRealDataStructure:
 
         for frame in frames:
             physics = get_physics(frame)
-            assert 'velocity' in physics
-            velocity = physics['velocity']
+            assert "velocity" in physics
+            velocity = physics["velocity"]
             assert isinstance(velocity, dict), f"Expected dict, got {type(velocity)}"
-            for axis in ('x', 'y', 'z'):
+            for axis in ("x", "y", "z"):
                 assert axis in velocity, f"velocity missing '{axis}'"
 
     def test_physics_has_speed(self):
@@ -164,7 +165,7 @@ class TestRealDataStructure:
 
         for frame in frames:
             physics = get_physics(frame)
-            assert 'speed_kmh' in physics
-            speed = physics['speed_kmh']
+            assert "speed_kmh" in physics
+            speed = physics["speed_kmh"]
             assert isinstance(speed, (int, float)), f"Expected numeric, got {type(speed)}"
             assert speed >= 0, f"Speed should be non-negative, got {speed}"

@@ -20,8 +20,9 @@ from src.core.telemetry_capture import (
 from src.models import SharedSessionManager
 
 
-def _graphics_lap_buffer(*, current_lap_time_ms: int, total_lap_count: int,
-                         last_laptime_ms: int, is_valid_lap: bool) -> bytes:
+def _graphics_lap_buffer(
+    *, current_lap_time_ms: int, total_lap_count: int, last_laptime_ms: int, is_valid_lap: bool
+) -> bytes:
     """Build a graphics mapping with the stable live-lap fields populated."""
     from src.core.telemetry_decoder import (
         _PEEK_CURRENT_LAP_TIME,
@@ -52,7 +53,7 @@ class TestRegionReader:
         assert reader._view is None
         assert reader._path_used is None
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_reader_open_success(self, mock_kernel32):
         """Test successful region reader open."""
         # Mock successful open
@@ -67,7 +68,7 @@ class TestRegionReader:
         assert reader._handle == mock_handle
         assert reader._view is not None
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_reader_open_failure(self, mock_kernel32):
         """Test region reader open failure."""
         # Mock failed open
@@ -79,8 +80,8 @@ class TestRegionReader:
         assert result is False
         assert reader._handle is None
 
-    @patch('src.core.telemetry_capture.kernel32')
-    @patch('src.core.telemetry_capture.ctypes')
+    @patch("src.core.telemetry_capture.kernel32")
+    @patch("src.core.telemetry_capture.ctypes")
     def test_region_reader_read_raw(self, mock_ctypes, mock_kernel32):
         """Test reading raw bytes from region."""
         # Mock successful open and read
@@ -89,7 +90,7 @@ class TestRegionReader:
         mock_kernel32.OpenFileMappingW.return_value = mock_handle
         mock_kernel32.MapViewOfFile.return_value = mock_view
 
-        test_data = b'\x00\x01\x02\x03' * 256  # 1024 bytes
+        test_data = b"\x00\x01\x02\x03" * 256  # 1024 bytes
         mock_ctypes.string_at.return_value = test_data
 
         reader = RegionReader("test_region", 1024)
@@ -99,7 +100,7 @@ class TestRegionReader:
         assert result == test_data
         assert len(result) == 1024
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_reader_read_raw_not_open(self, mock_kernel32):
         """Test reading from unopened region raises error."""
         reader = RegionReader("test_region", 1024)
@@ -107,7 +108,7 @@ class TestRegionReader:
         with pytest.raises(RuntimeError):
             reader.read_raw()
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_reader_close(self, mock_kernel32):
         """Test closing region reader."""
         mock_handle = MagicMock()
@@ -162,13 +163,13 @@ class TestTelemetryCapture:
 
         assert capture.get_output_prefix() is None
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_frame_decoding(self, mock_kernel32):
         """Test single frame capture and decoding."""
         # Mock region reader
         mock_reader = MagicMock()
         mock_reader.size = 1024
-        mock_reader.read_raw.return_value = b'\x00' * 1024
+        mock_reader.read_raw.return_value = b"\x00" * 1024
 
         capture = TelemetryCapture(hz=10.0)
         capture._readers = {"physics": mock_reader}
@@ -179,12 +180,12 @@ class TestTelemetryCapture:
         assert frame.frame_number == 0
         assert frame.physics is not None or frame.physics == {}
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_frame_prunes_raw_when_debug_logs_off(self, mock_kernel32):
         """Raw hex blobs are dropped from in-memory frames when debug logs disabled."""
         mock_reader = MagicMock()
         mock_reader.size = 1024
-        mock_reader.read_raw.return_value = b'\x01' * 1024
+        mock_reader.read_raw.return_value = b"\x01" * 1024
 
         capture = TelemetryCapture(hz=10.0, debug_logs=False)
         capture._readers = {"physics": mock_reader}
@@ -196,12 +197,12 @@ class TestTelemetryCapture:
         assert frame.graphics_raw is None
         assert frame.static_raw is None
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_frame_keeps_raw_when_debug_logs_on(self, mock_kernel32):
         """Raw hex blobs are retained when debug logs are enabled."""
         mock_reader = MagicMock()
         mock_reader.size = 1024
-        mock_reader.read_raw.return_value = b'\x01' * 1024
+        mock_reader.read_raw.return_value = b"\x01" * 1024
 
         capture = TelemetryCapture(hz=10.0, debug_logs=True)
         capture._readers = {"physics": mock_reader}
@@ -209,11 +210,11 @@ class TestTelemetryCapture:
         frame = capture._capture_frame(0)
 
         assert frame is not None
-        assert frame.physics_raw == (b'\x01' * 1024).hex()
+        assert frame.physics_raw == (b"\x01" * 1024).hex()
 
-    @patch('src.core.telemetry_capture.decode_static')
-    @patch('src.core.telemetry_capture.decode_graphics')
-    @patch('src.core.telemetry_capture.decode_physics')
+    @patch("src.core.telemetry_capture.decode_static")
+    @patch("src.core.telemetry_capture.decode_graphics")
+    @patch("src.core.telemetry_capture.decode_physics")
     def test_capture_frame_updates_shared_session_manager(
         self,
         mock_decode_physics,
@@ -292,10 +293,7 @@ class TestTelemetryCapture:
         capture = TelemetryCapture(hz=10.0)
 
         # Add some frames
-        capture._frames = [
-            FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=i, physics={})
-            for i in range(10)
-        ]
+        capture._frames = [FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=i, physics={}) for i in range(10)]
 
         capture.record_lap_boundary(123456, 7)
 
@@ -331,10 +329,7 @@ class TestTelemetryCapture:
     def test_capture_frame_record_creation(self):
         """Test frame record creation for compatibility."""
         frame = FrameData(
-            timestamp="2024-01-01T00:00:00Z",
-            frame_number=0,
-            physics={"speed_kmh": 100.0},
-            physics_raw="aabbccdd"
+            timestamp="2024-01-01T00:00:00Z", frame_number=0, physics={"speed_kmh": 100.0}, physics_raw="aabbccdd"
         )
 
         capture = TelemetryCapture(hz=10.0)
@@ -350,11 +345,7 @@ class TestTelemetryCapture:
     def test_capture_get_frames(self):
         """Test getting captured frames."""
         capture = TelemetryCapture(hz=10.0)
-        frame = FrameData(
-            timestamp="2024-01-01T00:00:00Z",
-            frame_number=0,
-            physics={}
-        )
+        frame = FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=0, physics={})
         capture._frames = [frame]
 
         frames = capture.get_frames()
@@ -370,7 +361,7 @@ class TestTelemetryCapture:
             hz=10.0,
             regions_found=["physics"],
             region_names={"physics": "acevo_pmf_physics"},
-            region_sizes={"physics": 1024}
+            region_sizes={"physics": 1024},
         )
         capture._metadata = meta
 
@@ -393,7 +384,7 @@ class TestCaptureEdgeCases:
         assert frame.frame_number == 0
         assert frame.physics == {}
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_with_read_error(self, mock_kernel32):
         """Test capture when read fails."""
         mock_reader = MagicMock()
@@ -409,12 +400,12 @@ class TestCaptureEdgeCases:
         # Reader should be removed on error
         assert "physics" not in capture._readers
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_with_incomplete_read(self, mock_kernel32):
         """Test capture when read returns incomplete data."""
         mock_reader = MagicMock()
         mock_reader.size = 1024
-        mock_reader.read_raw.return_value = b'\x00' * 500  # Incomplete
+        mock_reader.read_raw.return_value = b"\x00" * 500  # Incomplete
 
         capture = TelemetryCapture(hz=10.0)
         capture._readers = {"physics": mock_reader}
@@ -425,12 +416,12 @@ class TestCaptureEdgeCases:
         # Reader should be removed on incomplete read
         assert "physics" not in capture._readers
 
-    @patch('src.core.telemetry_capture.decode_physics', side_effect=Exception("Decode error"))
+    @patch("src.core.telemetry_capture.decode_physics", side_effect=Exception("Decode error"))
     def test_capture_with_decode_error(self, mock_decode):
         """Test capture when decoding fails."""
         mock_reader = MagicMock()
         mock_reader.size = 1024
-        mock_reader.read_raw.return_value = b'\x00' * 1024
+        mock_reader.read_raw.return_value = b"\x00" * 1024
 
         capture = TelemetryCapture(hz=10.0)
         capture._readers = {"physics": mock_reader}
@@ -485,11 +476,7 @@ class TestFrameData:
 
     def test_frame_data_creation(self):
         """Test creating FrameData."""
-        frame = FrameData(
-            timestamp="2024-01-01T00:00:00Z",
-            frame_number=0,
-            physics={"speed_kmh": 100.0}
-        )
+        frame = FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=0, physics={"speed_kmh": 100.0})
 
         assert frame.timestamp == "2024-01-01T00:00:00Z"
         assert frame.frame_number == 0
@@ -498,11 +485,7 @@ class TestFrameData:
 
     def test_frame_data_to_dict(self):
         """Test converting FrameData to dict."""
-        frame = FrameData(
-            timestamp="2024-01-01T00:00:00Z",
-            frame_number=0,
-            physics={"speed_kmh": 100.0}
-        )
+        frame = FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=0, physics={"speed_kmh": 100.0})
 
         result = frame.to_dict()
 
@@ -521,7 +504,7 @@ class TestCaptureMetadata:
             hz=10.0,
             regions_found=["physics"],
             region_names={"physics": "acevo_pmf_physics"},
-            region_sizes={"physics": 1024}
+            region_sizes={"physics": 1024},
         )
 
         assert meta.captured_at == "2024-01-01T00:00:00Z"
@@ -535,7 +518,7 @@ class TestCaptureMetadata:
             hz=10.0,
             regions_found=["physics"],
             region_names={"physics": "acevo_pmf_physics"},
-            region_sizes={"physics": 1024}
+            region_sizes={"physics": 1024},
         )
 
         result = meta.to_dict()
@@ -548,7 +531,7 @@ class TestCaptureMetadata:
 class TestRegionReaderEdgeCases:
     """Test RegionReader edge cases."""
 
-    @patch('src.core.telemetry_capture.sys')
+    @patch("src.core.telemetry_capture.sys")
     def test_region_reader_open_non_windows(self, mock_sys):
         """Test RegionReader.open on non-Windows platform."""
         mock_sys.platform = "linux"
@@ -558,7 +541,7 @@ class TestRegionReaderEdgeCases:
 
         assert result is False
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_reader_close_exception_handling(self, mock_kernel32):
         """Test RegionReader.close with exception handling."""
         mock_kernel32.UnmapViewOfFile.side_effect = OSError("Unmap failed")
@@ -578,7 +561,7 @@ class TestRegionReaderEdgeCases:
 class TestTelemetryCaptureEdgeCases:
     """Test TelemetryCapture edge cases."""
 
-    @patch('src.core.telemetry_capture.os')
+    @patch("src.core.telemetry_capture.os")
     def test_save_raw_dump(self, mock_os):
         """Test saving raw dump to file."""
         mock_os.makedirs.return_value = None
@@ -586,15 +569,12 @@ class TestTelemetryCaptureEdgeCases:
         capture = TelemetryCapture(hz=10.0)
         capture._frames = [
             FrameData(
-                timestamp="2024-01-01T00:00:00Z",
-                frame_number=0,
-                physics={"speed_kmh": 100.0},
-                physics_raw="aabbccdd"
+                timestamp="2024-01-01T00:00:00Z", frame_number=0, physics={"speed_kmh": 100.0}, physics_raw="aabbccdd"
             )
         ]
 
         # Mock file write
-        with patch('builtins.open', create=True) as mock_open:
+        with patch("builtins.open", create=True) as mock_open:
             mock_open.return_value.__enter__ = Mock()
             mock_open.return_value.__exit__ = Mock()
             mock_open.return_value.write = Mock()
@@ -603,7 +583,7 @@ class TestTelemetryCaptureEdgeCases:
 
             assert result is True
 
-    @patch('src.core.telemetry_capture.os')
+    @patch("src.core.telemetry_capture.os")
     def test_save_raw_dump_error(self, mock_os):
         """Test save_raw_dump with error."""
         mock_os.makedirs.side_effect = Exception("Dir error")
@@ -621,7 +601,7 @@ class TestTelemetryCaptureEdgeCases:
             timestamp="2024-01-01T00:00:00Z",
             frame_number=0,
             physics="string_value",  # Non-dict payload
-            physics_raw="aabbccdd"
+            physics_raw="aabbccdd",
         )
 
         capture = TelemetryCapture(hz=10.0)
@@ -634,12 +614,7 @@ class TestTelemetryCaptureEdgeCases:
 
     def test_build_compat_frame_record_none_payload(self):
         """Test _build_compat_frame_record with None payload."""
-        frame = FrameData(
-            timestamp="2024-01-01T00:00:00Z",
-            frame_number=0,
-            physics=None,
-            physics_raw="aabbccdd"
-        )
+        frame = FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=0, physics=None, physics_raw="aabbccdd")
 
         capture = TelemetryCapture(hz=10.0)
         capture._output_prefix = "test"
@@ -713,7 +688,7 @@ class TestTelemetryCaptureEdgeCases:
         capture._stop_reason = "session_end"
         assert capture._should_notify_stop_callback() is False
 
-    @patch('src.core.telemetry_capture.RegionReader')
+    @patch("src.core.telemetry_capture.RegionReader")
     def test_connect_regions(self, mock_reader_class):
         """Test _connect_regions method."""
         mock_reader = MagicMock()
@@ -728,7 +703,7 @@ class TestTelemetryCaptureEdgeCases:
         assert "physics" in readers
         assert capture._region_paths["physics"] == "test_path"
 
-    @patch('src.core.telemetry_capture.RegionReader')
+    @patch("src.core.telemetry_capture.RegionReader")
     def test_connect_regions_failure(self, mock_reader_class):
         """Test _connect_regions when region open fails."""
         mock_reader = MagicMock()
@@ -741,7 +716,7 @@ class TestTelemetryCaptureEdgeCases:
 
         assert readers == {}
 
-    @patch('src.core.telemetry_capture.RegionReader')
+    @patch("src.core.telemetry_capture.RegionReader")
     def test_reconnect_missing(self, mock_reader_class):
         """Test _reconnect_missing method."""
         mock_reader = MagicMock()
@@ -757,7 +732,7 @@ class TestTelemetryCaptureEdgeCases:
         assert "physics" in existing_readers
         assert capture._region_paths["physics"] == "test_path"
 
-    @patch('src.core.telemetry_capture.RegionReader')
+    @patch("src.core.telemetry_capture.RegionReader")
     def test_reconnect_missing_skips_existing(self, mock_reader_class):
         """Test _reconnect_missing skips regions already connected.
 
@@ -781,7 +756,7 @@ class TestTelemetryCaptureEdgeCases:
         # All regions already present → no new RegionReader instances
         mock_reader_class.assert_not_called()
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_capture_frame_disconnected_reader(self, mock_kernel32):
         """Test _capture_frame with disconnected reader."""
         mock_reader = MagicMock()
@@ -797,7 +772,7 @@ class TestTelemetryCaptureEdgeCases:
         # Reader should be removed after disconnection
         assert "physics" not in capture._readers
 
-    @patch('src.core.telemetry_capture.kernel32')
+    @patch("src.core.telemetry_capture.kernel32")
     def test_region_reader_open_duplicate_path(self, mock_kernel32):
         """Test RegionReader.open with duplicate path in candidates."""
         mock_handle = MagicMock()
@@ -805,6 +780,7 @@ class TestTelemetryCaptureEdgeCases:
 
         # First call succeeds, second call would fail but shouldn't be attempted
         call_count = [0]
+
         def open_side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:

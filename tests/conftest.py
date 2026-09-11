@@ -15,7 +15,7 @@ from src.core import security
 from src.core.log_parser import LapData, LogParser, SessionData
 from src.utils.structured_logger import Component, log_debug
 
-TEST_APP_SECRET = "0000000000000000000000000000000000000000000000000000000000000000"
+TEST_APP_SECRET = "0000000000000000000000000000000000000000000000000000000000000000"  # noqa: S105
 
 
 @pytest.fixture(autouse=True)

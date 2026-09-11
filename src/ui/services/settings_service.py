@@ -42,19 +42,13 @@ class SettingsService:
         # Validate the enabled webhook before constructing or persisting any
         # replacement state. Disabled integrations may retain an old value,
         # but enabling Discord must never save a URL the notifier would reject.
-        if config.discord_enabled and not DiscordNotifier.validate_webhook_url(
-            config.discord_webhook_url
-        ):
+        if config.discord_enabled and not DiscordNotifier.validate_webhook_url(config.discord_webhook_url):
             raise ValueError("Invalid Discord webhook URL")
 
         server_changed = previous.server_url != config.server_url
         log_path_changed = previous.log_path != config.log_path
-        telemetry_output_changed = (
-            previous.telemetry_output_path != config.telemetry_output_path
-        )
-        telemetry_debug_changed = (
-            previous.telemetry_debug_logs != config.telemetry_debug_logs
-        )
+        telemetry_output_changed = previous.telemetry_output_path != config.telemetry_output_path
+        telemetry_debug_changed = previous.telemetry_debug_logs != config.telemetry_debug_logs
 
         # Construct every replacement before mutating live application state.
         # This prevents a bad import or constructor from leaving Settings half
@@ -148,7 +142,7 @@ class SettingsService:
                 )
             app._telemetry_analyzer = staged_analyzer
             app._telemetry_button = staged_button
-            assert app._telemetry_button is not None
+            assert app._telemetry_button is not None  # noqa: S101
             app._telemetry_button.update_path(config.telemetry_output_path)
             app._attach_telemetry_ui()
         elif not config.telemetry_enabled and app._telemetry_capture:

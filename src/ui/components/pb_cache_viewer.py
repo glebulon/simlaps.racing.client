@@ -4,7 +4,6 @@ PB Cache Viewer - Shows personal best times loaded from server.
 Displays all track/car combinations with their best lap times.
 """
 
-
 import flet as ft
 
 from ...core.pb_cache import PBCache
@@ -32,10 +31,13 @@ def show_pb_cache_dialog(page: ft.Page, pb_cache: PBCache):
 
     if not cache_data:
         content = ft.Container(
-            content=ft.Column([
-                ft.Text("No personal best data loaded", size=16, color="#888888"),
-                ft.Text("Try recording some laps or check server connection", size=12, color="#666666"),
-            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
+            content=ft.Column(
+                [
+                    ft.Text("No personal best data loaded", size=16, color="#888888"),
+                    ft.Text("Try recording some laps or check server connection", size=12, color="#666666"),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
             padding=ft.Padding.all(20),
             width=400,
             height=200,
@@ -53,19 +55,21 @@ def show_pb_cache_dialog(page: ft.Page, pb_cache: PBCache):
             )
 
         content = ft.Container(
-            content=ft.Column([
-                ft.Text("Personal Best Cache", size=18, weight=ft.FontWeight.BOLD),
-                ft.Divider(height=1),
-                ft.Container(
-                    content=ft.ListView(
-                        items,
-                        height=300,
-                        spacing=1,
+            content=ft.Column(
+                [
+                    ft.Text("Personal Best Cache", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Divider(height=1),
+                    ft.Container(
+                        content=ft.ListView(
+                            items,
+                            height=300,
+                            spacing=1,
+                        ),
+                        border=ft.Border.all(1, "#3d3d5c"),
+                        border_radius=8,
                     ),
-                    border=ft.Border.all(1, "#3d3d5c"),
-                    border_radius=8,
-                ),
-            ]),
+                ]
+            ),
             padding=ft.Padding.all(20),
             width=500,
             height=400,

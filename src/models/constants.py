@@ -43,15 +43,16 @@ def is_hybrid_car(
     """
     return bool(has_ers_from_shm or has_kers_from_shm)
 
+
 # Raw GameModeType → normalised session label.
 SESSION_TYPE_MAP: dict[str, str] = {
     "INSTANT_RACE": "RACE",
-    "RACE":         "RACE",
-    "PRACTICE":     "PRACTICE",
-    "TIME_ATTACK":  "TIME_ATTACK",
-    "QUALIFYING":   "QUALIFYING",
-    "HOTLAP":       "HOTLAP",
-    "DRIFT":        "DRIFT",
+    "RACE": "RACE",
+    "PRACTICE": "PRACTICE",
+    "TIME_ATTACK": "TIME_ATTACK",
+    "QUALIFYING": "QUALIFYING",
+    "HOTLAP": "HOTLAP",
+    "DRIFT": "DRIFT",
 }
 
 # Modes that use the player-only "On Split start" sector format.

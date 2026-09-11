@@ -29,22 +29,10 @@ CREATING_CAR = (
     f"[ServerVehicleSystem][{CAR_UUID_RUNTIME}] Creating Car "
     f"(Glebulon  \t{STEAM_ID})"
 )
-SPLIT_START = (
-    "[2026-09-11 13:29:27.842] [gameplay] [info] "
-    "On Split start false end false id 0 splittime 0"
-)
-SPLIT_MID = (
-    "[2026-09-11 13:32:14.768] [gameplay] [info] "
-    "On Split start false end false id 1 splittime 166929"
-)
-PHYSICS_LAP = (
-    "[2026-09-11 13:35:30.931] [physics] [info] "
-    "Lap test evOnLapCompleted 2 completed"
-)
-NEW_LAP = (
-    "[2026-09-11 13:35:30.966] [gameplay] [info] "
-    f"New lap carId {CAR_UUID_RUNTIME}: 08:20.409"
-)
+SPLIT_START = "[2026-09-11 13:29:27.842] [gameplay] [info] On Split start false end false id 0 splittime 0"
+SPLIT_MID = "[2026-09-11 13:32:14.768] [gameplay] [info] On Split start false end false id 1 splittime 166929"
+PHYSICS_LAP = "[2026-09-11 13:35:30.931] [physics] [info] Lap test evOnLapCompleted 2 completed"
+NEW_LAP = f"[2026-09-11 13:35:30.966] [gameplay] [info] New lap carId {CAR_UUID_RUNTIME}: 08:20.409"
 
 
 class TestOfflineSinglePlayerBinding:
@@ -104,10 +92,7 @@ class TestOfflineSinglePlayerFallbackSession:
 
         # It must land in the session once finalised.
         parser._finalise_current_session()
-        assert any(
-            lp.lap_time_ms == parser._parse_lap_time_ms("08:20.409")
-            for lp in parser.sessions[-1].laps
-        )
+        assert any(lp.lap_time_ms == parser._parse_lap_time_ms("08:20.409") for lp in parser.sessions[-1].laps)
 
     def test_new_lap_alone_creates_session_and_emits(self):
         """Even if splits are missed, a player ``New lap`` should still create a

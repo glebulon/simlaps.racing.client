@@ -13,14 +13,12 @@ _CATALOG_PATH = Path(__file__).parent / "data" / "track_catalog.json"
 def _load_catalog() -> dict:
     """Load track catalog from JSON file with schema validation."""
     try:
-        catalog_text = resources.files("src.core").joinpath(
-            "data", "track_catalog.json"
-        ).read_text(encoding="utf-8")
+        catalog_text = resources.files("src.core").joinpath("data", "track_catalog.json").read_text(encoding="utf-8")
     except (FileNotFoundError, ModuleNotFoundError, OSError, TypeError):
         # Keep source checkouts and PyInstaller bundles working when the
         # package resource loader is not available for the active importer.
         if not _CATALOG_PATH.exists():
-            raise FileNotFoundError(f"Track catalog not found at {_CATALOG_PATH}")
+            raise FileNotFoundError(f"Track catalog not found at {_CATALOG_PATH}")  # noqa: B904
         catalog_text = _CATALOG_PATH.read_text(encoding="utf-8")
 
     catalog = json.loads(catalog_text)
@@ -90,9 +88,7 @@ def build_track_profile(track_key: str, config_key: str) -> dict:
     config = track["configs"][config_key]
     corners = config.get("corners", [])
     # Overall profile confidence: "estimated" if any corner is estimated
-    overall_confidence = "estimated" if any(
-        _corner_confidence(c) == "estimated" for c in corners
-    ) else "profiled"
+    overall_confidence = "estimated" if any(_corner_confidence(c) == "estimated" for c in corners) else "profiled"
     return {
         "track_key": track_key,
         "track_name": track["name"],

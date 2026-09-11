@@ -1,4 +1,5 @@
 """Validate the track catalog for data quality issues."""
+
 import json
 from pathlib import Path
 
@@ -36,11 +37,15 @@ for track_key, track in catalog.items():
 
             # Overlap with previous
             if prev_end > 0 and start < prev_end:
-                issues.append(f"OVERLAP: {track_key}/{config_key} corner {cid} starts at {start} before prev corner ends at {prev_end}")
+                issues.append(
+                    f"OVERLAP: {track_key}/{config_key} corner {cid} starts at {start} before prev corner ends at {prev_end}"  # noqa: E501
+                )
 
             # Gap too large
             if prev_end > 0 and start - prev_end > 0.06:
-                issues.append(f"GAP: {track_key}/{config_key} gap of {start - prev_end:.3f} between corner {cid - 1} and {cid}")
+                issues.append(
+                    f"GAP: {track_key}/{config_key} gap of {start - prev_end:.3f} between corner {cid - 1} and {cid}"
+                )
 
             # Bounds
             if start < 0 or end > 1:
@@ -53,7 +58,9 @@ for track_key, track in catalog.items():
         if corners and corners[-1]["end"] < 1.0:
             diff = 1.0 - corners[-1]["end"]
             if diff > 0.02:
-                issues.append(f"WRAP: {track_key}/{config_key} last corner \"{corners[-1]['name']}\" ends at {corners[-1]['end']}, gap of {diff:.3f} to finish line")
+                issues.append(
+                    f'WRAP: {track_key}/{config_key} last corner "{corners[-1]["name"]}" ends at {corners[-1]["end"]}, gap of {diff:.3f} to finish line'  # noqa: E501
+                )
 
 print(f"Validated {len(catalog)} tracks, {corner_count} corners total")
 if issues:

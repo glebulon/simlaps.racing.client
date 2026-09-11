@@ -123,9 +123,7 @@ async def test_lap_submission_updates_history_and_discord_when_card_is_unmounted
     card = home.add_lap(session, _lap(), LapCardStatus.SUBMITTING)
     history_entry = SimpleNamespace(was_submitted=False)
     api_client = MagicMock()
-    api_client.submit_lap = AsyncMock(
-        return_value=SimpleNamespace(status=SubmissionStatus.SUCCESS, message="ok")
-    )
+    api_client.submit_lap = AsyncMock(return_value=SimpleNamespace(status=SubmissionStatus.SUCCESS, message="ok"))
     post_to_discord = AsyncMock()
 
     with patch.object(type(card), "page", new_callable=_unmounted_page):

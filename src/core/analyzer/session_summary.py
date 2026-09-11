@@ -1,4 +1,5 @@
 """Session summary persistence — extracted from telemetry_analyzer.py."""
+
 import json
 import os
 from datetime import datetime, timezone

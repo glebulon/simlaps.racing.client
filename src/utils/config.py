@@ -107,7 +107,7 @@ class AppConfig:
     @classmethod
     def from_dict(cls, data: dict) -> "AppConfig":
         """Create config from dictionary.
-        
+
         Applies schema migrations for legacy field renames and logs warnings
         when unrecognised fields are encountered so they can be cleaned up
         in a future config version.
@@ -147,14 +147,14 @@ class AppConfig:
 class ConfigManager:
     """
     Manages application configuration.
-    
+
     Handles loading, saving, and updating configuration values.
     """
 
     def __init__(self, config_path: Optional[Path] = None):
         """
         Initialize configuration manager.
-        
+
         Args:
             config_path: Optional custom config file path
         """
@@ -165,10 +165,10 @@ class ConfigManager:
     def load(self) -> AppConfig:
         """
         Load configuration from file.
-        
+
         Creates default config if file doesn't exist.
         Migrates old ACE log path to new location.
-        
+
         Returns:
             Loaded or default configuration
         """
@@ -198,7 +198,7 @@ class ConfigManager:
     def save(self) -> bool:
         """
         Save current configuration to file.
-        
+
         Returns:
             True if save was successful
         """
@@ -232,7 +232,7 @@ class ConfigManager:
     def get(self) -> AppConfig:
         """
         Get current configuration.
-        
+
         Returns:
             Current configuration (loads if not already loaded)
         """
@@ -243,10 +243,10 @@ class ConfigManager:
     def update(self, **kwargs) -> AppConfig:
         """
         Update configuration values.
-        
+
         Args:
             **kwargs: Configuration values to update
-            
+
         Returns:
             Updated configuration
         """
@@ -262,7 +262,7 @@ class ConfigManager:
     def reset(self) -> AppConfig:
         """
         Reset configuration to defaults.
-        
+
         Returns:
             Default configuration
         """
@@ -279,7 +279,7 @@ class ConfigManager:
     ) -> None:
         """
         Set Discord configuration.
-        
+
         Args:
             webhook_url: Discord webhook URL
             enabled: Whether Discord posting is enabled

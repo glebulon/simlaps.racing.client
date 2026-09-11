@@ -18,7 +18,9 @@ def render_response_contract(ctx: PromptContext) -> List[str]:
     lines.append("CRITICAL STYLE RULE: Be extremely concise. Each bullet is ONE short actionable sentence.")
     lines.append("The driver reads this at a glance between sessions. Information overload = useless.")
     lines.append("Good example: 'Brake 1s sooner and turn in later to setup for exit (+0.7s).'")
-    lines.append("Bad example: 'Lap 4 applies 1.02G peak braking with 25% trail brake into a corner where Lap 2 peaks at 0.35G — remove the brake input entirely.'")
+    lines.append(
+        "Bad example: 'Lap 4 applies 1.02G peak braking with 25% trail brake into a corner where Lap 2 peaks at 0.35G — remove the brake input entirely.'"  # noqa: E501
+    )
     lines.append("One supporting number per bullet maximum. No multi-stat comparisons. No lap-vs-lap narration.")
     lines.append("")
     lines.append("Output in clean Markdown. Use ## for section headers.")
@@ -35,7 +37,9 @@ def render_response_contract(ctx: PromptContext) -> List[str]:
     lines.append("")
     lines.append("- **[Corner Name]** | -[delta]s | [short action to fix it]")
     lines.append("")
-    lines.append("The action must be a direct instruction (e.g. 'lift instead of braking', 'brake 0.5s earlier', 'carry 15 km/h more apex speed').")
+    lines.append(
+        "The action must be a direct instruction (e.g. 'lift instead of braking', 'brake 0.5s earlier', 'carry 15 km/h more apex speed')."  # noqa: E501
+    )
     lines.append("Do NOT explain the cause in detail — just state what to change.")
     lines.append("")
     lines.append("---")
@@ -57,7 +61,9 @@ def render_response_contract(ctx: PromptContext) -> List[str]:
     lines.append("## 3. CONSISTENCY")
     lines.append("")
     lines.append("3 bullets maximum. One line each.")
-    lines.append("Format: **[Corner]:** [apex range] km/h spread — [one-phrase cause: 'no braking marker' or 'commitment varies'].")
+    lines.append(
+        "Format: **[Corner]:** [apex range] km/h spread — [one-phrase cause: 'no braking marker' or 'commitment varies']."  # noqa: E501
+    )
     lines.append("")
     lines.append("---")
     lines.append("")
@@ -73,8 +79,12 @@ def render_response_contract(ctx: PromptContext) -> List[str]:
         lines.append("- 'Signal' = one data point (e.g. '28.4 psi hot', 'peak brake temp 620C').")
         lines.append("- 'Change' = short directional action (e.g. 'reduce 0.5 psi', 'raise rear 1 step').")
         lines.append("- Parameter and Signal MUST describe the same subsystem. Never mix evidence across systems.")
-        lines.append("- Tyre pressure rows MUST use tyre pressure evidence in psi only -- never brake temperature, tyre temperature, or wear.")
-        lines.append("- Brake temperature evidence may only support brake-related parameters, and only if that brake-related parameter is listed as adjustable for this car.")
+        lines.append(
+            "- Tyre pressure rows MUST use tyre pressure evidence in psi only -- never brake temperature, tyre temperature, or wear."  # noqa: E501
+        )
+        lines.append(
+            "- Brake temperature evidence may only support brake-related parameters, and only if that brake-related parameter is listed as adjustable for this car."  # noqa: E501
+        )
         lines.append("- If you do not have a matching telemetry signal for a parameter, omit that row entirely.")
         if tuning_block:
             lines.append("- ONLY recommend parameters listed in the CAR SETUP PARAMETERS section above.")
@@ -94,7 +104,9 @@ def render_response_contract(ctx: PromptContext) -> List[str]:
     lines.append("3 bullets maximum. One line each.")
     lines.append("Use the STRAIGHT/SECTOR ANALYSIS and EXIT-TO-ENTRY CORRELATION data above.")
     lines.append("Format: **[Corner A → Corner B]:** [insight] ([one number]).")
-    lines.append("Only include straights where there is meaningful time spread between laps or exit speed is compromising the next corner.")
+    lines.append(
+        "Only include straights where there is meaningful time spread between laps or exit speed is compromising the next corner."  # noqa: E501
+    )
     lines.append("Example: '**T2 → T3:** Poor T2 exit costs 0.4s on straight — get on throttle 0.3s earlier.'")
     lines.append("Example: '**T4 → T5:** 0.5s spread on straight — carry more speed through T4 exit.'")
     lines.append("")
@@ -104,7 +116,9 @@ def render_response_contract(ctx: PromptContext) -> List[str]:
     lines.append("")
     lines.append("3 bullets maximum. One line each.")
     lines.append("Format: **[Corner/Section]:** [short insight] ([one number]).")
-    lines.append("Only include observations where the car has significant unused grip or the corner can be taken differently than expected.")
+    lines.append(
+        "Only include observations where the car has significant unused grip or the corner can be taken differently than expected."  # noqa: E501
+    )
     lines.append("Example: '**Blanchimont:** Can be taken flat — only 0.77G used vs 2.26G available.'")
     lines.append("")
     lines.append("---")

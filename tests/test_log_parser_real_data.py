@@ -47,7 +47,7 @@ class TestSessionEndDetection:
         """Test that END_SESSION with player car triggers game_status=False."""
         parser = make_parser(PLAYER_CAR_ID)
 
-        line = "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb car"
+        line = "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb car"  # noqa: E501
 
         # Process the line
         parser._process_line(line)
@@ -59,7 +59,7 @@ class TestSessionEndDetection:
         """Test that END_SESSION for other cars can still trigger via fallback."""
         parser = make_parser(PLAYER_CAR_ID)
 
-        line = "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for cccccccccccccccc-dddddddddddddddd car"
+        line = "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for cccccccccccccccc-dddddddddddddddd car"  # noqa: E501
 
         # Process the line - other car
         parser._process_line(line)
@@ -71,7 +71,7 @@ class TestSessionEndDetection:
         """Test END_SESSION with 'teleported to pit' pattern."""
         parser = make_parser(PLAYER_CAR_ID)
 
-        line = "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION car cccccccccccccccc-dddddddddddddddd has ended teleported to pit"
+        line = "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION car cccccccccccccccc-dddddddddddddddd has ended teleported to pit"  # noqa: E501
 
         # Process the line
         parser._process_line(line)
@@ -146,9 +146,9 @@ class TestMultipleCarsInRace:
         parser = make_parser(PLAYER_CAR_ID)
 
         lines = [
-            "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for cccccccccccccccc-dddddddddddddddd car",
-            "[2000-01-01 00:00:01.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for 1111111111111111-2222222222222222 car",
-            "[2000-01-01 00:00:02.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb car",
+            "[2000-01-01 00:00:00.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for cccccccccccccccc-dddddddddddddddd car",  # noqa: E501
+            "[2000-01-01 00:00:01.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for 1111111111111111-2222222222222222 car",  # noqa: E501
+            "[2000-01-01 00:00:02.000] [gameplay] [info] END_SESSION WatingForOthers Ending Lap for aaaaaaaaaaaaaaaa-bbbbbbbbbbbbbbbb car",  # noqa: E501
         ]
 
         for line in lines:

@@ -34,10 +34,7 @@ class TestSelectTrackProfile:
 
     def test_select_by_track_name_with_config(self):
         """Test selecting track with specific config."""
-        track_key, profile = select_track_profile(
-            track_name="brands_hatch",
-            config_name="gp"
-        )
+        track_key, profile = select_track_profile(track_name="brands_hatch", config_name="gp")
 
         assert track_key is not None
         assert profile is not None
@@ -188,7 +185,7 @@ class TestTrackCatalog:
 
     def test_catalog_has_required_fields(self):
         """Test catalog entries have required fields."""
-        for track_key, track_data in TRACK_CATALOG.items():
+        for _track_key, track_data in TRACK_CATALOG.items():
             assert "name" in track_data or "display_name" in track_data
             assert "configs" in track_data
             assert "default_config" in track_data
@@ -200,9 +197,7 @@ class TestNordschleifeConfigSelection:
 
     def test_static_nordschleife_selects_nordschleife_config(self):
         """Static SHM config "Nordschleife" resolves to the plain layout."""
-        track_key, profile = select_track_profile(
-            track_name="Nurburgring", config_name="Nordschleife"
-        )
+        track_key, profile = select_track_profile(track_name="Nurburgring", config_name="Nordschleife")
 
         assert track_key == "nurburgring_nordschleife"
         assert profile["config_key"] == "nordschleife"
@@ -211,9 +206,7 @@ class TestNordschleifeConfigSelection:
 
     def test_static_gp_selects_gp_config(self):
         """Static SHM config "GP" skips the Nordschleife entry and finds GP."""
-        track_key, profile = select_track_profile(
-            track_name="Nurburgring", config_name="GP"
-        )
+        track_key, profile = select_track_profile(track_name="Nurburgring", config_name="GP")
 
         assert track_key == "nurburgring_gp"
         assert profile["config_key"] == "gp"

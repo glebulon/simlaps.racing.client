@@ -1,4 +1,5 @@
 """Corner detection functions — extracted from telemetry_analyzer.py."""
+
 import math
 from typing import Any, Dict, List, Optional
 
@@ -22,7 +23,8 @@ def _detect_profiled_corners_canonical(
     result = []
     for spec in profile.get("corners", []):
         window = [
-            pt for pt in canonical_track
+            pt
+            for pt in canonical_track
             if spec["start"] <= (pt.get("lap_progress") if pt.get("lap_progress") is not None else -1.0) < spec["end"]
         ]
         if len(window) < 4:
@@ -30,17 +32,13 @@ def _detect_profiled_corners_canonical(
 
         speed_series = [_optional_float(pt.get("speed")) for pt in window]
         smoothed_speed = _median3(speed_series)
-        apex_candidates = [
-            (idx, value)
-            for idx, value in enumerate(smoothed_speed)
-            if value is not None
-        ]
+        apex_candidates = [(idx, value) for idx, value in enumerate(smoothed_speed) if value is not None]
         if not apex_candidates:
             continue
 
         apex_idx, apex_speed = min(apex_candidates, key=lambda item: item[1])
         entry_idx = 0
-        for idx, pt in enumerate(window[:apex_idx + 1]):
+        for idx, pt in enumerate(window[: apex_idx + 1]):
             brake = _optional_float(pt.get("brake")) or 0.0
             steer = abs(_optional_float(pt.get("steer")) or 0.0)
             if brake >= 0.08 or steer >= 0.03:
@@ -67,15 +65,14 @@ def _detect_profiled_corners_canonical(
         exit_pt = window[exit_idx]
         valid_speed_ratio = sum(1 for value in speed_series if value is not None) / len(window)
         confidence = round(
-            min(1.0, len(window) / 8.0) * 0.2
-            + valid_speed_ratio * 0.4
-            + (0.4 if authoritative_progress else 0.1),
+            min(1.0, len(window) / 8.0) * 0.2 + valid_speed_ratio * 0.4 + (0.4 if authoritative_progress else 0.1),
             3,
         )
 
         m_start, m_end = _corner_measurement_window(spec)
         measurement = [
-            pt for pt in canonical_track
+            pt
+            for pt in canonical_track
             if m_start <= (pt.get("lap_progress") if pt.get("lap_progress") is not None else -1.0) < m_end
         ]
         if len(measurement) >= 2:
@@ -89,29 +86,32 @@ def _detect_profiled_corners_canonical(
         else:
             segment_time_s = None
 
-        result.append({
-            "id": spec["id"],
-            "name": spec["name"],
-            "start_frame": entry["frame"],
-            "end_frame": exit_pt["frame"],
-            "apex_frame": apex["frame"],
-            "apex_speed": min(
-                value for value in smoothed_speed[max(0, apex_idx - 1):min(len(window), apex_idx + 2)]
-                if value is not None
-            ),
-            "min_speed": min(value for value in speed_series if value is not None),
-            "entry_speed": _local_average(window, entry_idx, "speed"),
-            "exit_speed": _local_average(window, exit_idx, "speed"),
-            "apex_x": _optional_float(apex.get("x")) or 0.0,
-            "apex_z": _optional_float(apex.get("z")) or 0.0,
-            "lap_pos": apex.get("lap_progress", spec["start"]),
-            "segment_time_s": segment_time_s,
-            "confidence": confidence,
-            "confidence_label": _confidence_label(confidence),
-            "entry_state": extract_car_state(entry),
-            "apex_state": extract_car_state(apex),
-            "exit_state": extract_car_state(exit_pt),
-        })
+        result.append(
+            {
+                "id": spec["id"],
+                "name": spec["name"],
+                "start_frame": entry["frame"],
+                "end_frame": exit_pt["frame"],
+                "apex_frame": apex["frame"],
+                "apex_speed": min(
+                    value
+                    for value in smoothed_speed[max(0, apex_idx - 1) : min(len(window), apex_idx + 2)]
+                    if value is not None
+                ),
+                "min_speed": min(value for value in speed_series if value is not None),
+                "entry_speed": _local_average(window, entry_idx, "speed"),
+                "exit_speed": _local_average(window, exit_idx, "speed"),
+                "apex_x": _optional_float(apex.get("x")) or 0.0,
+                "apex_z": _optional_float(apex.get("z")) or 0.0,
+                "lap_pos": apex.get("lap_progress", spec["start"]),
+                "segment_time_s": segment_time_s,
+                "confidence": confidence,
+                "confidence_label": _confidence_label(confidence),
+                "entry_state": extract_car_state(entry),
+                "apex_state": extract_car_state(apex),
+                "exit_state": extract_car_state(exit_pt),
+            }
+        )
 
     return result
 
@@ -164,7 +164,7 @@ def detect_corners(track: List[Dict], lap_start_frame: int, lap_end_frame: int, 
         dur = ci_end - ci_start + 1
         if dur < min_dur:
             continue
-        window = seg[ci_start:ci_end + 1]
+        window = seg[ci_start : ci_end + 1]
         apex_idx = min(range(len(window)), key=lambda i: window[i]["speed"])
         apex = window[apex_idx]
         entry = window[0]
@@ -176,22 +176,24 @@ def detect_corners(track: List[Dict], lap_start_frame: int, lap_end_frame: int, 
         entry_speed = sum(pt["speed"] for pt in window[:_N_AVG]) / _N_AVG
         exit_speed = sum(pt["speed"] for pt in window[-_N_AVG:]) / _N_AVG
 
-        result.append({
-            "id": cid,
-            "start_frame": seg[ci_start]["frame"],
-            "end_frame": seg[ci_end]["frame"],
-            "apex_frame": apex["frame"],
-            "apex_speed": apex["speed"],
-            "min_speed": min(pt["speed"] for pt in window),
-            "entry_speed": entry_speed,
-            "exit_speed": exit_speed,
-            "apex_x": apex["x"],
-            "apex_z": apex["z"],
-            "lap_pos": seg[ci_start]["lap_pos"],
-            "entry_state": extract_car_state(entry),
-            "apex_state": extract_car_state(apex),
-            "exit_state": extract_car_state(exit_pt),
-        })
+        result.append(
+            {
+                "id": cid,
+                "start_frame": seg[ci_start]["frame"],
+                "end_frame": seg[ci_end]["frame"],
+                "apex_frame": apex["frame"],
+                "apex_speed": apex["speed"],
+                "min_speed": min(pt["speed"] for pt in window),
+                "entry_speed": entry_speed,
+                "exit_speed": exit_speed,
+                "apex_x": apex["x"],
+                "apex_z": apex["z"],
+                "lap_pos": seg[ci_start]["lap_pos"],
+                "entry_state": extract_car_state(entry),
+                "apex_state": extract_car_state(apex),
+                "exit_state": extract_car_state(exit_pt),
+            }
+        )
 
     for i, c in enumerate(result):
         c["id"] = i + 1
@@ -218,12 +220,7 @@ def detect_profiled_corners(
 
     result = []
     for spec in profile.get("corners", []):
-        window = [
-            pt
-            for pt in seg
-            if pt["lap_pos"] is not None
-            and spec["start"] <= pt["lap_pos"] < spec["end"]
-        ]
+        window = [pt for pt in seg if pt["lap_pos"] is not None and spec["start"] <= pt["lap_pos"] < spec["end"]]
         if not window:
             continue
 
@@ -241,12 +238,7 @@ def detect_profiled_corners(
         # is evaluated on the identical track section.
         m_start, m_end = _corner_measurement_window(spec)
         if has_norm_pos:
-            measurement = [
-                pt
-                for pt in seg
-                if pt["lap_pos"] is not None
-                and m_start <= pt["lap_pos"] < m_end
-            ]
+            measurement = [pt for pt in seg if pt["lap_pos"] is not None and m_start <= pt["lap_pos"] < m_end]
             if len(measurement) >= 2:
                 segment_time_s = (measurement[-1]["frame"] - measurement[0]["frame"]) / hz
                 confidence = 0.5
@@ -259,26 +251,28 @@ def detect_profiled_corners(
             confidence = 0.0
             confidence_label = "low"
 
-        result.append({
-            "id": spec["id"],
-            "name": spec["name"],
-            "start_frame": entry["frame"],
-            "end_frame": exit_pt["frame"],
-            "apex_frame": apex["frame"],
-            "apex_speed": apex["speed"],
-            "min_speed": min(pt["speed"] for pt in window),
-            "entry_speed": entry_speed,
-            "exit_speed": exit_speed,
-            "apex_x": apex["x"],
-            "apex_z": apex["z"],
-            "lap_pos": apex["lap_pos"],
-            "segment_time_s": segment_time_s,
-            "confidence": confidence,
-            "confidence_label": confidence_label,
-            "entry_state": extract_car_state(entry),
-            "apex_state": extract_car_state(apex),
-            "exit_state": extract_car_state(exit_pt),
-        })
+        result.append(
+            {
+                "id": spec["id"],
+                "name": spec["name"],
+                "start_frame": entry["frame"],
+                "end_frame": exit_pt["frame"],
+                "apex_frame": apex["frame"],
+                "apex_speed": apex["speed"],
+                "min_speed": min(pt["speed"] for pt in window),
+                "entry_speed": entry_speed,
+                "exit_speed": exit_speed,
+                "apex_x": apex["x"],
+                "apex_z": apex["z"],
+                "lap_pos": apex["lap_pos"],
+                "segment_time_s": segment_time_s,
+                "confidence": confidence,
+                "confidence_label": confidence_label,
+                "entry_state": extract_car_state(entry),
+                "apex_state": extract_car_state(apex),
+                "exit_state": extract_car_state(exit_pt),
+            }
+        )
 
     return result
 

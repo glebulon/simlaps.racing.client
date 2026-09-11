@@ -73,9 +73,7 @@ def test_update_config_discards_unsaved_form_edits() -> None:
 
 
 def test_discord_pb_filter_is_scoped_and_disabled_with_posting() -> None:
-    page = SettingsPage(
-        config=AppConfig(discord_enabled=False, discord_pb_only=True)
-    )
+    page = SettingsPage(config=AppConfig(discord_enabled=False, discord_pb_only=True))
 
     assert page._discord_pb_only_switch.disabled is True
     assert page._discord_pb_only_switch.value is True

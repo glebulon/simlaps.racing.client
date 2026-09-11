@@ -4,7 +4,6 @@ Comprehensive tests for security module.
 Tests signing, nonce generation, and timestamp functions.
 """
 
-
 import pytest
 
 from src.core.security import (
@@ -49,7 +48,7 @@ class TestSigning:
                 nonce="test-nonce",
                 user_id="76561198321627695",
                 track_id="spa_francorchamps",
-                lap_time=83456
+                lap_time=83456,
             )
 
             assert signature is not None
@@ -61,11 +60,7 @@ class TestSigning:
     def test_sign_payload_valid(self):
         """Test signing a valid payload."""
         try:
-            payload = {
-                "userId": "76561198321627695",
-                "trackId": "spa_francorchamps",
-                "time": 83456
-            }
+            payload = {"userId": "76561198321627695", "trackId": "spa_francorchamps", "time": 83456}
 
             result = sign_payload(payload)
 
@@ -88,7 +83,7 @@ class TestSigning:
                 "sector2": 48000,
                 "sector3": -1,
                 "gameVersion": "1.0.0",
-                "tires": "S"
+                "tires": "S",
             }
 
             result = sign_payload(payload)
@@ -102,11 +97,7 @@ class TestSigning:
     def test_verify_signature_locally(self):
         """Test local signature verification."""
         try:
-            payload = {
-                "userId": "76561198321627695",
-                "trackId": "spa_francorchamps",
-                "time": 83456
-            }
+            payload = {"userId": "76561198321627695", "trackId": "spa_francorchamps", "time": 83456}
             signed = sign_payload(payload)
 
             result = verify_signature_locally(signed)
@@ -118,11 +109,7 @@ class TestSigning:
     def test_verify_signature_locally_invalid(self):
         """Test verification with invalid signature."""
         try:
-            payload = {
-                "userId": "76561198321627695",
-                "trackId": "spa_francorchamps",
-                "time": 83456
-            }
+            payload = {"userId": "76561198321627695", "trackId": "spa_francorchamps", "time": 83456}
             signed = sign_payload(payload)
             signed["_signature"] = "invalid_signature"
 
@@ -204,7 +191,7 @@ class TestIntegration:
                 "sector2": 48000,
                 "sector3": -1,
                 "gameVersion": "1.0.0",
-                "tires": "S"
+                "tires": "S",
             }
 
             signed = sign_payload(payload)
@@ -226,6 +213,7 @@ class TestGameDetection:
 
             # Should return a GameProcessStatus enum
             from src.core.security import GameProcessStatus
+
             assert isinstance(result, GameProcessStatus)
             assert result in [GameProcessStatus.RUNNING, GameProcessStatus.NOT_RUNNING, GameProcessStatus.UNKNOWN]
         except Exception as e:

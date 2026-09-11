@@ -16,9 +16,7 @@ class TestFollowCore:
     """Test core follow() functionality."""
 
     @pytest.mark.asyncio
-    async def test_stop_during_large_historical_pass_exits_before_live_callbacks(
-        self, tmp_path
-    ):
+    async def test_stop_during_large_historical_pass_exits_before_live_callbacks(self, tmp_path):
         """Stopping at a cooperative yield must not cross the live boundary."""
         car_id = "4d27cc23-ee6c-e0de-9c38-10448288bcbb"
         historical_lap = (
@@ -84,9 +82,7 @@ class TestFollowCore:
 
         stop_task = asyncio.create_task(stopper())
         try:
-            await asyncio.wait_for(
-                parser.follow(poll_interval=0.01), timeout=1.0
-            )
+            await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=1.0)
         finally:
             parser.stop()
             await stop_task
@@ -233,6 +229,7 @@ class TestFollowWithCallbacks:
         log_file.write_text("Game Started!\n")
 
         status_calls = []
+
         async def on_status(msg):
             status_calls.append(msg)
 
@@ -261,11 +258,11 @@ class TestFollowWithCallbacks:
         """
         log_file = tmp_path / "test.log"
         log_file.write_text(
-            "76561198321627695 connected on car gt3_porsche, "
-            "with new carId abc12345-6789-abcd-ef01-23456789abcd\n"
+            "76561198321627695 connected on car gt3_porsche, with new carId abc12345-6789-abcd-ef01-23456789abcd\n"
         )
 
         user_calls = []
+
         async def on_user(uid, name):
             user_calls.append((uid, name))
 
@@ -288,6 +285,7 @@ class TestFollowWithCallbacks:
         log_file.write_text("Game Started!\n")
 
         game_calls = []
+
         async def on_game(running):
             game_calls.append(running)
 
@@ -322,21 +320,17 @@ class TestFollowWithCallbacks:
         log_file.write_text("")  # Empty so historical pass is a no-op
 
         restart_calls = []
+
         async def on_restart():
             restart_calls.append(True)
 
-        parser = LogParser(
-            log_path=str(log_file), on_session_restart=on_restart
-        )
+        parser = LogParser(log_path=str(log_file), on_session_restart=on_restart)
         parser._running = True
 
         async def append_restart():
             await asyncio.sleep(0.05)
             with open(log_file, "a", encoding="utf-8") as f:
-                f.write(
-                    "[2026-04-24 23:44:07.688] [gameface] [info] "
-                    "request made GameModeRequestRestartSession \n"
-                )
+                f.write("[2026-04-24 23:44:07.688] [gameface] [info] request made GameModeRequestRestartSession \n")
 
         appender = asyncio.create_task(append_restart())
         try:
@@ -362,21 +356,17 @@ class TestFollowWithCallbacks:
         log_file.write_text("")
 
         game_calls = []
+
         async def on_game(running):
             game_calls.append(running)
 
-        parser = LogParser(
-            log_path=str(log_file), on_game_status_change=on_game
-        )
+        parser = LogParser(log_path=str(log_file), on_game_status_change=on_game)
         parser._running = True
 
         async def append_exit():
             await asyncio.sleep(0.05)
             with open(log_file, "a", encoding="utf-8") as f:
-                f.write(
-                    "[2026-04-24 23:10:37.129] [gameface] [info] "
-                    "request made GameModeRequestExit \n"
-                )
+                f.write("[2026-04-24 23:10:37.129] [gameface] [info] request made GameModeRequestExit \n")
 
         appender = asyncio.create_task(append_exit())
         try:
@@ -387,9 +377,7 @@ class TestFollowWithCallbacks:
             parser.stop()
             await appender
 
-        assert False in game_calls, (
-            f"Expected game_status=False from Exit request, got {game_calls!r}"
-        )
+        assert False in game_calls, f"Expected game_status=False from Exit request, got {game_calls!r}"
 
     @pytest.mark.asyncio
     async def test_follow_end_session_ending_lap_emits_game_stopped(self, tmp_path):
@@ -398,12 +386,11 @@ class TestFollowWithCallbacks:
         log_file.write_text("")
 
         game_calls = []
+
         async def on_game(running):
             game_calls.append(running)
 
-        parser = LogParser(
-            log_path=str(log_file), on_game_status_change=on_game
-        )
+        parser = LogParser(log_path=str(log_file), on_game_status_change=on_game)
         parser.context.car_uuid = "4d27cc23ee6ce0de-9c3810448288bcbb"
         parser._running = True
 
@@ -424,9 +411,7 @@ class TestFollowWithCallbacks:
             parser.stop()
             await appender
 
-        assert False in game_calls, (
-            f"Expected game_status=False from END_SESSION Ending Lap, got {game_calls!r}"
-        )
+        assert False in game_calls, f"Expected game_status=False from END_SESSION Ending Lap, got {game_calls!r}"
 
     @pytest.mark.asyncio
     async def test_follow_restart_does_not_double_fire_exit(self, tmp_path):
@@ -439,6 +424,7 @@ class TestFollowWithCallbacks:
         log_file.write_text("")
 
         game_calls = []
+
         async def on_game(running):
             game_calls.append(running)
 
@@ -455,10 +441,7 @@ class TestFollowWithCallbacks:
         async def append_restart():
             await asyncio.sleep(0.05)
             with open(log_file, "a", encoding="utf-8") as f:
-                f.write(
-                    "[2026-04-24 23:44:07.688] [gameface] [info] "
-                    "request made GameModeRequestRestartSession \n"
-                )
+                f.write("[2026-04-24 23:44:07.688] [gameface] [info] request made GameModeRequestRestartSession \n")
 
         appender = asyncio.create_task(append_restart())
         try:
@@ -469,9 +452,7 @@ class TestFollowWithCallbacks:
             parser.stop()
             await appender
 
-        assert False not in game_calls, (
-            "Restart must not trigger game_status=False; that's reserved for Exit."
-        )
+        assert False not in game_calls, "Restart must not trigger game_status=False; that's reserved for Exit."
 
     @pytest.mark.asyncio
     async def test_follow_restart_keeps_lap_emission_without_game_started(self, tmp_path):
@@ -499,8 +480,7 @@ class TestFollowWithCallbacks:
         await parser._emit_session_restart()
 
         parser._process_line(
-            "[2026-05-20 00:01:03.439] [gameplay] [info] "
-            "New lap carId 4d27cc23-ee6c-e0de-9c38-10448288bcbb: 02:23.706"
+            "[2026-05-20 00:01:03.439] [gameplay] [info] New lap carId 4d27cc23-ee6c-e0de-9c38-10448288bcbb: 02:23.706"
         )
         completed = parser._process_line(
             "[2026-05-20 00:01:03.500] [network] [info] "
@@ -542,8 +522,7 @@ class TestFollowWithCallbacks:
         # Compound logged at original session start (full 4-tyre batch).
         for pos in range(4):
             parser._process_line(
-                "[2026-06-05 23:39:41.117] [physics] [info] "
-                f"setCompound Tyre: {pos} compound name: HC"
+                f"[2026-06-05 23:39:41.117] [physics] [info] setCompound Tyre: {pos} compound name: HC"
             )
 
         # Pause-menu restart — AC Evo does NOT re-log the compound afterwards.
@@ -555,8 +534,7 @@ class TestFollowWithCallbacks:
         assert parser.context.tyre.compound_name == "HC"
 
         parser._process_line(
-            "[2026-06-05 23:49:36.991] [gameplay] [info] "
-            "New lap carId 4d27cc23-ee6c-e0de-9c38-10448288bcbb: 08:21.918"
+            "[2026-06-05 23:49:36.991] [gameplay] [info] New lap carId 4d27cc23-ee6c-e0de-9c38-10448288bcbb: 08:21.918"
         )
         completed = parser._process_line(
             "[2026-06-05 23:49:36.998] [network] [info] "
@@ -659,10 +637,7 @@ class TestFollowLiveTailing:
         # This old-stream log completion remains pending, while an unmatched
         # SHM completion is retained in the shared manager.
         with open(old_file, "a", encoding="utf-8") as handle:
-            handle.write(
-                f"[2026-08-26 10:01:00.000] [gameplay] [info] "
-                f"New lap carId {car_id}: 01:20.000\n"
-            )
+            handle.write(f"[2026-08-26 10:01:00.000] [gameplay] [info] New lap carId {car_id}: 01:20.000\n")
         manager.update_from_graphics_shm(
             {
                 "total_lap_count": 0,
@@ -800,10 +775,7 @@ class TestFollowLiveTailing:
         follow_task = asyncio.create_task(parser.follow(poll_interval=0.005))
         await asyncio.sleep(0.04)
         with open(log_file, "a", encoding="utf-8") as handle:
-            handle.write(
-                f"[2026-08-26 14:01:00.000] [gameplay] [info] "
-                f"New lap carId {car_id}: 01:20.000\n"
-            )
+            handle.write(f"[2026-08-26 14:01:00.000] [gameplay] [info] New lap carId {car_id}: 01:20.000\n")
         manager.update_from_graphics_shm(
             {
                 "total_lap_count": 0,
@@ -890,11 +862,7 @@ class TestFollowLiveTailing:
         """Test follow clears historical laps before live tail."""
         log_file = tmp_path / "test.log"
         # Write existing lap
-        log_file.write_text(
-            "TRACK NAME: spa\n"
-            "CAR NAME: porsche\n"
-            "New lap carId=abc123 time=1:30.000\n"
-        )
+        log_file.write_text("TRACK NAME: spa\nCAR NAME: porsche\nNew lap carId=abc123 time=1:30.000\n")
 
         parser = LogParser(log_path=str(log_file))
         parser.context.car_uuid = "abc123"
@@ -926,9 +894,7 @@ class TestFollowExitFlushesPendingLap:
         "exit_request",
         ["GameModeRequestExit", "GameModeRequestQuitGame"],
     )
-    async def test_exit_flushes_pending_lap_without_validity(
-        self, tmp_path, exit_request
-    ):
+    async def test_exit_flushes_pending_lap_without_validity(self, tmp_path, exit_request):
         """Exit to Menu (GameModeRequestExit) and Exit to Desktop
         (GameModeRequestQuitGame) must both flush a pending lap even when
         no authoritative validity line was ever received."""
@@ -940,13 +906,9 @@ class TestFollowExitFlushesPendingLap:
         async def on_lap(session, lap):
             laps.append(lap)
 
-        parser = LogParser(
-            log_path=str(log_file), on_lap_complete=on_lap
-        )
+        parser = LogParser(log_path=str(log_file), on_lap_complete=on_lap)
         # Set up a session and player car so _handle_lap_complete buffers
-        parser.current_session = SessionData(
-            track="nurburgring", car="ktm_xbow_gt4", player_id="76561198321627695"
-        )
+        parser.current_session = SessionData(track="nurburgring", car="ktm_xbow_gt4", player_id="76561198321627695")
         parser.context.player_id = "76561198321627695"
         parser.context.car_uuid = "4d27cc23-ee6c-e0de-9c38-10448288bcbb"
         parser.context.tyre.set_all("SM")
@@ -966,16 +928,11 @@ class TestFollowExitFlushesPendingLap:
                 )
                 await asyncio.sleep(0.05)
                 # User exits — must flush the pending lap
-                f.write(
-                    "[2026-07-26 19:18:48.000] [gameface] [info] "
-                    f"request made {exit_request} \n"
-                )
+                f.write(f"[2026-07-26 19:18:48.000] [gameface] [info] request made {exit_request} \n")
 
         appender = asyncio.create_task(append_lines())
         try:
-            await asyncio.wait_for(
-                parser.follow(poll_interval=0.01), timeout=1.0
-            )
+            await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=1.0)
         except asyncio.TimeoutError:
             pass
         finally:
@@ -1252,24 +1209,17 @@ class TestFollowHistoricalPassDoesNotEmitPendingLap:
         async def on_lap(session, lap):
             laps.append(lap)
 
-        parser = LogParser(
-            log_path=str(log_file), on_lap_complete=on_lap
-        )
+        parser = LogParser(log_path=str(log_file), on_lap_complete=on_lap)
         parser._running = True
 
         async def append_exit():
             await asyncio.sleep(0.1)
             with open(log_file, "a", encoding="utf-8") as f:
-                f.write(
-                    "[2026-07-26 19:18:48.000] [gameface] [info] "
-                    "request made GameModeRequestExit \n"
-                )
+                f.write("[2026-07-26 19:18:48.000] [gameface] [info] request made GameModeRequestExit \n")
 
         appender = asyncio.create_task(append_exit())
         try:
-            await asyncio.wait_for(
-                parser.follow(poll_interval=0.01), timeout=1.0
-            )
+            await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=1.0)
         except asyncio.TimeoutError:
             pass
         finally:
@@ -1282,9 +1232,7 @@ class TestFollowHistoricalPassDoesNotEmitPendingLap:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("delta", [0, 1, -1, 2, -2])
-async def test_follow_keeps_equal_near_equal_delayed_laps_and_ignores_stale_broadcast(
-    tmp_path, delta
-):
+async def test_follow_keeps_equal_near_equal_delayed_laps_and_ignores_stale_broadcast(tmp_path, delta):
     """The public tail flow binds delayed metadata to each SHM completion."""
     car_id = "4d27cc23-ee6e-e0de-9c38-10448288bcbb"
     log_file = tmp_path / "equal-laps.log"

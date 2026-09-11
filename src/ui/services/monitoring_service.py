@@ -121,6 +121,6 @@ class MonitoringService:
                             match = re.search(r"Build release ([^,]+),", line)
                             if match:
                                 return match.group(1)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         return None

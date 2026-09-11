@@ -32,9 +32,9 @@ UPDATE_DOWNLOAD_URL = "https://www.simlaps.racing"
 
 def get_icon_path() -> Optional[str]:
     """Get the path to the app icon (PNG for ft.Image)."""
-    if getattr(sys, 'frozen', False):
+    if getattr(sys, "frozen", False):
         # Running as compiled executable - check _MEIPASS for bundled files
-        if hasattr(sys, '_MEIPASS'):
+        if hasattr(sys, "_MEIPASS"):
             icon_path = os.path.join(sys._MEIPASS, "assets", "icon.png")
             if os.path.exists(icon_path):
                 return icon_path
@@ -55,7 +55,7 @@ def get_icon_path() -> Optional[str]:
 class HomePage(ft.Column):
     """
     Home page displaying game status, detected user, and recent laps.
-    
+
     No authentication required - Steam ID is detected from game logs.
     """
 
@@ -136,9 +136,7 @@ class HomePage(ft.Column):
                     ft.Text(self._detected_player_name, size=16, weight=ft.FontWeight.W_600, color="#ffffff")
                 )
             if self._detected_steam_id:
-                user_info_controls.append(
-                    ft.Text(f"Steam ID: {self._detected_steam_id}", size=12, color="#888888")
-                )
+                user_info_controls.append(ft.Text(f"Steam ID: {self._detected_steam_id}", size=12, color="#888888"))
             if not user_info_controls:
                 user_info_controls = [ft.Text("Detecting player...", size=14, color="#888888")]
 
@@ -146,15 +144,21 @@ class HomePage(ft.Column):
                 controls=[
                     ft.Container(
                         content=ft.Icon(ft.Icons.PLAY_CIRCLE, color="#51cf66", size=32),
-                        width=56, height=56, border_radius=28, bgcolor="#1f3d1f",
+                        width=56,
+                        height=56,
+                        border_radius=28,
+                        bgcolor="#1f3d1f",
                         alignment=ft.Alignment(0, 0),
                     ),
                     ft.Column(
                         controls=[
-                            ft.Row([
-                                ft.Container(width=10, height=10, border_radius=5, bgcolor="#51cf66"),
-                                ft.Text("Game Running", size=12, color="#51cf66", weight=ft.FontWeight.W_600),
-                            ], spacing=6),
+                            ft.Row(
+                                [
+                                    ft.Container(width=10, height=10, border_radius=5, bgcolor="#51cf66"),
+                                    ft.Text("Game Running", size=12, color="#51cf66", weight=ft.FontWeight.W_600),
+                                ],
+                                spacing=6,
+                            ),
                             *user_info_controls,
                         ],
                         spacing=4,
@@ -176,15 +180,16 @@ class HomePage(ft.Column):
                     user_info_controls.append(
                         ft.Text(self._detected_player_name, size=16, weight=ft.FontWeight.W_600, color="#ffffff")
                     )
-                user_info_controls.append(
-                    ft.Text(f"Steam ID: {self._detected_steam_id}", size=12, color="#888888")
-                )
+                user_info_controls.append(ft.Text(f"Steam ID: {self._detected_steam_id}", size=12, color="#888888"))
 
                 self._game_status_container.content = ft.Row(
                     controls=[
                         ft.Container(
                             content=ft.Icon(ft.Icons.MONITOR, color="#ffd43b", size=32),
-                            width=56, height=56, border_radius=28, bgcolor="#3d3d1f",
+                            width=56,
+                            height=56,
+                            border_radius=28,
+                            bgcolor="#3d3d1f",
                             alignment=ft.Alignment(0, 0),
                         ),
                         ft.Column(
@@ -207,12 +212,18 @@ class HomePage(ft.Column):
                     controls=[
                         ft.Icon(ft.Icons.MONITOR, color="#666666", size=48),
                         ft.Text("Monitoring Log File", size=16, weight=ft.FontWeight.W_600, color="#ffffff"),
-                        ft.Text("Waiting for session to start...", size=12, color="#888888", text_align=ft.TextAlign.CENTER),
+                        ft.Text(
+                            "Waiting for session to start...", size=12, color="#888888", text_align=ft.TextAlign.CENTER
+                        ),
                         ft.Container(height=8),
-                        ft.Row([
-                            ft.Container(width=8, height=8, border_radius=4, bgcolor="#ffd43b"),
-                            ft.Text("Ready", size=11, color="#ffd43b"),
-                        ], spacing=8, alignment=ft.MainAxisAlignment.CENTER),
+                        ft.Row(
+                            [
+                                ft.Container(width=8, height=8, border_radius=4, bgcolor="#ffd43b"),
+                                ft.Text("Ready", size=11, color="#ffd43b"),
+                            ],
+                            spacing=8,
+                            alignment=ft.MainAxisAlignment.CENTER,
+                        ),
                     ],
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=8,
@@ -228,11 +239,15 @@ class HomePage(ft.Column):
         if not self._lap_cards:
             self._laps_column.controls = [
                 ft.Container(
-                    content=ft.Column([
-                        ft.Icon(ft.Icons.SPEED, color="#444444", size=48),
-                        ft.Text("No laps recorded yet", size=14, color="#666666"),
-                        ft.Text("Complete a lap in-game to see it here", size=12, color="#444444"),
-                    ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8),
+                    content=ft.Column(
+                        [
+                            ft.Icon(ft.Icons.SPEED, color="#444444", size=48),
+                            ft.Text("No laps recorded yet", size=14, color="#666666"),
+                            ft.Text("Complete a lap in-game to see it here", size=12, color="#444444"),
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=8,
+                    ),
                     padding=32,
                     alignment=ft.Alignment(0, 0),
                 ),
@@ -241,7 +256,7 @@ class HomePage(ft.Column):
             self._laps_column.controls = list(self._lap_cards)
 
         # Update counter text
-        if hasattr(self, '_lap_count_text'):
+        if hasattr(self, "_lap_count_text"):
             self._lap_count_text.value = f"({self._lap_count} total)"
             safe_update(self._lap_count_text)
 
@@ -255,34 +270,47 @@ class HomePage(ft.Column):
             header_icon = ft.Icon(ft.Icons.TIMER, color="#7c3aed", size=32)
 
         header = ft.Container(
-            content=ft.Row([
-                header_icon,
-                ft.Column([
-                    ft.Text("SimLaps", size=24, weight=ft.FontWeight.W_700, color="#ffffff"),
-                    self._game_version_text,
-                ], spacing=0),
-                ft.Container(expand=True),
-            ], spacing=12),
+            content=ft.Row(
+                [
+                    header_icon,
+                    ft.Column(
+                        [
+                            ft.Text("SimLaps", size=24, weight=ft.FontWeight.W_700, color="#ffffff"),
+                            self._game_version_text,
+                        ],
+                        spacing=0,
+                    ),
+                    ft.Container(expand=True),
+                ],
+                spacing=12,
+            ),
             padding=ft.Padding.only(left=20, right=20, top=20, bottom=16),
             bgcolor="#0f0f1a",
         )
 
         # Update notification banner
         self._update_banner = ft.Container(
-            content=ft.Row([
-                ft.Icon(ft.Icons.NEW_RELEASES, color="#ffffff", size=20),
-                ft.Column([
-                    ft.Text("Update Available", size=14, weight=ft.FontWeight.W_600, color="#ffffff"),
-                    ft.Text("Get the latest version at:", size=12, color="#ffffff"),
-                    ft.Text(UPDATE_DOWNLOAD_URL, size=12, color="#a5b4fc", selectable=True),
-                ], spacing=2, expand=True),
-                ft.TextButton(
-                    "Download",
-                    icon=ft.Icons.OPEN_IN_NEW,
-                    on_click=self._open_update_url,
-                    style=ft.ButtonStyle(color="#ffffff"),
-                ),
-            ], alignment=ft.MainAxisAlignment.START),
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.NEW_RELEASES, color="#ffffff", size=20),
+                    ft.Column(
+                        [
+                            ft.Text("Update Available", size=14, weight=ft.FontWeight.W_600, color="#ffffff"),
+                            ft.Text("Get the latest version at:", size=12, color="#ffffff"),
+                            ft.Text(UPDATE_DOWNLOAD_URL, size=12, color="#a5b4fc", selectable=True),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    ft.TextButton(
+                        "Download",
+                        icon=ft.Icons.OPEN_IN_NEW,
+                        on_click=self._open_update_url,
+                        style=ft.ButtonStyle(color="#ffffff"),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.START,
+            ),
             padding=ft.Padding.symmetric(horizontal=16, vertical=12),
             bgcolor="#7c3aed",
             border_radius=8,
@@ -292,13 +320,19 @@ class HomePage(ft.Column):
 
         # Status section
         status_section = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.Icon(ft.Icons.INFO, color="#888888", size=16),
-                    self._status_text,
-                ], spacing=8),
-                self._telemetry_status,
-            ], spacing=8),
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(ft.Icons.INFO, color="#888888", size=16),
+                            self._status_text,
+                        ],
+                        spacing=8,
+                    ),
+                    self._telemetry_status,
+                ],
+                spacing=8,
+            ),
             padding=ft.Padding.symmetric(vertical=12, horizontal=16),
             bgcolor="#16162a",
             border_radius=8,
@@ -309,10 +343,13 @@ class HomePage(ft.Column):
         self._lap_count_text = ft.Text(f"({self._lap_count} total)", size=12, color="#888888")
 
         laps_header = ft.Container(
-            content=ft.Row([
-                ft.Text("Recent Laps", size=16, weight=ft.FontWeight.W_600, color="#ffffff"),
-                self._lap_count_text,
-            ], spacing=8),
+            content=ft.Row(
+                [
+                    ft.Text("Recent Laps", size=16, weight=ft.FontWeight.W_600, color="#ffffff"),
+                    self._lap_count_text,
+                ],
+                spacing=8,
+            ),
             padding=ft.Padding.only(left=20, right=20, bottom=8),
             bgcolor="#0f0f1a",
         )
@@ -327,32 +364,35 @@ class HomePage(ft.Column):
 
         # Buttons
         buttons = ft.Container(
-            content=ft.Row([
-                ft.OutlinedButton(
-                    "Settings",
-                    icon=ft.Icons.SETTINGS,
-                    on_click=self._handle_settings_click,
-                    style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
-                ),
-                ft.OutlinedButton(
-                    "Submission History",
-                    icon=ft.Icons.HISTORY,
-                    on_click=self._handle_history_click,
-                    style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
-                ),
-                ft.OutlinedButton(
-                    "View PB Cache",
-                    icon=ft.Icons.LIST_ALT,
-                    on_click=self._handle_pb_cache_click,
-                    style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
-                ),
-                ft.OutlinedButton(
-                    "Logs",
-                    icon=ft.Icons.BUG_REPORT,
-                    on_click=self._handle_logs_click,
-                    style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
-                ),
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            content=ft.Row(
+                [
+                    ft.OutlinedButton(
+                        "Settings",
+                        icon=ft.Icons.SETTINGS,
+                        on_click=self._handle_settings_click,
+                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                    ),
+                    ft.OutlinedButton(
+                        "Submission History",
+                        icon=ft.Icons.HISTORY,
+                        on_click=self._handle_history_click,
+                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                    ),
+                    ft.OutlinedButton(
+                        "View PB Cache",
+                        icon=ft.Icons.LIST_ALT,
+                        on_click=self._handle_pb_cache_click,
+                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                    ),
+                    ft.OutlinedButton(
+                        "Logs",
+                        icon=ft.Icons.BUG_REPORT,
+                        on_click=self._handle_logs_click,
+                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
             padding=ft.Padding.only(left=20, right=20, top=16, bottom=16),
             bgcolor="#0f0f1a",
         )
@@ -382,8 +422,10 @@ class HomePage(ft.Column):
 
     def _check_for_updates(self):
         """Check for updates in background."""
+
         async def check():
             from ...core.api_client import APIClient
+
             try:
                 async with APIClient(server_url=self.config.server_url) as client:
                     result = await client.check_for_updates()
@@ -442,6 +484,7 @@ class HomePage(ft.Column):
         log_info(Component.HOME, "Logs button clicked")
         try:
             from ..components.debug_logs import show_debug_logs
+
             page = mounted_page(self)
             if page:
                 show_debug_logs(page)
@@ -471,7 +514,7 @@ class HomePage(ft.Column):
 
     def set_detected_user(self, steam_id: Optional[str], player_name: Optional[str] = None):
         """Update detected user information."""
-        changed = (self._detected_steam_id != steam_id or self._detected_player_name != player_name)
+        changed = self._detected_steam_id != steam_id or self._detected_player_name != player_name
         if changed:
             self._detected_steam_id = steam_id
             self._detected_player_name = player_name

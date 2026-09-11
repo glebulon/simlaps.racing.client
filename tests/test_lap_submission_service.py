@@ -13,9 +13,7 @@ async def test_submit_lap_success_updates_card_and_history_and_posts_discord():
     service = LapSubmissionService()
 
     api_client = MagicMock()
-    api_client.submit_lap = AsyncMock(
-        return_value=SimpleNamespace(status=SubmissionStatus.SUCCESS, message="ok")
-    )
+    api_client.submit_lap = AsyncMock(return_value=SimpleNamespace(status=SubmissionStatus.SUCCESS, message="ok"))
 
     config = SimpleNamespace(submit_invalid_laps=False, server_url="https://simlaps.racing")
     card = MagicMock()

@@ -16,6 +16,7 @@ from .mount_safe import safe_update
 
 class LapCardStatus(Enum):
     """Status of the lap card."""
+
     PENDING = "pending"
     SUBMITTING = "submitting"
     SUBMITTED = "submitted"
@@ -26,6 +27,7 @@ class LapCardStatus(Enum):
 @dataclass
 class LapCardData:
     """Data for a lap card display."""
+
     session: SessionData
     lap: LapData
     lap_number: int
@@ -36,7 +38,7 @@ class LapCardData:
 class LapCard(ft.Container):
     """
     A card component displaying a single lap time.
-    
+
     Shows track, car, lap time, sectors, and submission status.
     """
 
@@ -157,9 +159,7 @@ class LapCard(ft.Container):
         ]
 
         if not lap.is_valid:
-            footer_items.append(
-                ft.Text("INVALID", size=11, color="#ff6b6b", weight=ft.FontWeight.W_600)
-            )
+            footer_items.append(ft.Text("INVALID", size=11, color="#ff6b6b", weight=ft.FontWeight.W_600))
 
         footer = ft.Row(
             controls=footer_items,

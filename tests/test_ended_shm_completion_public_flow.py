@@ -23,7 +23,7 @@ def _graphics_frame(
     struct.pack_into("<i", data, 188, current_lap_time_ms)
     struct.pack_into("<i", data, 2384, total_lap_count)
     struct.pack_into("<i", data, 2396, last_laptime_ms)
-    data[2476:2476 + len(phase)] = phase.encode("ascii")
+    data[2476 : 2476 + len(phase)] = phase.encode("ascii")
     data[3121] = 1
     return bytes(data)
 

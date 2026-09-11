@@ -46,9 +46,7 @@ class SessionLifecycleService:
     def _delayed_stop_is_current(self, generation: int, capture: Any) -> bool:
         """Return whether a delayed stop still belongs to the active run."""
         return (
-            generation == self._lifecycle_generation
-            and capture is self._telemetry_capture
-            and capture.is_capturing()
+            generation == self._lifecycle_generation and capture is self._telemetry_capture and capture.is_capturing()
         )
 
     async def handle_car_removed(self) -> None:

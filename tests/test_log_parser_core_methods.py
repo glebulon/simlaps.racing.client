@@ -31,11 +31,7 @@ class TestHandleLapComplete:
     def test_handle_lap_complete_not_player_car(self):
         """Test lap complete for non-player car returns None."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa",
-            car="porsche",
-            player_id="76561198321627695"
-        )
+        parser.current_session = SessionData(track="spa", car="porsche", player_id="76561198321627695")
         parser.context.player_id = "76561198321627695"
         # Different car ID in the log line
         line = "New lap carId=999 time=1:23.456"
@@ -168,8 +164,7 @@ class TestProcessLineHandlers:
         parser.current_session = SessionData(car_uuid="4e2c85191a9274ee-634e033ab0de17ae")
 
         line = (
-            "[2026-04-21 19:51:40.441] [gameplay] [info] "
-            "FUEL car 4e2c85191a9274ee-634e033ab0de17ae setup with 30.0 L"
+            "[2026-04-21 19:51:40.441] [gameplay] [info] FUEL car 4e2c85191a9274ee-634e033ab0de17ae setup with 30.0 L"
         )
 
         parser._handle_fuel(line)
@@ -232,9 +227,7 @@ class TestHandleOutlap:
     def test_handle_outlap_signals_failed(self):
         """Rejected practice pit prefix preserves the full-circuit outlap."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa", car="porsche", session_type="PRACTICE"
-        )
+        parser.current_session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
         parser._ip.is_outlap = True
         parser._ip.splits = {2: 12345}
         line = "Couldn't create lap from opensplits"
@@ -251,9 +244,7 @@ class TestHandleOutlap:
         an outlap — otherwise the first racing lap is silently dropped.
         """
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="laguna", car="ks_dallara_exp", session_type="RACE"
-        )
+        parser.current_session = SessionData(track="laguna", car="ks_dallara_exp", session_type="RACE")
         line = "[2026-04-24 23:04:17.524] [gameplay] [info] Outplap split"
 
         # Simulate all six grid broadcasts.
@@ -261,8 +252,7 @@ class TestHandleOutlap:
             parser._handle_outlap_signals(line)
 
         assert parser._ip.is_outlap is False, (
-            "Outplap split in a RACE session must not set is_outlap — "
-            "the first lap is a real competitive lap."
+            "Outplap split in a RACE session must not set is_outlap — the first lap is a real competitive lap."
         )
 
     def test_outplap_split_honored_in_practice(self):
@@ -270,9 +260,7 @@ class TestHandleOutlap:
         outlap marker and must still be honored.
         """
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="laguna", car="ks_dallara_exp", session_type="PRACTICE"
-        )
+        parser.current_session = SessionData(track="laguna", car="ks_dallara_exp", session_type="PRACTICE")
         line = "[2026-04-24 23:04:17.524] [gameplay] [info] Outplap split"
 
         parser._handle_outlap_signals(line)
@@ -282,9 +270,7 @@ class TestHandleOutlap:
     def test_outplap_split_ignored_in_qualifying(self):
         """Qualifying is RACE_LIKE: the first timed lap is a real lap."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="laguna", car="ks_dallara_exp", session_type="QUALIFYING"
-        )
+        parser.current_session = SessionData(track="laguna", car="ks_dallara_exp", session_type="QUALIFYING")
         line = "[2026-04-24 23:04:17.524] [gameplay] [info] Outplap split"
 
         parser._handle_outlap_signals(line)
@@ -371,10 +357,7 @@ class TestFollowMethod:
     async def test_follow_reads_existing_content(self, tmp_path):
         """Test follow reads existing log content."""
         log_file = tmp_path / "test.log"
-        log_file.write_text(
-            "TRACK NAME spa_francorchamps\n"
-            "CAR NAME ks_porsche_992_gt3_cup\n"
-        )
+        log_file.write_text("TRACK NAME spa_francorchamps\nCAR NAME ks_porsche_992_gt3_cup\n")
 
         parser = LogParser(log_path=str(log_file))
 
@@ -397,6 +380,7 @@ class TestFollowMethod:
         log_file.write_text("Game Started!\n")
 
         status_calls = []
+
         async def on_status(status):
             status_calls.append(status)
 
@@ -449,10 +433,7 @@ class TestHandleLapCompleteAdvanced:
         """Test lap completion with valid session."""
         parser = LogParser()
         parser.current_session = SessionData(
-            track="spa",
-            car="porsche",
-            player_id="76561198321627695",
-            session_type="PRACTICE"
+            track="spa", car="porsche", player_id="76561198321627695", session_type="PRACTICE"
         )
         parser.context.player_id = "76561198321627695"
         parser.context.car_uuid = "abc123"
@@ -466,7 +447,7 @@ class TestHandleLapCompleteAdvanced:
 
         line = "New lap carId=abc123 time=1:38.456"
 
-        result = parser._handle_lap_complete(line)
+        parser._handle_lap_complete(line)
 
         # Should return a lap if everything matches
         # Note: May return None due to car_id matching, but at least code path is covered
@@ -476,10 +457,7 @@ class TestHandleLapCompleteAdvanced:
         """Test lap completion with sector 1 corruption (race grid start)."""
         parser = LogParser()
         parser.current_session = SessionData(
-            track="spa",
-            car="porsche",
-            player_id="76561198321627695",
-            session_type="RACE"
+            track="spa", car="porsche", player_id="76561198321627695", session_type="RACE"
         )
         parser.context.player_id = "76561198321627695"
         parser.context.car_uuid = "abc123"
@@ -492,7 +470,7 @@ class TestHandleLapCompleteAdvanced:
 
         line = "New lap carId=abc123 time=1:38.456"
 
-        result = parser._handle_lap_complete(line)
+        parser._handle_lap_complete(line)
 
         # Should handle S1 corruption
         assert True  # Code path exercised

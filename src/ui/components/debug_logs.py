@@ -87,9 +87,9 @@ class DebugLogsViewer:
         status = "CAPTURE ACTIVE" if _log_capture.capture_enabled else "CAPTURE INACTIVE"
 
         # Separate telemetry logs for better visibility
-        all_lines = logs.split('\n')
-        telemetry_lines = [line for line in all_lines if '[TELEMETRY]' in line or '[ANALYZER]' in line]
-        other_lines = [line for line in all_lines if '[TELEMETRY]' not in line and '[ANALYZER]' not in line]
+        all_lines = logs.split("\n")
+        telemetry_lines = [line for line in all_lines if "[TELEMETRY]" in line or "[ANALYZER]" in line]
+        other_lines = [line for line in all_lines if "[TELEMETRY]" not in line and "[ANALYZER]" not in line]
 
         result = f"{status}\n\n"
 
@@ -116,14 +116,14 @@ class DebugLogsViewer:
 
         try:
             # Get the app instance from the page
-            app_instance = getattr(self.page, '_app_instance', None)
+            app_instance = getattr(self.page, "_app_instance", None)
 
             if not app_instance:
                 log_warning(Component.DEBUG_LOGS, "No app instance found")
                 self._show_snackbar("App instance not available", "#ff6b6b")
                 return
 
-            if not hasattr(app_instance, '_log_parser'):
+            if not hasattr(app_instance, "_log_parser"):
                 log_warning(Component.DEBUG_LOGS, "App instance has no log parser")
                 self._show_snackbar("Log parser not available", "#ff6b6b")
                 return
@@ -161,7 +161,8 @@ class DebugLogsViewer:
                 # Open the folder in Windows Explorer
                 try:
                     import subprocess
-                    subprocess.run(['explorer', '/select,', filepath], check=False)
+
+                    subprocess.run(["explorer", "/select,", filepath], check=False)  # noqa: S603, S607
                 except Exception as ex:
                     log_warning(Component.DEBUG_LOGS, "Failed to open folder in Explorer", error=str(ex))
             else:
@@ -274,7 +275,6 @@ def start_log_capture():
             # Expected: traceback module unavailable or capture write failed
             # Silently ignore - we've already logged the primary error
             pass
-
 
 
 def show_debug_logs(page: ft.Page):

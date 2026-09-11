@@ -50,17 +50,13 @@ class TestSelectTrackProfile:
 
     def test_select_track_profile_by_static_config_nordschleife(self):
         """Static config "Nordschleife" selects the plain Nordschleife layout."""
-        track_key, profile = _select_track_profile_for_analysis(
-            "Nurburgring", "Nordschleife"
-        )
+        track_key, profile = _select_track_profile_for_analysis("Nurburgring", "Nordschleife")
         assert track_key == "nurburgring_nordschleife"
         assert profile["config_key"] == "nordschleife"
 
     def test_select_track_profile_by_static_config_gp(self):
         """Static config "GP" selects the GP layout, not the Nordschleife 24h."""
-        track_key, profile = _select_track_profile_for_analysis(
-            "Nurburgring", "GP"
-        )
+        track_key, profile = _select_track_profile_for_analysis("Nurburgring", "GP")
         assert track_key == "nurburgring_gp"
         assert profile["config_key"] == "gp"
 
@@ -88,7 +84,7 @@ class TestAnalysisResult:
             ai_prompt_path="/path/to/prompt.txt",
             laps_detected=5,
             best_lap_time=83.456,
-            track_name="spa_francorchamps"
+            track_name="spa_francorchamps",
         )
 
         assert result.html_path == "/path/to/report.html"
@@ -104,7 +100,7 @@ class TestAnalysisResult:
             ai_prompt_path="/path/to/prompt.txt",
             laps_detected=3,
             best_lap_time=90.123,
-            track_name=None
+            track_name=None,
         )
 
         assert result.track_name is None
@@ -115,11 +111,7 @@ class TestFrameDataEdgeCases:
 
     def test_frame_with_missing_physics(self):
         """get_physics returns None when frame has no physics data."""
-        frame = FrameData(
-            timestamp="2024-01-01T00:00:00Z",
-            frame_number=0,
-            physics=None
-        )
+        frame = FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=0, physics=None)
 
         physics = get_physics(frame)
 
@@ -127,11 +119,7 @@ class TestFrameDataEdgeCases:
 
     def test_frame_with_empty_physics(self):
         """get_physics returns an empty dict when frame has an empty physics dict."""
-        frame = FrameData(
-            timestamp="2024-01-01T00:00:00Z",
-            frame_number=0,
-            physics={}
-        )
+        frame = FrameData(timestamp="2024-01-01T00:00:00Z", frame_number=0, physics={})
 
         physics = get_physics(frame)
 
@@ -148,7 +136,7 @@ class TestCaptureMetadata:
             hz=10.0,
             regions_found=["physics"],
             region_names={"physics": "acevo_pmf_physics"},
-            region_sizes={"physics": 1024}
+            region_sizes={"physics": 1024},
         )
 
         assert metadata.captured_at == "2024-01-01T00:00:00Z"

@@ -48,7 +48,7 @@ class TestDiscordNotifier:
             created_at=datetime.now(),
             sector_times_ms=[28456, 32123, 31716],
             fuel_used_liters=3.2,
-            tire_compound="SC"
+            tire_compound="SC",
         )
 
         embed = notifier.create_lap_embed(lap_data)
@@ -77,7 +77,7 @@ class TestDiscordNotifier:
             lap_time_ms=78664,
             valid=False,
             steam_id="76561198321627695",
-            is_personal_best=False
+            is_personal_best=False,
         )
 
         embed = notifier.create_lap_embed(lap_data)
@@ -92,7 +92,7 @@ class TestDiscordNotifier:
     @pytest.mark.asyncio
     async def test_post_lap_success(self):
         """Test successful lap posting."""
-        with patch('httpx.AsyncClient') as mock_client:
+        with patch("httpx.AsyncClient") as mock_client:
             # Mock successful response
             mock_response = MagicMock()
             mock_response.status_code = 204
@@ -105,7 +105,7 @@ class TestDiscordNotifier:
                 car_name="test_car",
                 lap_time_ms=60000,
                 valid=True,
-                steam_id="76561198321627695"
+                steam_id="76561198321627695",
             )
 
             result = await notifier.post_lap(lap_data)
@@ -114,7 +114,7 @@ class TestDiscordNotifier:
     @pytest.mark.asyncio
     async def test_post_lap_failure(self):
         """Test lap posting failure."""
-        with patch('httpx.AsyncClient') as mock_client:
+        with patch("httpx.AsyncClient") as mock_client:
             # Mock failed response with RuntimeError (which is now caught)
             mock_client.return_value.__aenter__.return_value.post.side_effect = RuntimeError("Network error")
 
@@ -125,7 +125,7 @@ class TestDiscordNotifier:
                 car_name="test_car",
                 lap_time_ms=60000,
                 valid=True,
-                steam_id="76561198321627695"
+                steam_id="76561198321627695",
             )
 
             result = await notifier.post_lap(lap_data)
@@ -134,7 +134,7 @@ class TestDiscordNotifier:
     @pytest.mark.asyncio
     async def test_send_test_message(self):
         """Test sending test message."""
-        with patch('httpx.AsyncClient') as mock_client:
+        with patch("httpx.AsyncClient") as mock_client:
             # Mock successful response
             mock_response = MagicMock()
             mock_response.status_code = 204
@@ -164,8 +164,8 @@ class TestDiscordNotifier:
     async def test_send_test_message_handles_timeout_like_real_lap(self):
         """Regression: test-webhook timeouts must return False, not escape."""
         with patch("httpx.AsyncClient") as mock_client:
-            mock_client.return_value.__aenter__.return_value.post.side_effect = (
-                httpx.TimeoutException("Discord timed out")
+            mock_client.return_value.__aenter__.return_value.post.side_effect = httpx.TimeoutException(
+                "Discord timed out"
             )
 
             notifier = DiscordNotifier("https://discord.com/api/webhooks/123/abc")
@@ -200,7 +200,7 @@ class TestDiscordNotifier:
         assert all(not DiscordNotifier.validate_webhook_url(url) for url in invalid_urls)
 
     def test_constructor_rejects_invalid_webhook_without_echoing_secret(self):
-        secret_url = "http://127.0.0.1/api/webhooks/123/super-secret-token"
+        secret_url = "http://127.0.0.1/api/webhooks/123/super-secret-token"  # noqa: S105
         with pytest.raises(ValueError) as exc_info:
             DiscordNotifier(secret_url)
         assert "super-secret-token" not in str(exc_info.value)
@@ -240,18 +240,18 @@ class TestPBCache:
                     "trackId": "laguna_seca",
                     "carId": "ks_porsche_992_gt3_cup",
                     "bestTime": 92295,
-                    "setAt": "2026-02-14T10:00:00Z"
+                    "setAt": "2026-02-14T10:00:00Z",
                 },
                 {
                     "trackId": "brands_hatch",
                     "carId": "ks_toyota_gr86",
                     "bestTime": 78664,
-                    "setAt": "2026-02-14T11:00:00Z"
-                }
-            ]
+                    "setAt": "2026-02-14T11:00:00Z",
+                },
+            ],
         }
 
-        with patch('httpx.AsyncClient') as mock_client:
+        with patch("httpx.AsyncClient") as mock_client:
             mock_response = MagicMock()
             mock_response.status_code = 200
             mock_response.json.return_value = mock_response_data
@@ -273,7 +273,7 @@ class TestPBCache:
     @pytest.mark.asyncio
     async def test_preload_from_api_failure(self):
         """Test API preload failure."""
-        with patch('httpx.AsyncClient') as mock_client:
+        with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value.__aenter__.return_value.get.side_effect = Exception("Network error")
 
             cache = PBCache("http://localhost:3000")
@@ -349,10 +349,7 @@ class TestPBCache:
         # Add some data
         cache._steam_id = "76561198321627695"
         cache._loaded = True
-        cache._cache[("test_track", "test_car")] = PersonalBest(
-            best_time_ms=60000,
-            updated_at=datetime.now()
-        )
+        cache._cache[("test_track", "test_car")] = PersonalBest(best_time_ms=60000, updated_at=datetime.now())
 
         stats = cache.get_cache_stats()
         assert stats["loaded"] is True
@@ -385,7 +382,7 @@ class TestIntegration:
     async def test_discord_pb_workflow(self):
         """Test complete Discord PB workflow."""
         # Mock successful Discord post
-        with patch('httpx.AsyncClient') as mock_client:
+        with patch("httpx.AsyncClient") as mock_client:
             mock_response = MagicMock()
             mock_response.status_code = 204
             mock_client.return_value.__aenter__.return_value.post.return_value = mock_response
@@ -404,7 +401,7 @@ class TestIntegration:
                 lap_time_ms=65000,
                 valid=True,
                 steam_id="76561198321627695",
-                is_personal_best=True
+                is_personal_best=True,
             )
 
             result1 = await notifier.post_lap(lap_data1)
@@ -420,7 +417,7 @@ class TestIntegration:
                 lap_time_ms=60000,
                 valid=True,
                 steam_id="76561198321627695",
-                is_personal_best=True
+                is_personal_best=True,
             )
 
             result2 = await notifier.post_lap(lap_data2)
@@ -506,9 +503,7 @@ class TestAppDiscordPosting:
         app._discord_notifier = None
 
         with patch("httpx.AsyncClient") as http_client:
-            result = await app._test_discord_webhook(
-                "https://user:password@127.0.0.1/api/webhooks/123/secret-token"
-            )
+            result = await app._test_discord_webhook("https://user:password@127.0.0.1/api/webhooks/123/secret-token")
 
         assert result == (False, "Invalid Discord webhook URL")
         http_client.assert_not_called()

@@ -92,7 +92,7 @@ async def test_valid_timed_lap_after_rejected_pit_prefix_is_not_suppressed(tmp_p
 
     manager = SharedSessionManager()
     for lap_number, (lap_time_ms, is_valid) in enumerate(
-        zip(lap_times, lap_validity),
+        zip(lap_times, lap_validity, strict=False),
         start=1,
     ):
         _publish_shm_completion(
@@ -108,7 +108,7 @@ async def test_valid_timed_lap_after_rejected_pit_prefix_is_not_suppressed(tmp_p
         "Couldn't create lap from opensplits (carId player): Splitcollection 1/3",
     ]
     for lap_number, (lap_time_ms, lap_sectors) in enumerate(
-        zip(lap_times, sectors),
+        zip(lap_times, sectors, strict=False),
         start=1,
     ):
         lines.extend(
@@ -211,7 +211,7 @@ async def test_valid_timed_lap_after_rejected_pit_prefix_is_not_suppressed(tmp_p
     assert [call.args for call in telemetry.record_lap_boundary.call_args_list] == [
         (lap_time_ms, lap_number, lap_state.value)
         for lap_number, (lap_time_ms, lap_state) in enumerate(
-            zip(lap_times, [lap.lap_state for lap in session.laps]),
+            zip(lap_times, [lap.lap_state for lap in session.laps], strict=False),
             start=1,
         )
     ]
@@ -241,7 +241,7 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
         "Couldn't create lap from opensplits (carId player): Splitcollection 1/3",
     ]
     for lap_number, (lap_time_ms, lap_sectors) in enumerate(
-        zip(lap_times, sectors),
+        zip(lap_times, sectors, strict=False),
         start=1,
     ):
         lines.extend(
@@ -351,6 +351,7 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
         for frame, call in zip(
             boundary_frames,
             telemetry.record_lap_boundary.call_args_list,
+            strict=False,
         )
     ]
     analyzer = TelemetryAnalyzer(str(tmp_path))
@@ -379,16 +380,9 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
     assert [lap["is_valid"] for lap in analysis["laps"]] == [False, False]
     second_lap = analysis["laps"][1]
     assert len(second_lap["track"]) == 80
-    assert all(
-        point["status_name"] != "AC_PAUSE" for point in second_lap["track"]
-    )
-    assert any(
-        "invalid laps are shown for diagnostics only" in note
-        for note in analysis["analysis_notes"]
-    )
-    assert any(
-        "paused telemetry samples" in note for note in analysis["analysis_notes"]
-    )
+    assert all(point["status_name"] != "AC_PAUSE" for point in second_lap["track"])
+    assert any("invalid laps are shown for diagnostics only" in note for note in analysis["analysis_notes"])
+    assert any("paused telemetry samples" in note for note in analysis["analysis_notes"])
 
 
 @pytest.mark.asyncio
@@ -409,42 +403,27 @@ async def test_laguna_live_log_flow_records_outlap_boundary_without_card(tmp_pat
                 "[2026-08-18 11:31:25.052] [gameplay] [info] Outplap split",
                 "[2026-08-18 11:31:41.838] [gameplay] [error] "
                 "Couldn't create lap from opensplits (carId player): Splitcollection 1/3",
-                "[2026-08-18 11:32:26.244] [gameplay] [info] "
-                "On Split start false end false id 0 splittime 44403",
-                "[2026-08-18 11:32:53.895] [gameplay] [info] "
-                "On Split start false end false id 1 splittime 27651",
-                "[2026-08-18 11:33:36.971] [physics] [info] "
-                "Lap test evOnLapCompleted 2 completed",
-                "[2026-08-18 11:33:37.333] [gameplay] [info] "
-                "On Split start true end true id 2 splittime 43440",
-                f"[2026-08-18 11:33:37.333] [gameplay] [info] "
-                f"New lap carId {car_id}: 01:55.494",
+                "[2026-08-18 11:32:26.244] [gameplay] [info] On Split start false end false id 0 splittime 44403",
+                "[2026-08-18 11:32:53.895] [gameplay] [info] On Split start false end false id 1 splittime 27651",
+                "[2026-08-18 11:33:36.971] [physics] [info] Lap test evOnLapCompleted 2 completed",
+                "[2026-08-18 11:33:37.333] [gameplay] [info] On Split start true end true id 2 splittime 43440",
+                f"[2026-08-18 11:33:37.333] [gameplay] [info] New lap carId {car_id}: 01:55.494",
                 "[2026-08-18 11:33:37.420] [network] [info] "
                 "Relevant onSplit for Combo 6@2: laptime 115494, valid false, "
                 "flags 1, lap 1 (prev 0)",
-                "[2026-08-18 11:34:54.441] [gameplay] [info] "
-                "On Split start false end false id 0 splittime 77109",
-                "[2026-08-18 11:35:20.690] [gameplay] [info] "
-                "On Split start false end false id 1 splittime 26247",
-                "[2026-08-18 11:36:10.472] [physics] [info] "
-                "Lap test evOnLapCompleted 3 completed",
-                "[2026-08-18 11:36:10.840] [gameplay] [info] "
-                "On Split start true end true id 2 splittime 50151",
-                f"[2026-08-18 11:36:10.840] [gameplay] [info] "
-                f"New lap carId {car_id}: 02:33.507",
+                "[2026-08-18 11:34:54.441] [gameplay] [info] On Split start false end false id 0 splittime 77109",
+                "[2026-08-18 11:35:20.690] [gameplay] [info] On Split start false end false id 1 splittime 26247",
+                "[2026-08-18 11:36:10.472] [physics] [info] Lap test evOnLapCompleted 3 completed",
+                "[2026-08-18 11:36:10.840] [gameplay] [info] On Split start true end true id 2 splittime 50151",
+                f"[2026-08-18 11:36:10.840] [gameplay] [info] New lap carId {car_id}: 02:33.507",
                 "[2026-08-18 11:36:10.865] [network] [info] "
                 "Relevant onSplit for Combo 6@2: laptime 153507, valid false, "
                 "flags 1, lap 2 (prev 1)",
-                "[2026-08-18 11:36:52.962] [gameplay] [info] "
-                "On Split start false end false id 0 splittime 42120",
-                "[2026-08-18 11:37:19.918] [gameplay] [info] "
-                "On Split start false end false id 1 splittime 26958",
-                "[2026-08-18 11:38:07.538] [physics] [info] "
-                "Lap test evOnLapCompleted 4 completed",
-                "[2026-08-18 11:38:07.901] [gameplay] [info] "
-                "On Split start true end true id 2 splittime 47982",
-                f"[2026-08-18 11:38:07.901] [gameplay] [info] "
-                f"New lap carId {car_id}: 01:57.060",
+                "[2026-08-18 11:36:52.962] [gameplay] [info] On Split start false end false id 0 splittime 42120",
+                "[2026-08-18 11:37:19.918] [gameplay] [info] On Split start false end false id 1 splittime 26958",
+                "[2026-08-18 11:38:07.538] [physics] [info] Lap test evOnLapCompleted 4 completed",
+                "[2026-08-18 11:38:07.901] [gameplay] [info] On Split start true end true id 2 splittime 47982",
+                f"[2026-08-18 11:38:07.901] [gameplay] [info] New lap carId {car_id}: 01:57.060",
                 "[2026-08-18 11:38:07.927] [network] [info] "
                 "Relevant onSplit for Combo 6@2: laptime 117060, valid true, "
                 "flags 2, lap 3 (prev 2)",

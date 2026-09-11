@@ -159,6 +159,7 @@ def test_config_path_returns_production_path_when_secret_configured() -> None:
 def test_default_config_has_current_version() -> None:
     """Default AppConfig should carry the latest CONFIG_VERSION."""
     from src.utils.config import CONFIG_VERSION
+
     config = AppConfig()
     assert config.config_version == CONFIG_VERSION
 
@@ -166,6 +167,7 @@ def test_default_config_has_current_version() -> None:
 def test_from_dict_stamps_config_version_on_old_config() -> None:
     """Loading a dict without config_version should stamp the current version."""
     from src.utils.config import CONFIG_VERSION
+
     data = {"theme": "light", "auto_submit": False}
     config = AppConfig.from_dict(data)
     assert config.config_version == CONFIG_VERSION
@@ -204,6 +206,7 @@ def test_from_dict_migrates_legacy_field(capsys) -> None:
 def test_to_dict_includes_config_version() -> None:
     """to_dict() output should include config_version."""
     from src.utils.config import CONFIG_VERSION
+
     config = AppConfig()
     d = config.to_dict()
     assert d["config_version"] == CONFIG_VERSION

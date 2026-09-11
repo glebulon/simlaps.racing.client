@@ -16,9 +16,7 @@ class ArchiveValidationError(ValueError):
 MAX_FILE_SIZE = 256 * 1024 * 1024
 MAX_TOTAL_OUTPUT_SIZE = 4 * 1024 * 1024 * 1024
 MAX_FILE_COUNT = 100_000
-_WINDOWS_DEVICE_NAME = re.compile(
-    r"^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$", re.IGNORECASE
-)
+_WINDOWS_DEVICE_NAME = re.compile(r"^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\..*)?$", re.IGNORECASE)
 
 
 def _validate_non_overlapping_ranges(ranges: list[tuple[int, int]]) -> None:
@@ -29,6 +27,7 @@ def _validate_non_overlapping_ranges(ranges: list[tuple[int, int]]) -> None:
         if previous_end is not None and start < previous_end:
             raise ArchiveValidationError("archive members have overlapping data ranges")
         previous_end = end
+
 
 #            twitter.com/@ntpopgetdope
 #        github.com//ntpopgetdope/ace-kspkg
@@ -48,20 +47,22 @@ class FnvHash:
 
     @staticmethod
     def fnv1a_64(data):
-        assert isinstance(data, bytes)
+        assert isinstance(data, bytes)  # noqa: S101
         h = FnvHash.FNV1_64A_OFF
         for b in data:
-            h = ((h ^ b) * FnvHash.FNV_64_PRIME) % (2 ** 64)
+            h = ((h ^ b) * FnvHash.FNV_64_PRIME) % (2**64)
         return h
 
+
 # ------------------------------------------------------------------------------------------
+
 
 class KsPckFile:
     FILE_PATH_SZ = 0xE0
 
     class FileFlags(enum.IntFlag):
-        Directory = (1 << 0),
-        XorCipher = (1 << 8),
+        Directory = ((1 << 0),)
+        XorCipher = ((1 << 8),)
 
     def __init__(self, raw: bytes):
         self.raw = io.BytesIO(raw)
@@ -69,20 +70,20 @@ class KsPckFile:
 
         # Unpacking of these happens @ 0x14140f50b within the main parse loop.
         try:
-            self.file_path = struct.unpack(f"<{max_path}s", self.raw.read(max_path))[0] # +0x00
-            self.align_0E0 = struct.unpack("<I", self.raw.read(4))[0] # +0xE0
-            self.inf_flags = struct.unpack("<H", self.raw.read(2))[0] # +0xE4
-            self.path_leng = struct.unpack("<H", self.raw.read(2))[0] # +0xE6
+            self.file_path = struct.unpack(f"<{max_path}s", self.raw.read(max_path))[0]  # +0x00
+            self.align_0E0 = struct.unpack("<I", self.raw.read(4))[0]  # +0xE0
+            self.inf_flags = struct.unpack("<H", self.raw.read(2))[0]  # +0xE4
+            self.path_leng = struct.unpack("<H", self.raw.read(2))[0]  # +0xE6
             # FNV1A-64 hash of the file path used to order file table entries
-            self.path_fnv1 = struct.unpack("<Q", self.raw.read(8))[0] # +0xE8
-            self.file_size = struct.unpack("<Q", self.raw.read(8))[0] # +0xF0
-            self.file_offs = struct.unpack("<Q", self.raw.read(8))[0] # +0xF8
+            self.path_fnv1 = struct.unpack("<Q", self.raw.read(8))[0]  # +0xE8
+            self.file_size = struct.unpack("<Q", self.raw.read(8))[0]  # +0xF0
+            self.file_offs = struct.unpack("<Q", self.raw.read(8))[0]  # +0xF8
         except struct.error as exc:
             raise ArchiveValidationError("truncated file-table entry") from exc
 
         if self.path_leng > max_path:
             raise ArchiveValidationError("file-table path length exceeds entry size")
-        path_bytes = self.file_path[:self.path_leng]
+        path_bytes = self.file_path[: self.path_leng]
         if b"\x00" in path_bytes:
             raise ArchiveValidationError("file-table path contains NUL")
         try:
@@ -95,9 +96,10 @@ class KsPckFile:
         self.inf_flags = KsPckFile.FileFlags(self.inf_flags)
         return
 
+
 class KsPck:
-    FILE_TBL_SZ = (2 << 24)
-    FILE_ITM_SZ = (1 << 8)
+    FILE_TBL_SZ = 2 << 24
+    FILE_ITM_SZ = 1 << 8
 
     def __init__(
         self,
@@ -129,12 +131,12 @@ class KsPck:
         return
 
     @staticmethod
-    def xor_8b_cipher(buffer: bytes|bytearray, xork: bytes) -> bytearray:
+    def xor_8b_cipher(buffer: bytes | bytearray, xork: bytes) -> bytearray:
         # Need a mutable view of buffer.
         if isinstance(buffer, bytes):
             buffer = bytearray(buffer)
 
-        for i, b in enumerate(buffer):
+        for i, _b in enumerate(buffer):
             buffer[i] ^= xork[i % 8]
 
         # Return ciphertext.
@@ -212,7 +214,7 @@ class KsPck:
             raise ArchiveValidationError("archive exceeds total output-size quota")
         return total_size
 
-    def parse_file_tbl(self, save_ftbl: bool=False) -> None:
+    def parse_file_tbl(self, save_ftbl: bool = False) -> None:
         # 0x14140f2ce "ResourceManager::ParseKsPkgPackedContent"
         # 0x14140f2ce -> std::basic_istream<char,struct std::char_traits<char> >::seekg(&ios, -0x2000000, SEEK_END);
         # 0x14140f2e2 -> std::basic_istream<char,struct std::char_traits<char> >::read(&ios, pkg_file_tbl, 0x2000000);
@@ -234,8 +236,8 @@ class KsPck:
         # rcx: pkg_file_tbl, rdx: 0x2000000, r8: 0x9F9721A97D1135C1 (key; swap endianness)
 
         # XOR key usually obtained via *(rsrc_mgr + 0x758)
-        self.xork = self.ftbl[-8:] # Valid if nulls...
-        ascii = ''.join(f"{b:02X}" for b in self.xork)
+        self.xork = self.ftbl[-8:]  # Valid if nulls...
+        ascii = "".join(f"{b:02X}" for b in self.xork)
         print(f"File Table XOR Key: {ascii}")
         print("Unciphering KsPkg file table...\n")
 
@@ -243,7 +245,7 @@ class KsPck:
         self.ftbl = bytearray(self.ftbl)
         self.ftbl = self.xor_8b_cipher(self.ftbl, self.xork)
 
-        if save_ftbl: # Optionally save plaintext to disk.
+        if save_ftbl:  # Optionally save plaintext to disk.
             with open(f"{self.kspck.name}.unxor_file_table.bin", "wb") as f:
                 # Good SHA-1: f55c845e896366014e614267ec0936ff8f237c9e
                 f.write(self.ftbl)
@@ -253,7 +255,7 @@ class KsPck:
         total_size = 0
         for i in range(0, int(self.FILE_TBL_SZ / self.FILE_ITM_SZ)):
             # Unpack file entry struct to pythonic class wrapper.
-            idx = i * self.FILE_ITM_SZ # Index in 0x100 bounds.
+            idx = i * self.FILE_ITM_SZ  # Index in 0x100 bounds.
             file_entry = self.ftbl[idx : idx + self.FILE_ITM_SZ]
             file_entry = KsPckFile(file_entry)
 
@@ -264,9 +266,7 @@ class KsPck:
 
             if i + 1 > self.max_file_count:
                 raise ArchiveValidationError("package exceeds file-count quota")
-            total_size = self._validate_file_metadata(
-                file_entry, self.data_end, ranges, total_size
-            )
+            total_size = self._validate_file_metadata(file_entry, self.data_end, ranges, total_size)
 
             # Store by hash for later operations/lookup.
             self.files[file_entry.path_fnv1] = file_entry
@@ -312,11 +312,11 @@ class KsPck:
             f.write(data)
 
     def extract_file(self, file_path: str, out_path: str) -> None:
-        lookup = file_path.casefold().replace('/', '\\')
+        lookup = file_path.casefold().replace("/", "\\")
         print(f"Extracting single KsPkg file '{lookup}'...")
 
         fnv1a = FnvHash.fnv1a_64(lookup.encode())
-        file  = self.files.get(fnv1a)
+        file = self.files.get(fnv1a)
 
         if not file:
             print(f"File lookup by FNV1A-64 0x{fnv1a:04x} failed")
@@ -333,30 +333,23 @@ class KsPck:
         # Good SHA-1: 26c9b2a3517c1a1bc2da9e149499c60f34148ad1-00005ACC
         #             737b6571b6420d6a3530a5912033c109f52d94aa-0000751E
         for i, f in enumerate(self.files.values()):
-            print(
-                f"  [{i+1:03d}/{len(self.files):03d}] " \
-                f"0x{f.file_size:08X} bytes: {f.file_path}"
-            )
+            print(f"  [{i + 1:03d}/{len(self.files):03d}] 0x{f.file_size:08X} bytes: {f.file_path}")
             # Very slow... could do with multithreading and
             # handling of sync issues around file seek etc.
             # [TODO] GoLang port of this entire script lol
             self.extract_internal(f, out_path)
 
         # Finished extraction.
-        print(
-            f"Extracted {len(self.files)} files in "   \
-            f"{time.perf_counter() - start_time:.3f} " \
-            f"seconds."
-        )
+        print(f"Extracted {len(self.files)} files in {time.perf_counter() - start_time:.3f} seconds.")
 
     def list_all(self):
         for i, f in enumerate(self.files.values()):
             print(
-                f"KsPkg File #{i}\n"                  \
-                f"  -> Path:   {f.file_path}\n"       \
-                f"  -> Flags:  {f.inf_flags.name}\n"  \
-                f"  -> FNV1A:  0x{f.path_fnv1:08X}\n" \
-                f"  -> Size:   0x{f.file_size:08x}\n" \
+                f"KsPkg File #{i}\n"
+                f"  -> Path:   {f.file_path}\n"
+                f"  -> Flags:  {f.inf_flags.name}\n"
+                f"  -> FNV1A:  0x{f.path_fnv1:08X}\n"
+                f"  -> Size:   0x{f.file_size:08x}\n"
                 f"  -> Offset: 0x{f.file_offs:08x}\n"
             )
 
@@ -364,7 +357,8 @@ class KsPck:
         try:
             # N.B. must close internal file
             # handle before renaming it....
-            if self.kspck: self.kspck.close()
+            if self.kspck:
+                self.kspck.close()
 
             print("Forcing AC:Evo to use unpacked content...")
             # AC:Evo will run from unpacked resources if the
@@ -376,47 +370,41 @@ class KsPck:
         except PermissionError as e:
             print(f"Unable to rename KsPkg, exception: {e}")
 
+
 # ------------------------------------------------------------------------------------------
+
 
 def init_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Assetto Corsa Evo: Kunos Package (kspkg) Extraction Tool",
-        epilog="https://github.com/ntpopgetdope/ace-kspkg"
+        epilog="https://github.com/ntpopgetdope/ace-kspkg",
     )
 
+    parser.add_argument("-l", "--list", action="store_true", help="List all files packed within parsed KsPkg")
     parser.add_argument(
-        "-l", "--list", action="store_true",
-        help="List all files packed within parsed KsPkg"
-    )
-    parser.add_argument(
-        "-i", "--in", type=str, default="content.kspkg", metavar="PATH",
-        help="Path to KsPkg file (default: content.kspkg)"
+        "-i",
+        "--in",
+        type=str,
+        default="content.kspkg",
+        metavar="PATH",
+        help="Path to KsPkg file (default: content.kspkg)",
     )
 
     ex = parser.add_argument_group("extract")
     # Exclusive options for all/single file extraction...
     exopt = ex.add_mutually_exclusive_group()
-    exopt.add_argument(
-        "-a", "--all", action="store_true",
-        help="Extract all files within parsed KsPkg"
-    )
-    exopt.add_argument(
-        "-p", "--path", type=str, metavar="PATH",
-        help="Extract a single file by path in KsPkg"
-    )
+    exopt.add_argument("-a", "--all", action="store_true", help="Extract all files within parsed KsPkg")
+    exopt.add_argument("-p", "--path", type=str, metavar="PATH", help="Extract a single file by path in KsPkg")
 
     # Non-exclusive extraction options...
     ex.add_argument(
-        "-o", "--out", type=str, default="content", metavar="PATH",
-        help="Path to extract KsPkg to (default: content)"
+        "-o", "--out", type=str, default="content", metavar="PATH", help="Path to extract KsPkg to (default: content)"
     )
-    ex.add_argument(
-        "-r", "--run-unpacked", action="store_true",
-        help="Force AC:Evo to run the unpacked content"
-    )
+    ex.add_argument("-r", "--run-unpacked", action="store_true", help="Force AC:Evo to run the unpacked content")
 
     # Return file parser.
     return parser
+
 
 # ------------------------------------------------------------------------------------------
 
@@ -434,7 +422,7 @@ if __name__ == "__main__":
         parser.print_help()
         exit(0)
 
-    pck = KsPck(getattr(args, 'in') or "content.kspkg")
+    pck = KsPck(getattr(args, "in") or "content.kspkg")
     pck.parse_file_tbl()
 
     if args.list:
@@ -442,7 +430,7 @@ if __name__ == "__main__":
 
     if args.all or args.run_unpacked:
         pck.extract_all(args.out)
-    elif args.path: # Single file extraction.
+    elif args.path:  # Single file extraction.
         pck.extract_file(args.path, args.out)
 
     if args.run_unpacked:

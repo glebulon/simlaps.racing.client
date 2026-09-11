@@ -12,6 +12,7 @@ while graphics ``npos`` is non-zero. The graphics field is the authoritative
 source the AI prompt's coaching depends on, so this fixture is the regression
 backstop for the graphics decoder.
 """
+
 from __future__ import annotations
 
 import json
@@ -92,7 +93,7 @@ class TestDecodeGraphicsEvoStructure:
 
         buf = bytearray(b"\x00" * GRAPHICS_EVO_MIN_SIZE)
         # NaN: 0x7fc00000 little-endian = 00 00 c0 7f
-        buf[_GE_NPOS:_GE_NPOS + 4] = b"\x00\x00\xc0\x7f"
+        buf[_GE_NPOS : _GE_NPOS + 4] = b"\x00\x00\xc0\x7f"
 
         assert decode_graphics_evo(bytes(buf)) is None
 
@@ -194,7 +195,7 @@ class TestDecodeGraphicsEvoFieldValues:
         def put_string(offset, value):
             encoded = value.encode("ascii")
             assert len(encoded) <= 15
-            data[offset:offset + 15] = encoded.ljust(15, b"\x00")
+            data[offset : offset + 15] = encoded.ljust(15, b"\x00")
 
         put_string(_GE_TIMING_CURRENT_LAPTIME, "CURRENT")
         put_string(_GE_TIMING_DELTA_CURRENT, "CUR_DELTA")

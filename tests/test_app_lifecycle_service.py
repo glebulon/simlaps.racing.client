@@ -21,9 +21,7 @@ def _make_app(order=None) -> SimpleNamespace:
             destroy=AsyncMock(side_effect=lambda: order.append("destroy")),
         )
     )
-    app._stop_telemetry_capture = AsyncMock(
-        side_effect=lambda **kwargs: order.append("telemetry")
-    )
+    app._stop_telemetry_capture = AsyncMock(side_effect=lambda **kwargs: order.append("telemetry"))
     app._api_client = SimpleNamespace(
         close=AsyncMock(side_effect=lambda: order.append("api")),
     )
@@ -226,12 +224,8 @@ def _make_flet_app(monkeypatch):
         destroyed.set()
 
     app.stop_monitoring = stop_monitoring
-    app._stop_telemetry_capture = AsyncMock(
-        side_effect=lambda **kwargs: order.append("telemetry")
-    )
-    app._api_client = SimpleNamespace(
-        close=AsyncMock(side_effect=lambda: order.append("api"))
-    )
+    app._stop_telemetry_capture = AsyncMock(side_effect=lambda **kwargs: order.append("telemetry"))
+    app._api_client = SimpleNamespace(close=AsyncMock(side_effect=lambda: order.append("api")))
     # Native destruction is the terminal transport boundary under test.
     monkeypatch.setattr(app.page.window, "destroy", AsyncMock(side_effect=destroy))
     return app, session, connection, order, started, release, destroyed
@@ -243,9 +237,7 @@ async def test_flet_native_close_dispatch_awaits_ordered_cleanup(monkeypatch):
     assert app.page.window.prevent_close is True
     await session.dispatch_event(app.page.window._i, "event", {"type": "focus"})
     assert order == []
-    dispatch = asyncio.create_task(
-        session.dispatch_event(app.page.window._i, "event", {"type": "close"})
-    )
+    dispatch = asyncio.create_task(session.dispatch_event(app.page.window._i, "event", {"type": "close"}))
     try:
         await asyncio.wait_for(started.wait(), 2)
         assert not dispatch.done()
@@ -261,9 +253,7 @@ async def test_flet_native_close_dispatch_awaits_ordered_cleanup(monkeypatch):
 @pytest.mark.asyncio
 async def test_flet_disconnect_awaits_cleanup_after_native_dispatch_cancellation(monkeypatch):
     app, session, connection, order, started, release, _ = _make_flet_app(monkeypatch)
-    native = asyncio.create_task(
-        session.dispatch_event(app.page.window._i, "event", {"type": "close"})
-    )
+    native = asyncio.create_task(session.dispatch_event(app.page.window._i, "event", {"type": "close"}))
     fallback = None
     try:
         await asyncio.wait_for(started.wait(), 2)

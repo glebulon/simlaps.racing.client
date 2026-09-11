@@ -73,7 +73,7 @@ class TestLogParserFlow:
         """Test parsing log with basic lap completion."""
         log_content = """[2024-01-01 12:00:00] [gameplay] [info] Game Started! GameModeType_PRACTICE | TestTrack | porsche_992_gt3_cup | GameModeSelectionWeatherType_Clear
 [2024-01-01 12:00:01] [gameplay] [info] New lap carId abc123-456: 1:23.456
-"""
+"""  # noqa: E501
         log_file = tmp_path / "lap.log"
         log_file.write_text(log_content)
 
@@ -90,7 +90,7 @@ class TestLogParserFlow:
 [2024-01-01 12:00:01] [gameplay] [info] New lap carId abc123-456: 1:23.456
 [2024-01-01 12:00:02] [gameplay] [info] New lap carId abc123-456: 1:24.567
 [2024-01-01 12:00:03] [gameplay] [info] New lap carId abc123-456: 1:22.345
-"""
+"""  # noqa: E501
         log_file = tmp_path / "multilap.log"
         log_file.write_text(log_content)
 
@@ -137,7 +137,7 @@ class TestEdgeCases:
         log_content = """INVALID LINE FORMAT
 Another invalid line
 [2024-01-01 12:00:00] [gameplay] [info] Game Started! GameModeType_PRACTICE | TestTrack | porsche_992_gt3_cup | GameModeSelectionWeatherType_Clear
-"""
+"""  # noqa: E501
         log_file = tmp_path / "malformed.log"
         log_file.write_text(log_content)
 
@@ -162,7 +162,7 @@ class TestLapData:
             sector2_ms=48000,
             sector3_ms=-1,
             is_valid=True,
-            tyre_compound="Dry"
+            tyre_compound="Dry",
         )
 
         assert lap.lap_number == 1
@@ -172,12 +172,7 @@ class TestLapData:
 
     def test_lap_data_to_dict(self):
         """Test converting lap data to dict."""
-        lap = LapData(
-            lap_number=1,
-            physics_lap_number=1,
-            lap_time_ms=83456,
-            lap_time_str="1:23.456"
-        )
+        lap = LapData(lap_number=1, physics_lap_number=1, lap_time_ms=83456, lap_time_str="1:23.456")
 
         result = lap.to_dict()
 
@@ -192,6 +187,7 @@ class TestLogContext:
     def test_context_initialization(self):
         """Test creating log context."""
         from src.models.context import LogContext
+
         context = LogContext()
 
         assert context is not None
@@ -200,7 +196,7 @@ class TestLogContext:
         """Test parser has context attribute."""
         parser = LogParser()
 
-        assert hasattr(parser, 'context')
+        assert hasattr(parser, "context")
         assert parser.context is not None
 
 
@@ -255,7 +251,7 @@ class TestParserConfiguration:
         """Test log buffer initialization."""
         parser = LogParser()
 
-        assert hasattr(parser, 'log_buffer')
+        assert hasattr(parser, "log_buffer")
         assert isinstance(parser.log_buffer, list)
         assert parser.max_log_lines == 100_000
 
@@ -453,13 +449,10 @@ class TestLogParserEmitters:
         parser = LogParser(on_lap_complete=on_lap)
 
         from src.models import LapData, LapState, SessionData
+
         session = SessionData(track="spa", car="porsche")
         lap = LapData(
-            lap_number=1,
-            physics_lap_number=1,
-            lap_time_ms=100000,
-            lap_time_str="1:40.000",
-            lap_state=LapState.VALID
+            lap_number=1, physics_lap_number=1, lap_time_ms=100000, lap_time_str="1:40.000", lap_state=LapState.VALID
         )
 
         await parser._emit_lap(session, lap)
@@ -508,6 +501,7 @@ class TestLogParserStintHandling:
     def test_ensure_stint_creates_new(self):
         """Test creating a new stint."""
         from src.models import SessionData
+
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.tyre.set_all("SC")
@@ -521,6 +515,7 @@ class TestLogParserStintHandling:
     def test_ensure_stint_reuses_existing(self):
         """Test reusing existing stint for same compound."""
         from src.models import SessionData
+
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.tyre.set_all("SC")
@@ -533,6 +528,7 @@ class TestLogParserStintHandling:
     def test_ensure_stint_new_compound(self):
         """Test creating new stint for different compound."""
         from src.models import SessionData
+
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.tyre.set_all("SC")
@@ -547,6 +543,7 @@ class TestLogParserStintHandling:
     def test_finalise_stints(self):
         """Test finalizing stints."""
         from src.models import SessionData
+
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser._ensure_stint("SC")
@@ -564,6 +561,7 @@ class TestLogParserLapState:
     def test_determine_lap_state_outlap(self):
         """Test outlap detection."""
         from src.models import InProgressLap, LapState
+
         parser = LogParser()
         ip = InProgressLap()
         ip.is_outlap = True
@@ -575,6 +573,7 @@ class TestLogParserLapState:
     def test_determine_lap_state_valid(self):
         """Test non-outlap returns VALID."""
         from src.models import InProgressLap, LapState
+
         parser = LogParser()
         ip = InProgressLap()
         ip.is_outlap = False
@@ -586,6 +585,7 @@ class TestLogParserLapState:
     def test_determine_lap_state_practice_outlap_fallback(self):
         """Test practice lap 1 with no splits returns OUTLAP."""
         from src.models import InProgressLap, LapState
+
         parser = LogParser()
         ip = InProgressLap()
         ip.is_outlap = False
@@ -598,6 +598,7 @@ class TestLogParserLapState:
     def test_determine_lap_state_practice_lap1_with_splits(self):
         """Test practice lap 1 with splits is VALID."""
         from src.models import InProgressLap, LapState
+
         parser = LogParser()
         ip = InProgressLap()
         ip.is_outlap = False
