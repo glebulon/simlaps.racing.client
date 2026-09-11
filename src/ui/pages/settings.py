@@ -4,13 +4,14 @@ Settings Page - Configuration options.
 Simplified: No API key required (uses signed payloads).
 """
 
-import flet as ft
 from dataclasses import replace
-from typing import Optional, Callable
+from typing import Callable, Optional
 
-from ...utils.config import AppConfig, DEFAULT_SERVER_URL
-from ...utils.structured_logger import Component, log_exception
+import flet as ft
+
 from ...core.discord_notifier import DiscordNotifier
+from ...utils.config import DEFAULT_SERVER_URL, AppConfig
+from ...utils.structured_logger import Component, log_exception
 from ..components.feedback import show_snackbar
 from ..components.mount_safe import mounted_page, safe_update
 
@@ -18,11 +19,11 @@ from ..components.mount_safe import mounted_page, safe_update
 class SettingsPage(ft.Container):
     """
     Settings page for configuring the application.
-    
+
     Note: No API key field - authentication uses signed payloads with
     an embedded app secret.
     """
-    
+
     def __init__(
         self,
         config: AppConfig,
@@ -36,7 +37,7 @@ class SettingsPage(ft.Container):
         self.on_save = on_save
         self.on_test_connection = on_test_connection
         self.on_test_discord = on_test_discord
-        
+
         # Form fields
         self._server_url_field = ft.TextField(
             value=config.server_url,
@@ -48,12 +49,12 @@ class SettingsPage(ft.Container):
             color="#ffffff",
             label_style=ft.TextStyle(color="#888888"),
         )
-        
+
         self._submit_invalid_switch = ft.Switch(
             value=config.submit_invalid_laps,
             active_color="#7c3aed",
         )
-        
+
         # Discord fields
         self._discord_webhook_field = ft.TextField(
             value=config.discord_webhook_url or "",
@@ -65,31 +66,31 @@ class SettingsPage(ft.Container):
             color="#ffffff",
             label_style=ft.TextStyle(color="#888888"),
         )
-        
+
         self._discord_enabled_switch = ft.Switch(
             value=config.discord_enabled,
             active_color="#7c3aed",
             on_change=self._discord_enabled_changed,
         )
-        
+
         self._discord_pb_only_switch = ft.Switch(
             value=config.discord_pb_only,
             active_color="#7c3aed",
             disabled=not config.discord_enabled,
         )
-        
+
         self._discord_test_status = ft.Text(
             "",
             size=12,
             color="#888888",
         )
-        
+
         # Telemetry fields
         self._telemetry_enabled_switch = ft.Switch(
             value=config.telemetry_enabled,
             active_color="#7c3aed",
         )
-        
+
         self._telemetry_output_path_field = ft.TextField(
             value=config.telemetry_output_path,
             label="Output Directory",
@@ -105,18 +106,18 @@ class SettingsPage(ft.Container):
             value=config.telemetry_debug_logs,
             active_color="#7c3aed",
         )
-        
+
         self._connection_status = ft.Text(
             "",
             size=12,
             color="#888888",
         )
-        
+
         super().__init__(
             content=self._build_content(),
             expand=True,
         )
-    
+
     def _build_content(self) -> ft.Control:
         """Build the settings page content."""
         # Header with back button
@@ -136,7 +137,7 @@ class SettingsPage(ft.Container):
             ],
             spacing=8,
         )
-        
+
         # Server settings section
         server_section = self._build_section(
             "Server",
@@ -159,7 +160,7 @@ class SettingsPage(ft.Container):
                 ),
             ],
         )
-        
+
         # Behavior settings section
         behavior_section = self._build_section(
             "Behavior",
@@ -171,7 +172,7 @@ class SettingsPage(ft.Container):
                 ),
             ],
         )
-        
+
         # Discord settings section
         discord_section = self._build_section(
             "Discord Integration",
@@ -204,7 +205,7 @@ class SettingsPage(ft.Container):
                 ),
             ],
         )
-        
+
         # Telemetry settings section
         telemetry_section = self._build_section(
             "📊 Telemetry",
@@ -222,7 +223,7 @@ class SettingsPage(ft.Container):
                 ),
             ],
         )
-        
+
         # Save button
         save_button = ft.Button(
             "Save Settings",
@@ -235,14 +236,14 @@ class SettingsPage(ft.Container):
             ),
             width=200,
         )
-        
+
         # Reset button
         reset_button = ft.TextButton(
             "Reset to Defaults",
             on_click=self._reset_settings,
             style=ft.ButtonStyle(color="#888888"),
         )
-        
+
         return ft.Container(
             content=ft.Column(
                 controls=[
@@ -274,7 +275,7 @@ class SettingsPage(ft.Container):
             bgcolor="#0f0f1a",
             expand=True,
         )
-    
+
     def _build_section(self, title: str, controls: list) -> ft.Container:
         """Build a settings section."""
         return ft.Container(
@@ -296,7 +297,7 @@ class SettingsPage(ft.Container):
             border_radius=12,
             border=ft.Border.all(1, "#3d3d5c"),
         )
-    
+
     def _build_switch_row(
         self,
         title: str,
@@ -321,21 +322,17 @@ class SettingsPage(ft.Container):
 
     def _discord_enabled_changed(self, e) -> None:
         """Keep the Discord-only PB filter inactive when posting is off."""
-        self._discord_pb_only_switch.disabled = not bool(
-            self._discord_enabled_switch.value
-        )
+        self._discord_pb_only_switch.disabled = not bool(self._discord_enabled_switch.value)
         safe_update(self._discord_pb_only_switch)
-    
+
     async def _test_connection(self, e):
         """Test server connection."""
         self._connection_status.value = "Testing..."
         self._connection_status.color = "#ffd43b"
         safe_update(self._connection_status)
-        
+
         if self.on_test_connection:
-            success, message = await self.on_test_connection(
-                self._server_url_field.value
-            )
+            success, message = await self.on_test_connection(self._server_url_field.value)
             if success:
                 self._connection_status.value = "Connected"
                 self._connection_status.color = "#51cf66"
@@ -343,21 +340,21 @@ class SettingsPage(ft.Container):
                 self._connection_status.value = f"{message}"
                 self._connection_status.color = "#ff6b6b"
             safe_update(self._connection_status)
-    
+
     async def _test_discord_webhook(self, e):
         """Test Discord webhook connection."""
         webhook_url = self._discord_webhook_field.value.strip()
-        
+
         if not webhook_url:
             self._discord_test_status.value = "No webhook URL"
             self._discord_test_status.color = "#ff6b6b"
             safe_update(self._discord_test_status)
             return
-        
+
         self._discord_test_status.value = "Testing..."
         self._discord_test_status.color = "#ffd43b"
         safe_update(self._discord_test_status)
-        
+
         if self.on_test_discord:
             # Use the app's Discord test method
             success, message = await self.on_test_discord(webhook_url)
@@ -375,9 +372,9 @@ class SettingsPage(ft.Container):
             else:
                 self._discord_test_status.value = "Invalid URL format"
                 self._discord_test_status.color = "#ff6b6b"
-        
+
         safe_update(self._discord_test_status)
-    
+
     def _save_settings(self, e):
         """Save current settings."""
         # Build a new value so Settings edits do not mutate the application's
@@ -393,7 +390,7 @@ class SettingsPage(ft.Container):
             telemetry_output_path=self._telemetry_output_path_field.value or "",
             telemetry_debug_logs=self._telemetry_debug_logs_switch.value,
         )
-        
+
         try:
             if self.on_save:
                 self.on_save(updated_config)
@@ -404,12 +401,12 @@ class SettingsPage(ft.Container):
                 show_snackbar(page, f"Could not save settings: {exc}", "#ff6b6b")
             return
         self.config = updated_config
-        
+
         # Show success feedback
         page = mounted_page(self)
         if page is not None:
             show_snackbar(page, "Settings saved!", "#51cf66")
-    
+
     def _reset_settings(self, e):
         """Reset settings to defaults and persist immediately."""
         default_config = AppConfig()
@@ -456,19 +453,19 @@ class SettingsPage(ft.Container):
         page = mounted_page(self)
         if page is not None:
             show_snackbar(page, "Settings reset to defaults", "#7c3aed")
-    
+
     def update_config(self, config: AppConfig):
         """Reload the form from the application's active configuration."""
         self.config = config
         self._server_url_field.value = config.server_url
         self._submit_invalid_switch.value = config.submit_invalid_laps
-        
+
         # Update Discord fields
         self._discord_webhook_field.value = config.discord_webhook_url or ""
         self._discord_enabled_switch.value = config.discord_enabled
         self._discord_pb_only_switch.value = config.discord_pb_only
         self._discord_pb_only_switch.disabled = not config.discord_enabled
-        
+
         # Update Telemetry fields
         self._telemetry_enabled_switch.value = config.telemetry_enabled
         self._telemetry_output_path_field.value = config.telemetry_output_path

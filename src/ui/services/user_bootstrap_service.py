@@ -4,13 +4,14 @@ Owns startup/log-driven user detection handling: UI identity projection,
 Discord notifier initialization, and PB cache preload orchestration.
 """
 
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable, Optional
 
 from src.utils.structured_logger import Component, log_debug, log_info, log_warning
 
 if TYPE_CHECKING:
-    from ..app import SimLapsApp
     from src.core.discord_notifier import DiscordNotifier
+
+    from ..app import SimLapsApp
 
 
 class UserBootstrapService:

@@ -10,14 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import build
 from src.core import security
 
-
-TEST_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+TEST_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"  # noqa: S105
 
 
 class TestGenerateSecretModuleSource:
     def test_roundtrip_reconstructs_secret(self):
         namespace = {}
-        exec(build.generate_secret_module_source(TEST_SECRET), namespace)
+        exec(build.generate_secret_module_source(TEST_SECRET), namespace)  # noqa: S102
 
         assert namespace["get_secret"]() == TEST_SECRET.encode("utf-8")
 
@@ -109,6 +108,10 @@ class TestLoadEmbeddedSecret:
 
 
 class TestStageEmbeddedSecret:
+    @pytest.mark.skipif(
+        sys.platform != "win32",
+        reason="Produces a Windows .pyd; native extension is .so on other platforms",
+    )
     def test_compiles_native_module(self, tmp_path, monkeypatch):
         pytest.importorskip("Cython")
         monkeypatch.setenv("APP_SECRET", TEST_SECRET)
@@ -132,6 +135,7 @@ class TestStageEmbeddedSecret:
 
     def test_fails_without_secret(self, tmp_path, monkeypatch):
         monkeypatch.delenv("APP_SECRET", raising=False)
+        monkeypatch.setattr(build, "dotenv_values", lambda path: {})
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(build, "SECRET_STAGE_DIR", str(tmp_path / "secret_stage"))
 

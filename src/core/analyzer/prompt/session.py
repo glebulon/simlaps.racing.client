@@ -2,10 +2,11 @@
 
 from typing import Dict, List
 
-from src.core.car_tuning_catalog import format_tuning_block
+from src.core.analyzer._util import _trend_direction
 from src.core.analyzer.corner_detection import corner_segment_time
 from src.core.analyzer.metrics import analyze_electronics_per_lap
-from src.core.analyzer._util import _trend_direction
+from src.core.car_tuning_catalog import format_tuning_block
+
 from .context import PromptContext
 
 
@@ -22,35 +23,25 @@ def build_diagnostic_sections(ctx: PromptContext) -> List[str]:
         "",
     ]
     if ctx.no_valid_laps:
-        lines.append(
-            "Detailed corner coaching has been suppressed because no valid "
-            "completed lap is available."
-        )
+        lines.append("Detailed corner coaching has been suppressed because no valid completed lap is available.")
     else:
         lines.append(
-            "Detailed corner coaching has been suppressed because the lap "
-            "alignment is not trustworthy enough."
+            "Detailed corner coaching has been suppressed because the lap alignment is not trustworthy enough."
         )
     if ctx.analysis_notes:
         lines.extend(["", "Reasons:"])
         lines.extend(f"- {note}" for note in ctx.analysis_notes)
     lines.append("")
     if ctx.no_valid_laps:
-        lines.append(
-            "Use this session only for invalid-lap diagnostics; record at "
-            "least one valid lap for coaching."
-        )
+        lines.append("Use this session only for invalid-lap diagnostics; record at least one valid lap for coaching.")
     else:
-        lines.append(
-            "Use this session only for diagnostics; no coaching conclusions "
-            "should be drawn from it."
-        )
+        lines.append("Use this session only for diagnostics; no coaching conclusions should be drawn from it.")
     return lines
 
 
 def build_single_lap_sections(ctx: PromptContext) -> List[str]:
     best_lap = ctx.best_lap
-    assert best_lap is not None
+    assert best_lap is not None  # noqa: S101
     lines: List[str] = [
         "COMPARATIVE COACHING UNAVAILABLE",
         "",
@@ -72,10 +63,7 @@ def build_single_lap_sections(ctx: PromptContext) -> List[str]:
         lines.append(f"- Fuel used:  {best_lap['fuel_used']:.3f}L")
     if ctx.invalid_laps:
         lines.extend(["", "INVALID LAPS (diagnostic only; excluded from coaching):"])
-        lines.extend(
-            f"- Lap {lap['lap_num']}: {lap['lap_time_str']} [INVALID]"
-            for lap in ctx.invalid_laps
-        )
+        lines.extend(f"- Lap {lap['lap_num']}: {lap['lap_time_str']} [INVALID]" for lap in ctx.invalid_laps)
     if ctx.analysis_notes:
         lines.extend(["", "ANALYSIS NOTES:"])
         lines.extend(f"- {note}" for note in ctx.analysis_notes)
@@ -89,8 +77,6 @@ def build_session_context_sections(ctx: PromptContext) -> List[str]:
     analysis_mode = ctx.analysis_mode
     analysis_confidence = ctx.analysis_confidence
     analysis_notes = list(ctx.analysis_notes)
-    authoritative_progress_ratio = ctx.authoritative_progress_ratio
-    plausible_frame_ratio = ctx.plausible_frame_ratio
     reference_lap_num = ctx.reference_lap_num
     comparison_lap_num = ctx.comparison_lap_num
     hz = ctx.hz
@@ -101,8 +87,7 @@ def build_session_context_sections(ctx: PromptContext) -> List[str]:
 
     # ── Preamble / persona
     lines.append(
-        f"You are an expert Assetto Corsa Evo race engineer. "
-        f"Analyse telemetry for the {car_model} at {track_label}."
+        f"You are an expert Assetto Corsa Evo race engineer. Analyse telemetry for the {car_model} at {track_label}."
     )
     lines.append(
         "Your entire response must be CONCISE. "
@@ -131,7 +116,9 @@ def build_session_context_sections(ctx: PromptContext) -> List[str]:
             "Limit setup advice to tyre pressures only. Focus on driving technique."
         )
     lines.append("")
-    lines.append(f"NOTE: Telemetry sampled at {hz}Hz. Timing values resolve to {1/hz:.2f}s — differences below this are noise.")
+    lines.append(
+        f"NOTE: Telemetry sampled at {hz}Hz. Timing values resolve to {1 / hz:.2f}s — differences below this are noise."
+    )
     lines.append("")
 
     # ── Session context
@@ -157,9 +144,9 @@ def build_session_context_sections(ctx: PromptContext) -> List[str]:
             if isinstance(at, (int, float)) and at > 0:
                 _all_air_temps.append(float(at))
     if _all_road_temps:
-        lines.append(f"- Track temp:     {sum(_all_road_temps)/len(_all_road_temps):.0f}°C")
+        lines.append(f"- Track temp:     {sum(_all_road_temps) / len(_all_road_temps):.0f}°C")
     if _all_air_temps:
-        lines.append(f"- Air temp:       {sum(_all_air_temps)/len(_all_air_temps):.0f}°C")
+        lines.append(f"- Air temp:       {sum(_all_air_temps) / len(_all_air_temps):.0f}°C")
     if analysis_notes:
         lines.append("")
         lines.append("ANALYSIS NOTES:")
@@ -181,7 +168,7 @@ def build_fuel_sections(ctx: PromptContext) -> List[str]:
     laps = list(ctx.valid_laps)
     best_lap = ctx.best_lap
     worst_lap = ctx.worst_lap
-    assert best_lap is not None and worst_lap is not None
+    assert best_lap is not None and worst_lap is not None  # noqa: S101
     time_diff = ctx.time_diff
     authoritative_progress_ratio = ctx.authoritative_progress_ratio
     plausible_frame_ratio = ctx.plausible_frame_ratio
@@ -192,7 +179,7 @@ def build_fuel_sections(ctx: PromptContext) -> List[str]:
     lines.append(f"- Best lap:   #{best_lap['lap_num']}  {best_lap['lap_time_str']}")
     lines.append(f"- Worst lap:  #{worst_lap['lap_num']}  {worst_lap['lap_time_str']}")
     lines.append(f"- Delta best/worst: {time_diff:.2f}s")
-    lines.append(f"- Top speed: {max(l['max_speed'] for l in laps):.1f} km/h")
+    lines.append(f"- Top speed: {max(l['max_speed'] for l in laps):.1f} km/h")  # noqa: E741
     lines.append(f"- Authoritative progress coverage: {authoritative_progress_ratio:.0%}")
     lines.append(f"- Plausible physics coverage:      {plausible_frame_ratio:.0%}")
 
@@ -212,9 +199,9 @@ def build_fuel_sections(ctx: PromptContext) -> List[str]:
         lines.append(f"- Lap times: {_time_strs}  (trend: {_trend_label})")
 
     # ── Fuel consumption summary (from telemetry)
-    laps_with_fuel = [lap for lap in laps if lap.get('fuel_used') is not None]
+    laps_with_fuel = [lap for lap in laps if lap.get("fuel_used") is not None]
     if laps_with_fuel:
-        fuel_values = [lap['fuel_used'] for lap in laps_with_fuel]
+        fuel_values = [lap["fuel_used"] for lap in laps_with_fuel]
         avg_fuel = sum(fuel_values) / len(fuel_values)
         total_fuel = sum(fuel_values)
         lines.append(f"- Fuel per lap (avg): {avg_fuel:.3f}L")
@@ -265,16 +252,21 @@ def build_lap_sections(ctx: PromptContext) -> List[str]:
     laps = list(ctx.valid_laps)
     best_lap = ctx.best_lap
     worst_lap = ctx.worst_lap
-    assert best_lap is not None and worst_lap is not None
+    assert best_lap is not None and worst_lap is not None  # noqa: S101
     hz = ctx.hz
     lines: List[str] = []
     # ── Lap-by-lap summary
     lines.append("LAP-BY-LAP SUMMARY:")
     for lap in laps:
-        marker = " <- BEST" if lap["lap_num"] == best_lap["lap_num"] else \
-                 " <- WORST" if lap["lap_num"] == worst_lap["lap_num"] else ""
+        marker = (
+            " <- BEST"
+            if lap["lap_num"] == best_lap["lap_num"]
+            else " <- WORST"
+            if lap["lap_num"] == worst_lap["lap_num"]
+            else ""
+        )
         valid_str = "" if lap.get("is_valid", True) else " [INVALID]"
-        fuel_str = f"  fuel {lap['fuel_used']:.3f}L" if lap.get('fuel_used') is not None else ""
+        fuel_str = f"  fuel {lap['fuel_used']:.3f}L" if lap.get("fuel_used") is not None else ""
         lines.append(
             f"  Lap {lap['lap_num']}: {lap['lap_time_str']}  "
             f"max {lap['max_speed']:.1f} km/h  "
@@ -311,10 +303,7 @@ def build_electronics_sections(ctx: PromptContext) -> List[str]:
     lines: List[str] = []
     # ── Electronics / aids summary
     elec_per_lap = analyze_electronics_per_lap(laps)
-    has_elec_data = any(
-        e["tc_level"] is not None or e["abs_level"] is not None
-        for e in elec_per_lap
-    )
+    has_elec_data = any(e["tc_level"] is not None or e["abs_level"] is not None for e in elec_per_lap)
     if has_elec_data:
         lines.append("CAR ELECTRONICS / AIDS (start-of-lap SHM snapshot):")
         lines.append("(TC/ABS: 0=off, higher=more aggressive; EngMap=engine power mode;")
@@ -329,9 +318,20 @@ def build_electronics_sections(ctx: PromptContext) -> List[str]:
         )
         has_modifiable_data = any(
             first_elec.get(f"{param}_modifiable") is not None
-            for param in ["tc_level", "abs_level", "brake_bias", "engine_map", "diff_power", "diff_coast",
-                         "front_bump_damper", "front_rebound_damper", "rear_bump_damper", "rear_rebound_damper",
-                         "pitlimiter", "perf_mode"]
+            for param in [
+                "tc_level",
+                "abs_level",
+                "brake_bias",
+                "engine_map",
+                "diff_power",
+                "diff_coast",
+                "front_bump_damper",
+                "front_rebound_damper",
+                "rear_bump_damper",
+                "rear_rebound_damper",
+                "pitlimiter",
+                "perf_mode",
+            ]
         )
 
         if has_modifiable_data or has_limit_data:
@@ -375,21 +375,43 @@ def build_electronics_sections(ctx: PromptContext) -> List[str]:
                 if first_elec.get("abs_level_min") is not None and first_elec.get("abs_level_max") is not None:
                     limit_lines.append(f"ABS: {first_elec['abs_level_min']}-{first_elec['abs_level_max']}")
                 if first_elec.get("brake_bias_min") is not None and first_elec.get("brake_bias_max") is not None:
-                    limit_lines.append(f"BrakeBias: {first_elec['brake_bias_min']:.2f}-{first_elec['brake_bias_max']:.2f}")
+                    limit_lines.append(
+                        f"BrakeBias: {first_elec['brake_bias_min']:.2f}-{first_elec['brake_bias_max']:.2f}"
+                    )
                 if first_elec.get("engine_map_min") is not None and first_elec.get("engine_map_max") is not None:
                     limit_lines.append(f"EngMap: {first_elec['engine_map_min']}-{first_elec['engine_map_max']}")
                 if first_elec.get("diff_power_min") is not None and first_elec.get("diff_power_max") is not None:
                     limit_lines.append(f"DiffP: {first_elec['diff_power_min']}-{first_elec['diff_power_max']}")
                 if first_elec.get("diff_coast_min") is not None and first_elec.get("diff_coast_max") is not None:
                     limit_lines.append(f"DiffC: {first_elec['diff_coast_min']}-{first_elec['diff_coast_max']}")
-                if first_elec.get("front_bump_damper_min") is not None and first_elec.get("front_bump_damper_max") is not None:
-                    limit_lines.append(f"FrontBump: {first_elec['front_bump_damper_min']}-{first_elec['front_bump_damper_max']}")
-                if first_elec.get("front_rebound_damper_min") is not None and first_elec.get("front_rebound_damper_max") is not None:
-                    limit_lines.append(f"FrontRebound: {first_elec['front_rebound_damper_min']}-{first_elec['front_rebound_damper_max']}")
-                if first_elec.get("rear_bump_damper_min") is not None and first_elec.get("rear_bump_damper_max") is not None:
-                    limit_lines.append(f"RearBump: {first_elec['rear_bump_damper_min']}-{first_elec['rear_bump_damper_max']}")
-                if first_elec.get("rear_rebound_damper_min") is not None and first_elec.get("rear_rebound_damper_max") is not None:
-                    limit_lines.append(f"RearRebound: {first_elec['rear_rebound_damper_min']}-{first_elec['rear_rebound_damper_max']}")
+                if (
+                    first_elec.get("front_bump_damper_min") is not None
+                    and first_elec.get("front_bump_damper_max") is not None
+                ):
+                    limit_lines.append(
+                        f"FrontBump: {first_elec['front_bump_damper_min']}-{first_elec['front_bump_damper_max']}"
+                    )
+                if (
+                    first_elec.get("front_rebound_damper_min") is not None
+                    and first_elec.get("front_rebound_damper_max") is not None
+                ):
+                    limit_lines.append(
+                        f"FrontRebound: {first_elec['front_rebound_damper_min']}-{first_elec['front_rebound_damper_max']}"  # noqa: E501
+                    )
+                if (
+                    first_elec.get("rear_bump_damper_min") is not None
+                    and first_elec.get("rear_bump_damper_max") is not None
+                ):
+                    limit_lines.append(
+                        f"RearBump: {first_elec['rear_bump_damper_min']}-{first_elec['rear_bump_damper_max']}"
+                    )
+                if (
+                    first_elec.get("rear_rebound_damper_min") is not None
+                    and first_elec.get("rear_rebound_damper_max") is not None
+                ):
+                    limit_lines.append(
+                        f"RearRebound: {first_elec['rear_rebound_damper_min']}-{first_elec['rear_rebound_damper_max']}"
+                    )
                 if limit_lines:
                     lines.append(f"  Valid ranges: {' | '.join(limit_lines)}")
             lines.append("")
@@ -414,8 +436,7 @@ def build_electronics_sections(ctx: PromptContext) -> List[str]:
             else:
                 dc_str = str(dc_raw) if dc_raw is not None else "?"
             lines.append(
-                f"  Lap {e['lap_num']}: TC={tc_str}  ABS={abs_str}  "
-                f"EngMap={map_str}  DiffP={dp_str}  DiffC={dc_str}"
+                f"  Lap {e['lap_num']}: TC={tc_str}  ABS={abs_str}  EngMap={map_str}  DiffP={dp_str}  DiffC={dc_str}"
             )
             changes: List[str] = []
             if e["tc_changed"]:
@@ -447,7 +468,6 @@ def build_session_sections(
     lines.extend(build_lap_sections(ctx))
     lines.extend(build_electronics_sections(ctx))
     lap_corner_map: Dict[int, Dict[int, Dict]] = {
-        lap["lap_num"]: {corner["id"]: corner for corner in lap["corners"]}
-        for lap in ctx.valid_laps
+        lap["lap_num"]: {corner["id"]: corner for corner in lap["corners"]} for lap in ctx.valid_laps
     }
     return lines, lap_corner_map

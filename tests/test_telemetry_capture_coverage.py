@@ -4,18 +4,15 @@ import asyncio
 import json
 import os
 import tempfile
-from unittest.mock import MagicMock, Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from src.core.security import GameProcessStatus
 from src.core.telemetry_capture import (
     FrameData,
-    RegionReader,
     TelemetryCapture,
-    REGIONS,
 )
-from src.models import SharedSessionManager
-from src.core.security import GameProcessStatus
 
 
 class TestShouldNotifyStopCallback:
@@ -132,9 +129,7 @@ class TestExportToJsonl:
     def test_export_success(self):
         capture = TelemetryCapture(hz=10.0)
         capture._output_prefix = "test_prefix"
-        capture._session_start_time = __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        )
+        capture._session_start_time = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
         capture._readers = {}
         capture._region_paths = {}
         capture._frames = [
@@ -167,9 +162,7 @@ class TestExportToJsonl:
 
         capture = TelemetryCapture(hz=10.0)
         capture._output_prefix = "test"
-        capture._session_start_time = __import__("datetime").datetime.now(
-            __import__("datetime").timezone.utc
-        )
+        capture._session_start_time = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
         capture._readers = {}
         capture._region_paths = {}
         capture._metadata = CaptureMetadata(
@@ -301,7 +294,7 @@ class TestStopCapture:
 
         capture._task = asyncio.create_task(slow_task())
 
-        frames = await capture.stop_capture("manual")
+        await capture.stop_capture("manual")
 
         assert capture._running is False
         assert capture._stop_reason == "manual"
@@ -315,7 +308,7 @@ class TestStopCapture:
         capture._readers = {"physics": mock_reader}
         capture._frames = []
 
-        frames = await capture.stop_capture("session_end")
+        await capture.stop_capture("session_end")
 
         mock_reader.close.assert_called_once()
         assert capture._readers == {}
@@ -328,7 +321,7 @@ class TestStopCapture:
         mock_file = MagicMock()
         capture._diag_file = mock_file
 
-        frames = await capture.stop_capture("manual")
+        await capture.stop_capture("manual")
 
         mock_file.close.assert_called_once()
         assert capture._diag_file is None
@@ -377,6 +370,7 @@ class TestStartCapture:
             capture._diag_file.close()
         finally:
             import shutil
+
             shutil.rmtree(capture._output_dir, ignore_errors=True)
 
 
@@ -556,9 +550,7 @@ class TestValidityOnlyCaptureLoop:
         capture = TelemetryCapture(record_frames=False)
         capture._running = True
         capture.set_record_frames(True)
-        capture._frames = [
-            FrameData("2026-01-01T00:00:00Z", 50, {"speed_kmh": 100.0})
-        ]
+        capture._frames = [FrameData("2026-01-01T00:00:00Z", 50, {"speed_kmh": 100.0})]
 
         capture.record_lap_boundary(120000, 1, "OUTLAP")
 
@@ -696,9 +688,7 @@ class TestValidityOnlyCaptureLoop:
     @pytest.mark.asyncio
     async def test_wrapper_preserves_original_exception_reason(self):
         capture = TelemetryCapture(debug_logs=False)
-        with patch.object(
-            capture, "_capture_loop", AsyncMock(side_effect=RuntimeError("boom"))
-        ):
+        with patch.object(capture, "_capture_loop", AsyncMock(side_effect=RuntimeError("boom"))):
             await capture._capture_loop_wrapper()
 
         assert capture.get_stop_reason() == "unhandled_exception: boom"

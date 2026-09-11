@@ -6,23 +6,23 @@ shared-memory decoding, telemetry analysis, and API submission code.
 
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
 import threading
 import time
 import uuid
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Set
 
-from .lap import LapData, SessionData
 from .constants import LAP_TIME_RECONCILIATION_TOLERANCE_MS
+from .lap import LapData, SessionData
 
-
-_TERMINAL_SESSION_PHASES = frozenset({
-    "ended",
-    "disqualified",
-    "teardown",
-})
+_TERMINAL_SESSION_PHASES = frozenset(
+    {
+        "ended",
+        "disqualified",
+        "teardown",
+    }
+)
 
 
 def _is_terminal_graphics_state(
@@ -39,6 +39,7 @@ def _is_terminal_graphics_state(
     # phase string remains from the last active snapshot.
     status_name = str(graphics_data.get("status_name") or "").strip().upper()
     return status_name == "AC_OFF"
+
 
 @dataclass
 class LapValidityData:
@@ -151,9 +152,7 @@ class SharedSessionData:
     pending_counter_echo_lap: Optional[int] = None
     pending_counter_echo_time_ms: Optional[int] = None
     fuel_data: FuelData = field(default_factory=FuelData)
-    player_identification: PlayerIdentificationData = field(
-        default_factory=PlayerIdentificationData
-    )
+    player_identification: PlayerIdentificationData = field(default_factory=PlayerIdentificationData)
     sector_splits: Dict[int, SectorSplitData] = field(default_factory=dict)
     session_metadata: SessionMetadataData = field(default_factory=SessionMetadataData)
 
@@ -237,8 +236,7 @@ class SharedSessionManager:
                 for completion in self._session_data.lap_completions
                 if (
                     completion.observed_at > observed_at
-                    and completion.observed_at
-                    not in self._session_data.consumed_lap_completion_times
+                    and completion.observed_at not in self._session_data.consumed_lap_completion_times
                 )
             ]
 
@@ -259,10 +257,8 @@ class SharedSessionManager:
                 completion
                 for completion in self._session_data.lap_completions
                 if (
-                    completion.observed_at
-                    not in self._session_data.consumed_lap_completion_times
-                    and abs(completion.lap_time_ms - lap_time_ms)
-                    <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                    completion.observed_at not in self._session_data.consumed_lap_completion_times
+                    and abs(completion.lap_time_ms - lap_time_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
                 )
             ]
             if not candidates:
@@ -272,9 +268,7 @@ class SharedSessionManager:
                 key=lambda item: (abs(item.lap_time_ms - lap_time_ms), item.observed_at),
             )
             if consume:
-                self._session_data.consumed_lap_completion_times.add(
-                    completion.observed_at
-                )
+                self._session_data.consumed_lap_completion_times.add(completion.observed_at)
             return completion
 
     def consume_lap_completion(self, completion: LapCompletionData) -> None:
@@ -364,9 +358,7 @@ class SharedSessionManager:
     def get_best_lap_time(self) -> Optional[float]:
         with self._lock:
             times = [
-                t.completed_lap_time
-                for t in self._session_data.lap_timing.values()
-                if t.completed_lap_time is not None
+                t.completed_lap_time for t in self._session_data.lap_timing.values() if t.completed_lap_time is not None
             ]
             return min(times) if times else None
 
@@ -381,7 +373,7 @@ class SharedSessionManager:
     def validate_data_consistency(self) -> Dict[str, list[str]]:
         issues: list[str] = []
         with self._lock:
-            for lap_num, timing in sorted(self._session_data.lap_timing.items()):
+            for _lap_num, timing in sorted(self._session_data.lap_timing.items()):
                 if timing.completed_lap_time is None:
                     continue
                 # Check for source drift: if both logs and graphics provided
@@ -395,10 +387,7 @@ class SharedSessionManager:
 
     def get_all_lap_validity(self) -> Dict[int, bool]:
         with self._lock:
-            return {
-                lap_num: v.is_valid
-                for lap_num, v in self._session_data.lap_validity.items()
-            }
+            return {lap_num: v.is_valid for lap_num, v in self._session_data.lap_validity.items()}
 
     # New shared object updates
     def update_lap_validity_from_graphics_shm(self, lap_num: int, is_invalid: bool) -> None:
@@ -570,8 +559,7 @@ class SharedSessionManager:
             if (
                 static_car_uuid
                 and self._session_data.player_identification.car_uuid
-                and str(static_car_uuid).casefold()
-                != str(self._session_data.player_identification.car_uuid).casefold()
+                and str(static_car_uuid).casefold() != str(self._session_data.player_identification.car_uuid).casefold()
             ):
                 self._session_data.has_ers = None
                 self._session_data.has_kers = None
@@ -701,36 +689,20 @@ class SharedSessionManager:
             )
             previous_completed = self._session_data.total_laps
             previous_lap_time_ms = int(self._session_data.current_lap_time_ms or 0)
-            lap_timer_reset = (
-                previous_lap_time_ms >= 5_000
-                and 0 <= current_lap_time_ms <= 1_000
-            )
+            lap_timer_reset = previous_lap_time_ms >= 5_000 and 0 <= current_lap_time_ms <= 1_000
             completed_timer_reset = (
-                lap_timer_reset
-                and last_laptime_ms > 0
-                and abs(previous_lap_time_ms - last_laptime_ms) <= 2_000
+                lap_timer_reset and last_laptime_ms > 0 and abs(previous_lap_time_ms - last_laptime_ms) <= 2_000
             )
-            counter_advanced = (
-                previous_completed is not None
-                and completed_laps > int(previous_completed)
-            )
+            counter_advanced = previous_completed is not None and completed_laps > int(previous_completed)
             duplicate_counter_echo = (
                 counter_advanced
                 and not completed_timer_reset
                 and self._session_data.pending_counter_echo
-                and completed_laps
-                == self._session_data.pending_counter_echo_lap
-                and last_laptime_ms
-                == self._session_data.pending_counter_echo_time_ms
+                and completed_laps == self._session_data.pending_counter_echo_lap
+                and last_laptime_ms == self._session_data.pending_counter_echo_time_ms
             )
-            new_physical_boundary = lap_timer_reset or (
-                counter_advanced and not duplicate_counter_echo
-            )
-            if (
-                not terminal_state
-                and (completed_timer_reset or counter_advanced)
-                and last_laptime_ms > 0
-            ):
+            new_physical_boundary = lap_timer_reset or (counter_advanced and not duplicate_counter_echo)
+            if not terminal_state and (completed_timer_reset or counter_advanced) and last_laptime_ms > 0:
                 now_mono = time.monotonic()
                 if not duplicate_counter_echo:
                     completion = LapCompletionData(
@@ -754,13 +726,9 @@ class SharedSessionManager:
                 if completed_timer_reset:
                     self._session_data.pending_counter_echo = not counter_advanced
                     self._session_data.pending_counter_echo_lap = (
-                        max(completed_laps, int(previous_completed or 0)) + 1
-                        if not counter_advanced
-                        else None
+                        max(completed_laps, int(previous_completed or 0)) + 1 if not counter_advanced else None
                     )
-                    self._session_data.pending_counter_echo_time_ms = (
-                        last_laptime_ms if not counter_advanced else None
-                    )
+                    self._session_data.pending_counter_echo_time_ms = last_laptime_ms if not counter_advanced else None
                 elif duplicate_counter_echo:
                     self._session_data.pending_counter_echo = False
                     self._session_data.pending_counter_echo_lap = None
@@ -825,27 +793,23 @@ class SharedSessionManager:
             if shm_last and int(shm_last) > 0 and completed_laps == 0 and current_lap <= 1:
                 existing = self._session_data.lap_timing.get(current_lap)
                 already_stored = (
-                    existing is not None
-                    and existing.completed_lap_time is not None
-                    and existing.completed_lap_time > 0
+                    existing is not None and existing.completed_lap_time is not None and existing.completed_lap_time > 0
                 )
                 if not already_stored:
-                    from ..utils.structured_logger import log_debug, Component
-                    log_debug(Component.SHARED_SESSION,
+                    from ..utils.structured_logger import Component, log_debug
+
+                    log_debug(
+                        Component.SHARED_SESSION,
                         f"[SHM_STALE] Discarding stale last_laptime_ms={shm_last} ms "
                         f"for lap {current_lap} with completed_laps=0 — "
-                        f"likely carryover from previous game session"
+                        f"likely carryover from previous game session",
                     )
                 # Scrub the stale value before it reaches the timing update
                 graphics_data = dict(graphics_data)
                 graphics_data["last_laptime_ms"] = 0
             self.update_lap_timing_from_graphics_shm(
                 current_lap,
-                (
-                    {**graphics_data, "last_laptime_ms": 0}
-                    if terminal_state
-                    else graphics_data
-                ),
+                ({**graphics_data, "last_laptime_ms": 0} if terminal_state else graphics_data),
                 completed_lap_num=completed_laps if completed_laps > 0 else None,
             )
 
@@ -975,17 +939,17 @@ class SharedSessionManager:
             same_identified_car = bool(
                 old_ident.car_uuid
                 and old_hybrid_car_uuid
-                and str(old_ident.car_uuid).casefold()
-                == str(old_hybrid_car_uuid).casefold()
+                and str(old_ident.car_uuid).casefold() == str(old_hybrid_car_uuid).casefold()
             )
             if same_identified_car:
                 self._session_data.has_ers = old_has_ers
                 self._session_data.has_kers = old_has_kers
                 self._session_data.hybrid_flags_car_uuid = old_hybrid_car_uuid
-            from ..utils.structured_logger import log_debug, Component
-            log_debug(Component.SHARED_SESSION,
+            from ..utils.structured_logger import Component, log_debug
+
+            log_debug(
+                Component.SHARED_SESSION,
                 f"[RESET] Cleared shared session: dropped {old_timing_count} timing entries, "
                 f"{old_validity_count} validity entries. "
-                f"Car model after reset: {old_ident.car_model}"
+                f"Car model after reset: {old_ident.car_model}",
             )
-

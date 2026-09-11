@@ -1,4 +1,5 @@
 """Canonical lap resampling — extracted from telemetry_analyzer.py."""
+
 from typing import Any, Dict, List, Optional
 
 from src.core.analyzer._util import _interpolate_value, _optional_float
@@ -17,9 +18,7 @@ def _canonical_bins_for_profile(profile: Optional[Dict[str, Any]]) -> int:
     """
     corners = (profile or {}).get("corners") or []
     widths = [
-        float(c["end"]) - float(c["start"])
-        for c in corners
-        if c.get("start") is not None and c.get("end") is not None
+        float(c["end"]) - float(c["start"]) for c in corners if c.get("start") is not None and c.get("end") is not None
     ]
     min_width = min((w for w in widths if w > 0), default=0.0)
     if min_width <= 0.0:
@@ -60,19 +59,48 @@ def _build_canonical_lap(
 
     grid = [idx / max(bins - 1, 1) for idx in range(bins)]
     scalar_fields = [
-        "frame", "time_s", "x", "z", "speed", "heading", "steer",
-        "brake", "gas", "yaw_rate", "acc_g_x", "acc_g_y", "acc_g_z",
+        "frame",
+        "time_s",
+        "x",
+        "z",
+        "speed",
+        "heading",
+        "steer",
+        "brake",
+        "gas",
+        "yaw_rate",
+        "acc_g_x",
+        "acc_g_y",
+        "acc_g_z",
         # Tyre temperatures (per-corner core temps)
-        "tyre_temp_fl", "tyre_temp_fr", "tyre_temp_rl", "tyre_temp_rr",
+        "tyre_temp_fl",
+        "tyre_temp_fr",
+        "tyre_temp_rl",
+        "tyre_temp_rr",
         # Tyre pressures
-        "pressure_fl", "pressure_fr", "pressure_rl", "pressure_rr",
+        "pressure_fl",
+        "pressure_fr",
+        "pressure_rl",
+        "pressure_rr",
         # Brake temperatures
-        "brake_temp_fl", "brake_temp_fr", "brake_temp_rl", "brake_temp_rr",
+        "brake_temp_fl",
+        "brake_temp_fr",
+        "brake_temp_rl",
+        "brake_temp_rr",
         # Suspension travel
-        "sus_fl", "sus_fr", "sus_rl", "sus_rr",
+        "sus_fl",
+        "sus_fr",
+        "sus_rl",
+        "sus_rr",
         # Slip angles & ratios
-        "slip_angle_fl", "slip_angle_fr", "slip_angle_rl", "slip_angle_rr",
-        "slip_ratio_fl", "slip_ratio_fr", "slip_ratio_rl", "slip_ratio_rr",
+        "slip_angle_fl",
+        "slip_angle_fr",
+        "slip_angle_rl",
+        "slip_angle_rr",
+        "slip_ratio_fl",
+        "slip_ratio_fr",
+        "slip_ratio_rl",
+        "slip_ratio_rr",
     ]
     canonical: List[Dict[str, Any]] = []
     cursor = 0

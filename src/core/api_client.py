@@ -5,27 +5,29 @@ Handles lap time submissions with signed payloads for anti-cheat.
 No API key required - uses embedded app secret for signing.
 """
 
-import httpx
-from typing import Any, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, Optional
 
-from ..models import SessionData, LapData, SharedSessionManager
-from ..utils.structured_logger import log_debug, log_error, log_info, log_warning, log_exception, Component
+import httpx
+
+from ..models import LapData, SessionData, SharedSessionManager
+from ..utils.structured_logger import Component, log_debug, log_error, log_exception, log_info, log_warning
+from ..version import USER_AGENT, VERSION
 from .security import (
-    sign_payload,
-    is_game_running,
     GameProcessStatus,
-    is_secret_configured,
-    verify_signature_locally,
     get_app_secret,
     get_secret_source,
+    is_game_running,
+    is_secret_configured,
+    sign_payload,
+    verify_signature_locally,
 )
-from ..version import VERSION, USER_AGENT
 
 
 class SubmissionStatus(Enum):
     """Status of a lap submission."""
+
     SUCCESS = "success"
     ERROR = "error"
     INVALID_LAP = "invalid_lap"
@@ -35,21 +37,22 @@ class SubmissionStatus(Enum):
     GAME_NOT_RUNNING = "game_not_running"
     NETWORK_ERROR = "network_error"
     PLAUSIBILITY_FAILED = "plausibility_failed"
-    NO_SECRET = "no_secret"
+    NO_SECRET = "no_secret"  # noqa: S105
 
 
 @dataclass
 class SubmissionResult:
     """Result of a lap submission attempt."""
+
     status: SubmissionStatus
     message: str
     lap_id: Optional[str] = None
-    
+
 
 class APIClient:
     """
     Client for communicating with the SimLaps API.
-    
+
     Uses signed payloads instead of API keys for authentication.
     All submissions are cryptographically signed with an embedded app secret.
     """
@@ -65,7 +68,7 @@ class APIClient:
     ):
         """
         Initialize API client.
-        
+
         Args:
             server_url: Base URL of the SimLaps server
         """
@@ -94,7 +97,7 @@ class APIClient:
     def set_server_url(self, server_url: str) -> None:
         """
         Set the server URL.
-        
+
         Args:
             server_url: Base URL of the SimLaps server
         """
@@ -158,8 +161,8 @@ class APIClient:
         )
         if preflight_error is not None:
             return preflight_error
-        assert final_user_id is not None
-        assert shared_player is not None
+        assert final_user_id is not None  # noqa: S101
+        assert shared_player is not None  # noqa: S101
 
         payload, payload_error = self._build_submission_payload(
             session=session,
@@ -170,7 +173,7 @@ class APIClient:
         )
         if payload_error is not None:
             return payload_error
-        assert payload is not None
+        assert payload is not None  # noqa: S101
 
         signed_payload = sign_payload(payload)
         local_sig_valid = verify_signature_locally(signed_payload)
@@ -212,9 +215,13 @@ class APIClient:
                 Component.API,
                 "Rejected: Invalid lap and submit_invalid=False",
             )
-            return None, None, SubmissionResult(
-                status=SubmissionStatus.INVALID_LAP,
-                message="Lap was invalidated (penalty or off-track)",
+            return (
+                None,
+                None,
+                SubmissionResult(
+                    status=SubmissionStatus.INVALID_LAP,
+                    message="Lap was invalidated (penalty or off-track)",
+                ),
             )
 
         shared_player = self._session_manager.get_player_identification()
@@ -229,9 +236,13 @@ class APIClient:
         )
         if not final_user_id:
             log_warning(Component.API, "Rejected: No user ID")
-            return None, shared_player, SubmissionResult(
-                status=SubmissionStatus.ERROR,
-                message="No Steam ID detected - please start a session in game",
+            return (
+                None,
+                shared_player,
+                SubmissionResult(
+                    status=SubmissionStatus.ERROR,
+                    message="No Steam ID detected - please start a session in game",
+                ),
             )
         return final_user_id, shared_player, None
 
@@ -250,15 +261,9 @@ class APIClient:
         shared_fuel_data = self._session_manager.get_fuel_data()
         session_metadata = self._session_manager.get_session_metadata_data()
 
-        effective_track = (
-            session.track
-            if session.track and session.track != "Unknown"
-            else session_metadata.track
-        )
+        effective_track = session.track if session.track and session.track != "Unknown" else session_metadata.track
         effective_car = (
-            session.car
-            if session.car and session.car != "Unknown"
-            else (shared_player.car_model or session.car)
+            session.car if session.car and session.car != "Unknown" else (shared_player.car_model or session.car)
         )
         effective_session_id = session.session_id or session_metadata.session_id
         effective_session_type = (
@@ -291,12 +296,8 @@ class APIClient:
         # fallback because its session-global value can still describe lap N-1.
         final_time_candidate: Any = lap.lap_time_ms
         if (
-            (
-                not isinstance(final_time_candidate, (int, float))
-                or int(final_time_candidate) <= 0
-            )
-            and shared_lap_timing is not None
-        ):
+            not isinstance(final_time_candidate, (int, float)) or int(final_time_candidate) <= 0
+        ) and shared_lap_timing is not None:
             final_time_candidate = shared_lap_timing.last_lap_time_ms
 
         if not isinstance(final_time_candidate, (int, float)):
@@ -425,16 +426,8 @@ class APIClient:
             log_warning(
                 Component.API,
                 "401 signature error",
-                server_code=(
-                    error_data.get("code")
-                    if isinstance(error_data, dict)
-                    else None
-                ),
-                server_error=(
-                    error_data.get("error")
-                    if isinstance(error_data, dict)
-                    else None
-                ),
+                server_code=(error_data.get("code") if isinstance(error_data, dict) else None),
+                server_error=(error_data.get("error") if isinstance(error_data, dict) else None),
                 error_data=error_data,
             )
             return SubmissionResult(
@@ -499,11 +492,7 @@ class APIClient:
                 payload_sent=signed_payload,
                 headers=dict(response.headers),
             )
-            error_msg = (
-                error_data.get("error", "Client error")
-                if isinstance(error_data, dict)
-                else str(error_data)
-            )
+            error_msg = error_data.get("error", "Client error") if isinstance(error_data, dict) else str(error_data)
             if isinstance(error_msg, list):
                 error_msg = "; ".join(str(error) for error in error_msg)
             return SubmissionResult(
@@ -518,38 +507,38 @@ class APIClient:
     def _normalize_track_id(self, track_name: str) -> str:
         """
         Normalize track name to ID format.
-        
+
         Args:
             track_name: Track name from log
-            
+
         Returns:
             Normalized track ID
         """
         # Remove common suffixes and prefixes
         track_id = track_name.lower()
-        
+
         # Remove layout suffixes
         for suffix in [" gp", " time attack practice", " practice", " race", " qualify"]:
             if track_id.endswith(suffix):
-                track_id = track_id[:-len(suffix)]
-        
+                track_id = track_id[: -len(suffix)]
+
         # Remove common prefixes
         for prefix in ["circuit de ", "circuit ", "autodromo ", "autódromo "]:
             if track_id.startswith(prefix):
-                track_id = track_id[len(prefix):]
-        
+                track_id = track_id[len(prefix) :]
+
         # Replace spaces with underscores
         track_id = track_id.replace(" ", "_")
-        
+
         # Remove special characters
         track_id = "".join(c for c in track_id if c.isalnum() or c == "_")
-        
+
         return track_id
 
     async def test_connection(self) -> tuple[bool, str]:
         """
         Test connection to the server AND verify secret.
-        
+
         Returns:
             Tuple of (success, message)
         """
@@ -558,19 +547,19 @@ class APIClient:
 
         try:
             client = await self._get_client()
-            
+
             # First, test basic connectivity
             response = await client.get(f"{self.server_url}/api/tracks")
             if response.status_code != 200 and not (300 <= response.status_code < 400):
                 return False, f"Server returned status {response.status_code}"
-            
+
             # Now test the secret
             secret_ok, secret_msg = await self.test_secret()
             if not secret_ok:
                 return False, f"Connected but {secret_msg}"
-            
+
             return True, "Connected and secret verified"
-                
+
         except httpx.NetworkError as e:
             return False, f"Network error: {str(e)}"
         except httpx.TimeoutException:
@@ -581,7 +570,7 @@ class APIClient:
     async def test_secret(self) -> tuple[bool, str]:
         """
         Test if the embedded secret matches the server's secret.
-        
+
         Returns:
             Tuple of (success, message)
         """
@@ -590,8 +579,8 @@ class APIClient:
 
         try:
             log_debug(Component.API, "test_secret called")
-            from .security import create_signature, get_timestamp, generate_nonce, get_app_secret
-            
+            from .security import create_signature, generate_nonce, get_app_secret, get_timestamp
+
             # Log only that the secret is present and its length; never log the value
             secret = get_app_secret()
             log_debug(
@@ -601,47 +590,47 @@ class APIClient:
                 secret_len=len(secret),
                 secret_source=get_secret_source(),
             )
-            
+
             # Create a test signature with known test values
             timestamp = get_timestamp()
             nonce = generate_nonce()
             log_debug(Component.API, "timestamp", timestamp=timestamp, nonce=nonce[:8])
-            
+
             # Sign with test payload (must match server expectations)
             signature = create_signature(
                 timestamp=timestamp,
                 nonce=nonce,
-                user_id='test',
-                track_id='test',
+                user_id="test",
+                track_id="test",
                 lap_time=0,
             )
             log_debug(Component.API, "signature", signature=signature[:20])
-            
+
             # Send to test endpoint
             client = await self._get_client()
             response = await client.post(
                 f"{self.server_url}/api/test-secret",
                 json={
-                    '_timestamp': timestamp,
-                    '_nonce': nonce,
-                    '_signature': signature,
-                }
+                    "_timestamp": timestamp,
+                    "_nonce": nonce,
+                    "_signature": signature,
+                },
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
-                if data.get('valid'):
+                if data.get("valid"):
                     return True, "Secret verified"
                 else:
-                    return False, data.get('error', 'Unknown error')
+                    return False, data.get("error", "Unknown error")
             elif response.status_code == 401:
                 return False, "secret mismatch - rebuild client with correct secret"
             elif response.status_code == 500:
                 data = response.json()
-                return False, data.get('error', 'Server error')
+                return False, data.get("error", "Server error")
             else:
                 return False, f"Unexpected status {response.status_code}"
-                
+
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             log_error(Component.API, "test_secret error", error=str(e))
             return False, f"Error testing secret: {str(e)}"
@@ -649,35 +638,35 @@ class APIClient:
     async def check_for_updates(self) -> dict:
         """
         Check for client updates.
-        
+
         Returns:
             Dict with update info or empty dict if no update.
         """
         try:
             client = await self._get_client()
             response = await client.get(f"{self.server_url}/api/version")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 latest_version = data.get("latestClientVersion")
-                
+
                 if latest_version:
                     # Parse versions
                     try:
                         current_parts = [int(x) for x in VERSION.split(".")]
                         latest_parts = [int(x) for x in latest_version.split(".")]
-                        
+
                         # Compare
                         is_newer = False
                         for i in range(3):
                             c = current_parts[i] if i < len(current_parts) else 0
-                            l = latest_parts[i] if i < len(latest_parts) else 0
+                            l = latest_parts[i] if i < len(latest_parts) else 0  # noqa: E741
                             if l > c:
                                 is_newer = True
                                 break
                             if l < c:
                                 break
-                        
+
                         if is_newer:
                             return {
                                 "available": True,
@@ -686,7 +675,7 @@ class APIClient:
                             }
                     except (ValueError, IndexError):
                         pass
-                        
+
             return {"available": False}
         except httpx.NetworkError as e:
             log_error(Component.API, "Update check failed", error=str(e))

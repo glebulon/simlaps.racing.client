@@ -5,47 +5,43 @@ Based on deep multi-log analysis + engineering review of v2.
 This module now imports data models from src.models for better maintainability.
 """
 
-import re
-import os
-import sys
-import time
 import asyncio
+import os
+import re
+import time
 from datetime import datetime
-from typing import AsyncIterator, Optional, Callable, Awaitable, TextIO
 from pathlib import Path
+from typing import AsyncIterator, Awaitable, Callable, Optional, TextIO
 
 # Import data models from the models module
 from ..models import (
-    LapState,
-    InProgressLap,
-    StintData,
-    LapData,
-    LapCompletionData,
-    SessionData,
-    SharedSessionManager,
-    TyreState,
-    LogContext,
-    # Constants
-    SECTOR_SUM_TOLERANCE_MS,
     LAP_TIME_RECONCILIATION_TOLERANCE_MS,
-    MIN_FULL_LAP_HUNDREDM,
-    is_hybrid_car,
-    SESSION_TYPE_MAP,
     PRACTICE_LIKE,
     RACE_LIKE,
+    # Constants
+    SECTOR_SUM_TOLERANCE_MS,
+    SESSION_TYPE_MAP,
+    InProgressLap,
+    LapCompletionData,
+    LapData,
+    LapState,
+    LogContext,
+    SessionData,
+    SharedSessionManager,
+    StintData,
+    is_hybrid_car,
 )
-from ..utils.structured_logger import log_debug, Component
-
+from ..utils.structured_logger import Component, log_debug
 
 # ─── Callback type aliases ────────────────────────────────────────────────────
 
-LapCallback          = Callable[[SessionData, LapData], Awaitable[None]]
-LapUpdateCallback    = Callable[[SessionData, LapData], Awaitable[None]]
-StatusCallback       = Callable[[str], Awaitable[None]]
-GameStatusCallback   = Callable[[bool], Awaitable[None]]
+LapCallback = Callable[[SessionData, LapData], Awaitable[None]]
+LapUpdateCallback = Callable[[SessionData, LapData], Awaitable[None]]
+StatusCallback = Callable[[str], Awaitable[None]]
+GameStatusCallback = Callable[[bool], Awaitable[None]]
 UserDetectedCallback = Callable[[str, Optional[str]], Awaitable[None]]
-GameVersionCallback  = Callable[[str], Awaitable[None]]
-SessionEndCallback   = Callable[[], Awaitable[None]]
+GameVersionCallback = Callable[[str], Awaitable[None]]
+SessionEndCallback = Callable[[], Awaitable[None]]
 SessionRestartCallback = Callable[[], Awaitable[None]]
 
 
@@ -62,6 +58,7 @@ async def _iter_lines_cooperatively(
 
 
 # ─── Main parser ──────────────────────────────────────────────────────────────
+
 
 class LogParser:
     """Parse ACE game logs and extract structured lap/session data.
@@ -150,9 +147,7 @@ class LogParser:
         # starting the client never re-emits an old lap after the grace period.
         self._pending_lap_since: Optional[float] = None
         latest_completion = self._session_manager.get_latest_lap_completion()
-        self._last_shm_completion_observed_at = (
-            latest_completion.observed_at if latest_completion else 0.0
-        )
+        self._last_shm_completion_observed_at = latest_completion.observed_at if latest_completion else 0.0
         self._shm_emitted_laps: list[LapData] = []
         # Preserve source completion identity across delayed log lines. Lap
         # times are only a metadata hint because consecutive laps may match.
@@ -175,7 +170,7 @@ class LogParser:
         self._last_activity_ts: Optional[float] = None
         self._running: bool = False
         self._emit_callbacks: bool = False
-        
+
         # Track last seen car ID for compound detection
         self._last_car_uuid: Optional[str] = None
         self._last_setup_car_uuid: Optional[str] = None
@@ -205,15 +200,12 @@ class LogParser:
         return self._session_manager.get_hybrid_flags()
 
     @staticmethod
-    def _nearest_lap_match(
-        laps: list[LapData], lap_time_ms: int
-    ) -> Optional[LapData]:
+    def _nearest_lap_match(laps: list[LapData], lap_time_ms: int) -> Optional[LapData]:
         """Return the nearest lap within the cross-source timing tolerance."""
         candidates = [
             (index, lap)
             for index, lap in enumerate(laps)
-            if abs(lap.lap_time_ms - lap_time_ms)
-            <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+            if abs(lap.lap_time_ms - lap_time_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
         ]
         if not candidates:
             return None
@@ -224,25 +216,14 @@ class LogParser:
 
     # ── Pattern compilation ───────────────────────────────────────────────────
 
-    
     def _compile_patterns(self) -> None:
         self._pats: dict[str, re.Pattern] = {
             "version": re.compile(r"Build release ([^,]+),"),
-
             "track_name_direct": re.compile(r"TRACK NAME (.+)"),
-            "track_load": re.compile(
-                r"Loading (?:scene|Scene) .+ content\\tracks\\([^\\]+)"
-            ),
-
+            "track_load": re.compile(r"Loading (?:scene|Scene) .+ content\\tracks\\([^\\]+)"),
             "driver_line": re.compile(r"\tDriver (.+) on car ([\w_]+)"),
-
-            "connect": re.compile(
-                r"(\d+) connected(?: \([^)]+\))? on car ([\w_]+), with new carId ([a-f0-9\-]+)"
-            ),
-            "connecting_gamecar": re.compile(
-                r"connecting gamecar ([a-f0-9\-]+) \((.+)\)"
-            ),
-
+            "connect": re.compile(r"(\d+) connected(?: \([^)]+\))? on car ([\w_]+), with new carId ([a-f0-9\-]+)"),
+            "connecting_gamecar": re.compile(r"connecting gamecar ([a-f0-9\-]+) \((.+)\)"),
             # Offline single-player car selection. No network `connect` line is
             # emitted in these sessions, so this is how the player's car/model
             # is learned:
@@ -258,45 +239,32 @@ class LogParser:
                 r"\[ServerVehicleSystem\]\[([a-f0-9\-]+)\] Creating Car "
                 r"\((.*?)\s+(\d{17})\)"
             ),
-
             # Full pipe-delimited Game Started line
             "game_started": re.compile(
                 r"\[gameplay\] \[info\] Game Started!\s*GameModeType_([A-Z_]+)"
                 r" \| (.+?) \| ([\w_]+) \| GameModeSelectionWeatherType_(\w+)"
             ),
-
             "date": re.compile(r"^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"),
-
-            "set_compound_old": re.compile(
-                r"setCompound Tyre:\s*(\d+)\s+compound(?: name)?:\s*(\w+)"
-            ),
-
+            "set_compound_old": re.compile(r"setCompound Tyre:\s*(\d+)\s+compound(?: name)?:\s*(\w+)"),
             "loading_tyre_compound": re.compile(r"LOADING TYRE COMPOUND (.+)"),
             "tyre_compound_summary": re.compile(r"TYRE COMPOUND: (.+)"),
-
-            "fuel_filled": re.compile(
-                r"FUEL car ([a-f0-9\-]+) (?:filled|setup) with ([\d.]+) L"
-            ),
-
+            "fuel_filled": re.compile(r"FUEL car ([a-f0-9\-]+) (?:filled|setup) with ([\d.]+) L"),
             # Energy source: fires exactly once per completed lap
             "fuel_consumed": re.compile(
                 r"\[gameplay\] \[info\] Energy source car ([a-f0-9\-]+)"
                 r" for driver [a-f0-9\-]+ "
                 r"hundredmeters done: (\d+) fuel consumed: ([\-\d.]+) L"
             ),
-
             # Track limit: car | new_tyre_out_count | inside_distance_m
             "track_limits": re.compile(
                 r"\[physics\] \[info\] Limits: car ([a-f0-9\-]+)"
                 r" tyres out changed: \d+ -> (\d+) with ([\-\d.]+)m inside"
             ),
-
             # Race-mode: car-specific sector event
             "race_split": re.compile(
                 r"\[gameplay\] \[info\] Split completed for car ([a-f0-9\-]+)"
                 r": \((\d+) ms, splitindex (\d+)\)"
             ),
-
             # Practice-mode: player-only sector event.
             # AC Evo logs boolean start/end flags ("start true end false"); the
             # \S+ tokens tolerate both that and legacy numeric values.
@@ -304,26 +272,15 @@ class LogParser:
                 r"\[gameplay\] \[info\] On Split start \S+ end \S+"
                 r" id (\d+) splittime (\d+)"
             ),
-
-            "split_end": re.compile(
-                r"\[gameplay\] \[info\] On Split end with all splits"
-            ),
-
-            "physics_lap": re.compile(
-                r"\[physics\] \[info\] Lap test evOnLapCompleted (\d+) completed"
-            ),
-
+            "split_end": re.compile(r"\[gameplay\] \[info\] On Split end with all splits"),
+            "physics_lap": re.compile(r"\[physics\] \[info\] Lap test evOnLapCompleted (\d+) completed"),
             # Car removed: fires when the player's car is removed at session end
-            "remove_car": re.compile(
-                r"onSetPlayerCurrentCarCommand: remove car ([a-f0-9\-]+)"
-            ),
-
+            "remove_car": re.compile(r"onSetPlayerCurrentCarCommand: remove car ([a-f0-9\-]+)"),
             # New lap: timestamp | car_uuid | lap_time_str
             "lap_finish": re.compile(
                 r"\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)\]"
                 r" \[gameplay\] \[info\] New lap carId ([a-f0-9\-]+): ([\d:.]+)"
             ),
-
             # Game's authoritative per-lap validity flag.  Emitted on the
             # [network] channel ~ms after `New lap carId`, e.g.:
             #   Relevant onSplit for Combo 6@2: laptime 146939, valid true,
@@ -340,7 +297,6 @@ class LogParser:
             "lap_validity_valid": re.compile(r"\bvalid\s+(true|false)\b", re.IGNORECASE),
             "lap_validity_flags": re.compile(r"\bflags\s+(\d+)\b", re.IGNORECASE),
             "lap_validity_lap_number": re.compile(r"\blap\s+(\d+)\b", re.IGNORECASE),
-
             # AC Evo emits the same `UINotificationType_SessionPenalty`
             # notification line for BOTH penalty additions and clearances.
             # Each event is followed by a discriminating warning line:
@@ -350,12 +306,8 @@ class LogParser:
             # generic notification line caused every penalty *clear* to flip
             # `has_penalty=True`, invalidating clean racing laps.
             "penalty": re.compile(r"\{PENALTY_ADDED_KEY\}"),
-            "penalty_warning_type": re.compile(
-                r"Penalty Type PenaltyType_Warning has no tranformation"
-            ),
-            "setup_group": re.compile(
-                r"KS-SETUP-GROUP\s+(.+)$"
-            ),
+            "penalty_warning_type": re.compile(r"Penalty Type PenaltyType_Warning has no tranformation"),
+            "setup_group": re.compile(r"KS-SETUP-GROUP\s+(.+)$"),
         }
 
     # ── Small helpers ─────────────────────────────────────────────────────────
@@ -363,9 +315,7 @@ class LogParser:
     def _parse_lap_time_ms(self, time_str: str) -> int:
         parts = time_str.replace(":", ".").split(".")
         if len(parts) == 3:
-            return (int(parts[0]) * 60 + int(parts[1])) * 1000 + int(
-                parts[2].ljust(3, "0")[:3]
-            )
+            return (int(parts[0]) * 60 + int(parts[1])) * 1000 + int(parts[2].ljust(3, "0")[:3])
         if len(parts) == 2:
             return int(parts[0]) * 1000 + int(parts[1].ljust(3, "0")[:3])
         return 0
@@ -393,13 +343,9 @@ class LogParser:
 
     def _is_player_car(self, car_uuid: str) -> bool:
         normalized = self._normalize_car_uuid(car_uuid)
-        return (
-            normalized == self._normalize_car_uuid(self.context.car_uuid)
-            or normalized in {
-                self._normalize_car_uuid(uuid)
-                for uuid in self.context.player_car_uuids
-            }
-        )
+        return normalized == self._normalize_car_uuid(self.context.car_uuid) or normalized in {
+            self._normalize_car_uuid(uuid) for uuid in self.context.player_car_uuids
+        }
 
     def _line_mentions_player_car(self, line: str) -> bool:
         if not self.context.car_uuid and not self.context.player_car_uuids:
@@ -407,10 +353,7 @@ class LogParser:
         normalized_line = self._normalize_car_uuid(line)
         if self.context.car_uuid and self._normalize_car_uuid(self.context.car_uuid) in normalized_line:
             return True
-        return any(
-            self._normalize_car_uuid(uuid) in normalized_line
-            for uuid in self.context.player_car_uuids
-        )
+        return any(self._normalize_car_uuid(uuid) in normalized_line for uuid in self.context.player_car_uuids)
 
     def _update_session_activity_from_line(self, line: str) -> None:
         """Track whether the latest parsed log state still looks drivable."""
@@ -447,8 +390,14 @@ class LogParser:
             flags=re.IGNORECASE,
         )
         for suffix in (
-            " Race Race", " Race", " Time Attack Practice",
-            " Time Attack", " Practice", " Qualifying", " Hotlap", " Drift",
+            " Race Race",
+            " Race",
+            " Time Attack Practice",
+            " Time Attack",
+            " Practice",
+            " Qualifying",
+            " Hotlap",
+            " Drift",
         ):
             if raw.endswith(suffix):
                 raw = raw[: -len(suffix)]
@@ -512,9 +461,7 @@ class LogParser:
         # from the fresh manager so old SHM completions cannot be consumed.
         self._session_manager.reset()
         latest_completion = self._session_manager.get_latest_lap_completion()
-        self._last_shm_completion_observed_at = (
-            latest_completion.observed_at if latest_completion else 0.0
-        )
+        self._last_shm_completion_observed_at = latest_completion.observed_at if latest_completion else 0.0
 
         log_debug(
             Component.LOG_PARSER,
@@ -594,10 +541,11 @@ class LogParser:
 
     async def _emit_lap(self, session: SessionData, lap: LapData) -> None:
         self._session_manager.update_lap_from_logs(lap, session_data=session)
-        log_debug(Component.LOG_PARSER,
+        log_debug(
+            Component.LOG_PARSER,
             f"[EMIT_LAP] #{lap.lap_number} {lap.lap_time_str} "
             f"state={lap.lap_state.value}  car={session.car}  track={session.track}  "
-            f"session_id={session.session_id[:8]}..."
+            f"session_id={session.session_id[:8]}...",
         )
         if self.on_lap_complete:
             try:
@@ -622,19 +570,21 @@ class LogParser:
     async def _emit_game_status(self, is_running: bool, trigger: str = "unknown") -> None:
         """Emit game status change, logging if duplicate or state change."""
         if self._last_emitted_game_status == is_running:
-            log_debug(Component.LOG_PARSER,
+            log_debug(
+                Component.LOG_PARSER,
                 f"[GAME_STATUS] DUPLICATE DROPPED: is_running={is_running}, "
                 f"trigger={trigger}, last={self._last_emitted_game_status}  "
-                f"⚠️ reset() will NOT be called for this event"
+                f"⚠️ reset() will NOT be called for this event",
             )
             return
-        
-        log_debug(Component.LOG_PARSER,
+
+        log_debug(
+            Component.LOG_PARSER,
             f"[GAME_STATUS] STATE CHANGE: is_running={is_running}, "
-            f"trigger={trigger}, last={self._last_emitted_game_status}"
+            f"trigger={trigger}, last={self._last_emitted_game_status}",
         )
         self._last_emitted_game_status = is_running
-        
+
         if self.on_game_status_change:
             try:
                 await self.on_game_status_change(is_running)
@@ -681,18 +631,17 @@ class LogParser:
             self.context.tyre = preserved_tyre
             if self.current_session:
                 self.current_session.tyre_compound = preserved_tyre.compound_name
-            log_debug(Component.LOG_PARSER, 
-                f"[SESSION_RESTART] Preserved tyre compound "
-                f"{preserved_tyre.compound_name} across restart")
+            log_debug(
+                Component.LOG_PARSER,
+                f"[SESSION_RESTART] Preserved tyre compound {preserved_tyre.compound_name} across restart",
+            )
         if self.on_session_restart:
             try:
                 await self.on_session_restart()
             except (RuntimeError, asyncio.CancelledError) as exc:
                 log_debug(Component.LOG_PARSER, f"[ERROR] on_session_restart: {exc}")
 
-    async def _emit_user_detected(
-        self, steam_id: str, player_name: Optional[str]
-    ) -> None:
+    async def _emit_user_detected(self, steam_id: str, player_name: Optional[str]) -> None:
         log_debug(Component.LOG_PARSER, f"[USER] steam_id={steam_id} name={player_name}")
         if self.on_user_detected:
             try:
@@ -719,10 +668,11 @@ class LogParser:
 
         # Compound changed → new stint (tyre change at pit stop)
         if compound != self._current_stint.tyre_compound:
-            log_debug(Component.LOG_PARSER, 
+            log_debug(
+                Component.LOG_PARSER,
                 f"[STINT] Compound changed {self._current_stint.tyre_compound!r} "
                 f"→ {compound!r}: starting stint "
-                f"{self._current_stint.stint_number + 1}"
+                f"{self._current_stint.stint_number + 1}",
             )
             self._current_stint = StintData(
                 stint_number=self._current_stint.stint_number + 1,
@@ -754,10 +704,7 @@ class LogParser:
                 self.context.current_track = name
                 if self.current_session:
                     self.current_session.track = name
-        elif (
-            ("Loading scene" in line or "Loading Scene" in line)
-            and "content\\tracks" in line
-        ):
+        elif ("Loading scene" in line or "Loading Scene" in line) and "content\\tracks" in line:
             m = self._pats["track_load"].search(line)
             if m and self.current_session and self.current_session.track == "Unknown":
                 self.context.current_track = m.group(1)
@@ -802,9 +749,9 @@ class LogParser:
             else:
                 self._start_new_session("UNKNOWN", line)
 
-            log_debug(Component.LOG_PARSER, 
-                f"[CONNECT] pid={pid} car={car} uuid={car_uuid} "
-                f"hybrid={self.context.car_is_hybrid}"
+            log_debug(
+                Component.LOG_PARSER,
+                f"[CONNECT] pid={pid} car={car} uuid={car_uuid} hybrid={self.context.car_is_hybrid}",
             )
 
     def _handle_driver(self, line: str) -> None:
@@ -854,9 +801,7 @@ class LogParser:
         if "onSetPlayerCurrentCarCommand: Set new car " in line:
             m = self._pats["set_player_car"].search(line)
             if m:
-                self._pending_set_car_model[
-                    self._normalize_car_uuid(m.group(1))
-                ] = m.group(2)
+                self._pending_set_car_model[self._normalize_car_uuid(m.group(1))] = m.group(2)
             return
 
         if "Creating Car (" not in line or "ServerVehicleSystem" not in line:
@@ -888,9 +833,7 @@ class LogParser:
             }
         )
         ers, kers = self._get_shm_hybrid_flags()
-        self.context.car_is_hybrid = is_hybrid_car(
-            has_ers_from_shm=ers, has_kers_from_shm=kers
-        )
+        self.context.car_is_hybrid = is_hybrid_car(has_ers_from_shm=ers, has_kers_from_shm=kers)
 
         if self.current_session:
             self.current_session.car_uuid = car_uuid
@@ -902,8 +845,7 @@ class LogParser:
 
         log_debug(
             Component.LOG_PARSER,
-            f"[CAR_BIND] player car via Creating Car: uuid={car_uuid} "
-            f"model={model} steam={pid}",
+            f"[CAR_BIND] player car via Creating Car: uuid={car_uuid} model={model} steam={pid}",
         )
 
     def _maybe_start_fallback_session(self, line: str) -> None:
@@ -918,9 +860,7 @@ class LogParser:
         """
         if self._seen_explicit_session_marker or not self.context.car_uuid:
             return
-        is_practice_split = (
-            "On Split start" in line and self._pats["practice_split"].search(line)
-        )
+        is_practice_split = "On Split start" in line and self._pats["practice_split"].search(line)
         is_physics_lap = "Lap test evOnLapCompleted" in line
         is_player_lap = (
             "New lap carId" in line
@@ -961,14 +901,15 @@ class LogParser:
                 compound_name = m.group(1).strip()
                 if self.context.tyre.compound_name == "Unknown":
                     self.context.tyre.set_all(compound_name)
-                    log_debug(Component.LOG_PARSER,
-                        f"[COMPOUND] All tires -> {compound_name} "
-                        f"(resolved: {self.context.tyre.compound_name})"
+                    log_debug(
+                        Component.LOG_PARSER,
+                        f"[COMPOUND] All tires -> {compound_name} (resolved: {self.context.tyre.compound_name})",
                     )
                 else:
-                    log_debug(Component.LOG_PARSER,
+                    log_debug(
+                        Component.LOG_PARSER,
                         f"[COMPOUND] Ignoring LOADING fallback -> {compound_name} "
-                        f"because resolved compound is already {self.context.tyre.compound_name}"
+                        f"because resolved compound is already {self.context.tyre.compound_name}",
                     )
             return
 
@@ -1003,9 +944,8 @@ class LogParser:
 
         if not line_ts:
             self.context.tyre.set(pos, compound_name)
-            log_debug(Component.LOG_PARSER, 
-                f"[COMPOUND] Tyre {pos} -> {code} "
-                f"(resolved: {self.context.tyre.compound_name})"
+            log_debug(
+                Component.LOG_PARSER, f"[COMPOUND] Tyre {pos} -> {code} (resolved: {self.context.tyre.compound_name})"
             )
             return
 
@@ -1013,9 +953,10 @@ class LogParser:
         if not self._pending_compound_updates:
             self._pending_compound_source_car_uuid = self._last_setup_car_uuid
         self._pending_compound_updates[pos] = compound_name
-        log_debug(Component.LOG_PARSER, 
+        log_debug(
+            Component.LOG_PARSER,
             f"[COMPOUND] Pending tyre {pos} -> {code} at {line_ts} "
-            f"(positions={sorted(self._pending_compound_updates)})"
+            f"(positions={sorted(self._pending_compound_updates)})",
         )
 
     def _flush_pending_compound_batch(self) -> None:
@@ -1033,14 +974,15 @@ class LogParser:
         if player_scoped or (legacy_unscoped and prelap_window):
             for pos, compound in pending.items():
                 self.context.tyre.set(pos, compound)
-            log_debug(Component.LOG_PARSER, 
+            log_debug(
+                Component.LOG_PARSER,
                 f"[COMPOUND] Applied batch at {self._pending_compound_ts} "
-                f"(positions={sorted(pending)}) -> {self.context.tyre.compound_name}"
+                f"(positions={sorted(pending)}) -> {self.context.tyre.compound_name}",
             )
         else:
-            log_debug(Component.LOG_PARSER, 
-                f"[COMPOUND] Ignored unscoped batch at {self._pending_compound_ts} "
-                f"(positions={sorted(pending)})"
+            log_debug(
+                Component.LOG_PARSER,
+                f"[COMPOUND] Ignored unscoped batch at {self._pending_compound_ts} (positions={sorted(pending)})",
             )
 
         self._pending_compound_ts = None
@@ -1052,7 +994,7 @@ class LogParser:
             return
         idx = line.find("GameModeSelectionWeatherType_")
         if idx != -1:
-            suffix = line[idx + len("GameModeSelectionWeatherType_"):].split()[0]
+            suffix = line[idx + len("GameModeSelectionWeatherType_") :].split()[0]
             self.context.weather = suffix
             if self.current_session:
                 self.current_session.weather = suffix
@@ -1102,29 +1044,27 @@ class LogParser:
         # (e.g. the game version changed the field names).  Still reset the
         # shared session so stale data doesn't leak in.
         if "GameModeType_" not in line:
-            log_debug(Component.LOG_PARSER,
+            log_debug(
+                Component.LOG_PARSER,
                 "[SESSION_START] 'Game Started!' line missing 'GameModeType_' — "
                 "unrecognised format, session NOT created.  "
-                "Resetting shared session anyway."
+                "Resetting shared session anyway.",
             )
-            self._reset_session_boundary(
-                "unrecognised Game Started", finalize_current_session=True
-            )
+            self._reset_session_boundary("unrecognised Game Started", finalize_current_session=True)
             self.context.reset_for_new_session()
             return False
         m = self._pats["game_started"].search(line)
         if not m:
-            log_debug(Component.LOG_PARSER,
+            log_debug(
+                Component.LOG_PARSER,
                 "[SESSION_START] 'Game Started!' line did NOT match regex — "
                 "session NOT created, old session persists!  "
-                "Resetting shared session anyway to clear stale data."
+                "Resetting shared session anyway to clear stale data.",
             )
             # Even though we can't parse the new session, we know a new game
             # session is starting.  Clear the shared session to prevent stale
             # lap timing/validity data from the previous session leaking in.
-            self._reset_session_boundary(
-                "unrecognised Game Started", finalize_current_session=True
-            )
+            self._reset_session_boundary("unrecognised Game Started", finalize_current_session=True)
             self.context.reset_for_new_session()
             return False
 
@@ -1132,7 +1072,10 @@ class LogParser:
         self._session_active_from_logs = True
 
         raw_type, raw_track_desc, raw_car, raw_weather = (
-            m.group(1), m.group(2), m.group(3).strip(), m.group(4).strip()
+            m.group(1),
+            m.group(2),
+            m.group(3).strip(),
+            m.group(4).strip(),
         )
         session_type = SESSION_TYPE_MAP.get(raw_type, raw_type)
         track = self._clean_track_name(raw_track_desc)
@@ -1165,12 +1108,14 @@ class LogParser:
             fuel_reliable=not self.context.car_is_hybrid,
             start_time=start_time,
         )
-        
+
         # Apply any setup values that were captured before this session started
         if self.context.setup_values:
             self.current_session.setup_notes = self._serialize_setup_notes()
-            log_debug(Component.LOG_PARSER, f"[SESSION] Applied {len(self.context.setup_values)} setup values to new session")
-        
+            log_debug(
+                Component.LOG_PARSER, f"[SESSION] Applied {len(self.context.setup_values)} setup values to new session"
+            )
+
         self._reset_in_progress()
         self._finalise_stints()
 
@@ -1182,18 +1127,15 @@ class LogParser:
         # with a clean shared state regardless of either code path.
         self._sync_shared_session(self.current_session)
 
-        log_debug(Component.LOG_PARSER,
-            f"[SESSION] New: type={session_type} track={track} "
-            f"car={raw_car} hybrid={self.context.car_is_hybrid}"
+        log_debug(
+            Component.LOG_PARSER,
+            f"[SESSION] New: type={session_type} track={track} car={raw_car} hybrid={self.context.car_is_hybrid}",
         )
         return True
 
     def _handle_fuel(self, line: str) -> None:
         # ── Fuel fill on pit exit / session start ─────────────────────────────
-        if "FUEL car" in line and (
-            ("filled with" in line and "from setup" in line)
-            or "setup with" in line
-        ):
+        if "FUEL car" in line and (("filled with" in line and "from setup" in line) or "setup with" in line):
             m = self._pats["fuel_filled"].search(line)
             if m:
                 car_id = m.group(1)
@@ -1220,9 +1162,7 @@ class LogParser:
         # Negative delta = tank fill / init event (race start).
         if fuel_delta < 0:
             self.context.fuel_init_correction = abs(fuel_delta)
-            log_debug(Component.LOG_PARSER, 
-                f"[FUEL] Init correction stored: {self.context.fuel_init_correction} L"
-            )
+            log_debug(Component.LOG_PARSER, f"[FUEL] Init correction stored: {self.context.fuel_init_correction} L")
             return
 
         if fuel_delta == 0.0:
@@ -1237,17 +1177,15 @@ class LogParser:
         net_fuel = fuel_delta
         if self.context.fuel_init_correction > 0.0:
             net_fuel = max(0.0, fuel_delta - self.context.fuel_init_correction)
-            log_debug(Component.LOG_PARSER, 
-                f"[FUEL] Init correction applied: raw={fuel_delta:.3f} → "
-                f"net={net_fuel:.3f} L"
+            log_debug(
+                Component.LOG_PARSER, f"[FUEL] Init correction applied: raw={fuel_delta:.3f} → net={net_fuel:.3f} L"
             )
             self.context.fuel_init_correction = 0.0
 
         self._ip.fuel_used = net_fuel
-        log_debug(Component.LOG_PARSER, 
-            f"[FUEL] Lap fuel: {net_fuel:.3f} L  "
-            f"dist: {lap_hundredm}×100 m  "
-            f"reliable={self._ip.fuel_reliable}"
+        log_debug(
+            Component.LOG_PARSER,
+            f"[FUEL] Lap fuel: {net_fuel:.3f} L  dist: {lap_hundredm}×100 m  reliable={self._ip.fuel_reliable}",
         )
 
     def _handle_penalty_signals(self, line: str) -> None:
@@ -1293,11 +1231,7 @@ class LogParser:
         )
 
         pending = self._pending_lap
-        if (
-            pending is not None
-            and pending.validity_source != "authoritative"
-            and not in_progress_started
-        ):
+        if pending is not None and pending.validity_source != "authoritative" and not in_progress_started:
             if pending.lap_state != LapState.OUTLAP:
                 pending.lap_state = LapState.INVALID_PENALTY
                 pending.lap_type = LapState.INVALID_PENALTY.value
@@ -1312,8 +1246,7 @@ class LogParser:
         self._pending_penalty_warning = True
         log_debug(
             Component.LOG_PARSER,
-            f"[VALIDITY] Fallback penalty trigger ({trigger}) recorded for "
-            "current in-progress lap",
+            f"[VALIDITY] Fallback penalty trigger ({trigger}) recorded for current in-progress lap",
         )
 
     def _handle_splits_race(self, line: str) -> None:
@@ -1341,13 +1274,13 @@ class LogParser:
             return
         if self.current_session.session_type in RACE_LIKE:
             return
-        
+
         m = self._pats["practice_split"].search(line)
         if not m:
             return
-        
+
         split_idx, split_ms = int(m.group(1)), int(m.group(2))
-        
+
         # Tourist-style layouts can publish a zero-time start marker instead
         # of a ``New lap`` line when the outlap ends. That marker starts the
         # first timed lap. A normal non-zero S1 does not: on tracks whose pit
@@ -1355,11 +1288,12 @@ class LogParser:
         # still S1 of the outlap and clearing here would expose the outlap as
         # an ordinary invalid lap.
         if self._ip.is_outlap and split_idx == 0 and split_ms == 0:
-            log_debug(Component.LOG_PARSER,
-                "[OUTLAP] Clearing outlap flag — zero-time start marker "
-                "for new flying lap detected")
+            log_debug(
+                Component.LOG_PARSER,
+                "[OUTLAP] Clearing outlap flag — zero-time start marker for new flying lap detected",
+            )
             self._ip.is_outlap = False
-        
+
         # Do not put structural-outlap splits in the ordinary accumulator.
         # Retain them separately, though: some tracks reject the pit prefix
         # and then time the following full circuit as a valid lap. An exact
@@ -1367,7 +1301,7 @@ class LogParser:
         if self._ip.is_outlap:
             self._outlap_candidate_splits[split_idx] = split_ms
             return
-        
+
         # Record the split (including the id 0 start-line marker at splittime 0).
         # Keeping id 0 preserves contiguous split keys ([0,1,...]) for the
         # validity guard; for single-split tracks (e.g. Nurburgring Tourist) the
@@ -1391,16 +1325,14 @@ class LogParser:
         accumulated fields while carrying the structural marker forward.
         """
         if "Outplap split" in line:
-            if (
-                self.current_session
-                and self.current_session.session_type in PRACTICE_LIKE
-            ):
+            if self.current_session and self.current_session.session_type in PRACTICE_LIKE:
                 self._ip.is_outlap = True
                 log_debug(Component.LOG_PARSER, "[OUTLAP] Outplap split detected")
             else:
-                log_debug(Component.LOG_PARSER, 
+                log_debug(
+                    Component.LOG_PARSER,
                     "[OUTLAP] Outplap split ignored in race-like session "
-                    "(grid-countdown broadcast, not a player outlap marker)"
+                    "(grid-countdown broadcast, not a player outlap marker)",
                 )
         elif "Couldn't create lap from opensplits" in line:
             log_debug(Component.LOG_PARSER, "[OUTLAP] Couldn't create lap — resetting in-progress")
@@ -1443,16 +1375,11 @@ class LogParser:
            with no recorded splits.  If splits ARE recorded, it's a flying
            lap.
         """
-        is_practice_outlap = (
-            session_type in PRACTICE_LIKE
-            and ip.physics_lap_num == 1
-            and not ip.splits
-        )
+        is_practice_outlap = session_type in PRACTICE_LIKE and ip.physics_lap_num == 1 and not ip.splits
         if ip.is_outlap or is_practice_outlap:
             if is_practice_outlap and not ip.is_outlap:
-                log_debug(Component.LOG_PARSER,
-                    "[VALIDITY] OUTLAP via physics_lap_num==1 fallback "
-                    "(no Outplap split logged)"
+                log_debug(
+                    Component.LOG_PARSER, "[VALIDITY] OUTLAP via physics_lap_num==1 fallback (no Outplap split logged)"
                 )
             return LapState.OUTLAP
 
@@ -1478,9 +1405,7 @@ class LogParser:
         shm_existing = self._nearest_lap_match(self._shm_emitted_laps, lap_time_ms)
         ip = self._ip
         completion_splits = (
-            self._outlap_candidate_splits
-            if ip.is_outlap and self._outlap_candidate_splits
-            else ip.splits
+            self._outlap_candidate_splits if ip.is_outlap and self._outlap_candidate_splits else ip.splits
         )
         split_keys: list[int] = sorted(completion_splits.keys())
         split_times: list[int] = [completion_splits[key] for key in split_keys]
@@ -1503,19 +1428,21 @@ class LogParser:
             if overshoot > SECTOR_SUM_TOLERANCE_MS:
                 s1_calc = lap_time_ms - s2 - s3
                 if s1_calc > 0:
-                    log_debug(Component.LOG_PARSER, 
+                    log_debug(
+                        Component.LOG_PARSER,
                         f"[SECTORS] S1 corrupted (raw={s1} ms, "
                         f"sum={sector_sum} > lap={lap_time_ms} by {overshoot} ms)"
-                        f" → back-calculated: {s1_calc} ms"
+                        f" → back-calculated: {s1_calc} ms",
                     )
                     s1 = s1_calc
                     if split_keys and split_keys[0] == 0:
                         split_times[0] = s1
                 else:
-                    log_debug(Component.LOG_PARSER, 
+                    log_debug(
+                        Component.LOG_PARSER,
                         f"[SECTORS] S1 overshoot detected (raw={s1}, "
                         f"sum={sector_sum} > lap={lap_time_ms}) but "
-                        f"back-calc non-positive ({s1_calc}); leaving as-is"
+                        f"back-calc non-positive ({s1_calc}); leaving as-is",
                     )
 
         session_type = self.current_session.session_type
@@ -1536,9 +1463,7 @@ class LogParser:
         # ── Sector consistency flag ────────────────────────────────────────────
         sectors_consistent: Optional[bool] = None
         if len(split_times) >= 2:
-            sectors_consistent = (
-                abs(sum(split_times) - lap_time_ms) <= SECTOR_SUM_TOLERANCE_MS
-            )
+            sectors_consistent = abs(sum(split_times) - lap_time_ms) <= SECTOR_SUM_TOLERANCE_MS
 
         # ── Fuel ──────────────────────────────────────────────────────────────
         fuel_used = ip.fuel_used
@@ -1559,11 +1484,7 @@ class LogParser:
         prior_lap_numbers = [lap.lap_number for lap in self.current_session.laps]
         if self._pending_lap is not None:
             prior_lap_numbers.append(self._pending_lap.lap_number)
-        lap_number = (
-            shm_existing.lap_number
-            if shm_existing is not None
-            else max(prior_lap_numbers, default=0) + 1
-        )
+        lap_number = shm_existing.lap_number if shm_existing is not None else max(prior_lap_numbers, default=0) + 1
 
         # Update stint (only for laps that actually ran, including invalid valid)
         if shm_existing is not None:
@@ -1596,11 +1517,12 @@ class LogParser:
             distance_hundredm=ip.distance_hundredm,
         )
 
-        log_debug(Component.LOG_PARSER,
+        log_debug(
+            Component.LOG_PARSER,
             f"[LAP] #{lap_number} phys={physics_lap_number} "
             f"{time_str}  state={lap_state.value}  "
             f"compound={compound}  fuel={fuel_used}  "
-            f"consistent={sectors_consistent}  (buffered)"
+            f"consistent={sectors_consistent}  (buffered)",
         )
 
         self._reset_in_progress()
@@ -1643,9 +1565,7 @@ class LogParser:
         if prior_pending is not None:
             prior_completion = self._lap_completion_by_lap_id.get(id(prior_pending))
             if prior_completion is None:
-                prior_completion = self._session_manager.get_lap_completion_by_time(
-                    prior_pending.lap_time_ms
-                )
+                prior_completion = self._session_manager.get_lap_completion_by_time(prior_pending.lap_time_ms)
                 if prior_completion is not None:
                     self._lap_completion_by_lap_id[id(prior_pending)] = prior_completion
             if prior_completion is not None:
@@ -1653,21 +1573,20 @@ class LogParser:
                 # new lap, even when their rounded times are equal.
                 self._session_manager.consume_lap_completion(prior_completion)
         self._pending_lap = completed_lap
-        associated_completion = self._session_manager.get_lap_completion_by_time(
-            lap_time_ms
-        )
+        associated_completion = self._session_manager.get_lap_completion_by_time(lap_time_ms)
         if associated_completion is not None:
             self._lap_completion_by_lap_id[id(completed_lap)] = associated_completion
         self._pending_lap_since = time.monotonic() if self._emit_callbacks else None
         if prior_pending is not None:
             self._apply_shm_fallback_validity(prior_pending)
             self.current_session.laps.append(prior_pending)
-            log_debug(Component.LOG_PARSER,
+            log_debug(
+                Component.LOG_PARSER,
                 f"[LAP] ⚠️ FLUSHING PRIOR PENDING LAP: "
                 f"#{prior_pending.lap_number} {prior_pending.lap_time_str} "
                 f"state={prior_pending.lap_state.value}  "
                 f"via heuristic (no authoritative validity seen)  "
-                f"session_car={self.current_session.car}"
+                f"session_car={self.current_session.car}",
             )
             return prior_pending
         return None
@@ -1720,14 +1639,9 @@ class LogParser:
             # number disambiguates the originating object among completions
             # that are within the timing tolerance.
             timed_candidates = [
-                lap
-                for lap in candidates
-                if abs(lap.lap_time_ms - laptime_ms)
-                <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                lap for lap in candidates if abs(lap.lap_time_ms - laptime_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
             ]
-            numbered_candidates = [
-                lap for lap in timed_candidates if lap.lap_number == game_lap_number
-            ]
+            numbered_candidates = [lap for lap in timed_candidates if lap.lap_number == game_lap_number]
             pending = self._nearest_lap_match(
                 numbered_candidates or timed_candidates,
                 laptime_ms,
@@ -1741,12 +1655,9 @@ class LogParser:
             timed_candidates = [
                 lap
                 for lap in emitted_candidates
-                if abs(lap.lap_time_ms - laptime_ms)
-                <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                if abs(lap.lap_time_ms - laptime_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
             ]
-            numbered_candidates = [
-                lap for lap in timed_candidates if lap.lap_number == game_lap_number
-            ]
+            numbered_candidates = [lap for lap in timed_candidates if lap.lap_number == game_lap_number]
             pending = self._nearest_lap_match(
                 numbered_candidates or timed_candidates,
                 laptime_ms,
@@ -1755,10 +1666,7 @@ class LogParser:
             if pending is None:
                 return None
 
-        if (
-            abs(laptime_ms - pending.lap_time_ms)
-            > LAP_TIME_RECONCILIATION_TOLERANCE_MS
-        ):
+        if abs(laptime_ms - pending.lap_time_ms) > LAP_TIME_RECONCILIATION_TOLERANCE_MS:
             # Mismatch — likely a stale broadcast for a different car.
             return None
 
@@ -1783,17 +1691,13 @@ class LogParser:
                 pending.lap_state = LapState.VALID
                 pending.lap_type = LapState.VALID.value
                 pending.is_valid = True
-                log_debug(Component.LOG_PARSER,
-                    f"[VALIDITY] Game says valid — #{pending.lap_number} → VALID"
-                )
+                log_debug(Component.LOG_PARSER, f"[VALIDITY] Game says valid — #{pending.lap_number} → VALID")
         else:
             if pending.lap_state != LapState.INVALID_GAME or pending.is_valid:
                 pending.lap_state = LapState.INVALID_GAME
                 pending.lap_type = LapState.INVALID_GAME.value
                 pending.is_valid = False
-                log_debug(Component.LOG_PARSER,
-                    f"[VALIDITY] Game says invalid — #{pending.lap_number} → INVALID_GAME"
-                )
+                log_debug(Component.LOG_PARSER, f"[VALIDITY] Game says invalid — #{pending.lap_number} → INVALID_GAME")
 
         # Tag the lap as carrying an authoritative validity verdict from the
         # game's "Relevant onSplit" broadcast.  This provenance is consumed by
@@ -1812,9 +1716,9 @@ class LogParser:
             self.current_session.laps.append(pending)
             self._pending_lap = None
             self._pending_lap_since = None
-        log_debug(Component.LOG_PARSER, 
-            f"[LAP] flushed pending #{pending.lap_number} via authoritative "
-            f"flag (game_valid={game_valid})"
+        log_debug(
+            Component.LOG_PARSER,
+            f"[LAP] flushed pending #{pending.lap_number} via authoritative flag (game_valid={game_valid})",
         )
         return None if already_emitted else pending
 
@@ -1838,8 +1742,7 @@ class LogParser:
         if was_outlap:
             if (
                 bound_completion is not None
-                and abs(bound_completion.lap_time_ms - pending.lap_time_ms)
-                <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                and abs(bound_completion.lap_time_ms - pending.lap_time_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
             ):
                 matching_completions = [bound_completion]
             else:
@@ -1849,15 +1752,9 @@ class LogParser:
             # only a single candidate may promote the structural outlap.
             matching_completions.extend(
                 candidate
-                for candidate in self._session_manager.get_lap_completions_after(
-                    float("-inf")
-                )
-                if abs(candidate.lap_time_ms - pending.lap_time_ms)
-                <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
-                and (
-                    bound_completion is None
-                    or candidate.observed_at != bound_completion.observed_at
-                )
+                for candidate in self._session_manager.get_lap_completions_after(float("-inf"))
+                if abs(candidate.lap_time_ms - pending.lap_time_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                and (bound_completion is None or candidate.observed_at != bound_completion.observed_at)
             )
             exact_completions = sorted(
                 matching_completions,
@@ -1866,18 +1763,12 @@ class LogParser:
                     candidate.observed_at,
                 ),
             )
-            shm_counters = [
-                candidate.completed_laps for candidate in exact_completions
-            ]
+            shm_counters = [candidate.completed_laps for candidate in exact_completions]
             resolution = "retained_missing_completion"
 
             if len(exact_completions) == 1:
                 candidate = exact_completions[0]
-                counters_aligned = (
-                    candidate.completed_laps
-                    == pending.lap_number
-                    == pending.physics_lap_number
-                )
+                counters_aligned = candidate.completed_laps == pending.lap_number == pending.physics_lap_number
                 if candidate.is_valid is True:
                     completion = candidate
                     resolution = "promoted_valid_completion"
@@ -1911,15 +1802,10 @@ class LogParser:
         if completion is None:
             completion = self._lap_completion_by_lap_id.get(id(pending))
         if completion is None:
-            completion = self._session_manager.get_lap_completion_by_time(
-                pending.lap_time_ms
-            )
+            completion = self._session_manager.get_lap_completion_by_time(pending.lap_time_ms)
             if completion is not None:
                 self._lap_completion_by_lap_id[id(pending)] = completion
-        completion_matches = (
-            completion is not None
-            and completion.is_valid is not None
-        )
+        completion_matches = completion is not None and completion.is_valid is not None
 
         if completion_matches:
             is_valid = bool(completion.is_valid)
@@ -1939,9 +1825,7 @@ class LogParser:
             is_valid = validity.is_valid
 
         pending.is_valid = is_valid
-        pending.lap_state = (
-            LapState.VALID if is_valid else LapState.INVALID_GAME
-        )
+        pending.lap_state = LapState.VALID if is_valid else LapState.INVALID_GAME
         pending.lap_type = pending.lap_state.value
         pending.validity_source = "shm_graphics"
 
@@ -1987,9 +1871,9 @@ class LogParser:
         self._pending_lap_since = None
         self._apply_shm_fallback_validity(pending)
         self.current_session.laps.append(pending)
-        log_debug(Component.LOG_PARSER, 
-            f"[LAP] flushed pending #{pending.lap_number} on session/EOF "
-            f"(validity source={pending.validity_source})"
+        log_debug(
+            Component.LOG_PARSER,
+            f"[LAP] flushed pending #{pending.lap_number} on session/EOF (validity source={pending.validity_source})",
         )
         return pending
 
@@ -2003,9 +1887,7 @@ class LogParser:
 
     def _take_ready_shm_lap(self) -> Optional[LapData]:
         """Build a live lap when ACE's file logger has not flushed yet."""
-        completions = self._session_manager.get_lap_completions_after(
-            self._last_shm_completion_observed_at
-        )
+        completions = self._session_manager.get_lap_completions_after(self._last_shm_completion_observed_at)
         if not completions:
             return None
         # Consume oldest-first. ACE can delay file-log writes for more than a
@@ -2022,31 +1904,25 @@ class LogParser:
             return None
 
         if self._pending_lap is not None:
-            pending_completion = self._lap_completion_by_lap_id.get(
-                id(self._pending_lap)
-            )
+            pending_completion = self._lap_completion_by_lap_id.get(id(self._pending_lap))
             if pending_completion is completion:
                 self._last_shm_completion_observed_at = completion.observed_at
                 self._session_manager.consume_lap_completion(completion)
                 return None
             if (
                 pending_completion is None
-                and abs(self._pending_lap.lap_time_ms - completion.lap_time_ms)
-                <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                and abs(self._pending_lap.lap_time_ms - completion.lap_time_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
             ):
                 self._lap_completion_by_lap_id[id(self._pending_lap)] = completion
                 self._last_shm_completion_observed_at = completion.observed_at
                 self._session_manager.consume_lap_completion(completion)
                 return None
         if self.current_session:
-            unmatched_laps = [
-                lap for lap in self.current_session.laps
-                if id(lap) not in self._lap_completion_by_lap_id
-            ]
+            unmatched_laps = [lap for lap in self.current_session.laps if id(lap) not in self._lap_completion_by_lap_id]
             matching_laps = [
-                lap for lap in unmatched_laps
-                if abs(lap.lap_time_ms - completion.lap_time_ms)
-                <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
+                lap
+                for lap in unmatched_laps
+                if abs(lap.lap_time_ms - completion.lap_time_ms) <= LAP_TIME_RECONCILIATION_TOLERANCE_MS
             ]
             if matching_laps:
                 matched_lap = min(
@@ -2068,8 +1944,7 @@ class LogParser:
         if self._ip.is_outlap:
             log_debug(
                 Component.LOG_PARSER,
-                f"[OUTLAP] Deferred SHM completion {completion.lap_time_ms} ms "
-                "until structural log reconciliation",
+                f"[OUTLAP] Deferred SHM completion {completion.lap_time_ms} ms until structural log reconciliation",
             )
             return None
 
@@ -2122,11 +1997,7 @@ class LogParser:
         there's nothing worth emitting.
         """
         ip = self._ip
-        has_data = (
-            ip.splits
-            or ip.fuel_used is not None
-            or ip.distance_hundredm is not None
-        )
+        has_data = ip.splits or ip.fuel_used is not None or ip.distance_hundredm is not None
         if not has_data or not self.current_session:
             return None
 
@@ -2155,9 +2026,9 @@ class LogParser:
         )
 
         self.current_session.laps.append(aborted)
-        log_debug(Component.LOG_PARSER, 
-            f"[LAP] ABORTED #{lap_number}  sectors={sorted(ip.splits.keys())}  "
-            f"dist={ip.distance_hundredm}"
+        log_debug(
+            Component.LOG_PARSER,
+            f"[LAP] ABORTED #{lap_number}  sectors={sorted(ip.splits.keys())}  dist={ip.distance_hundredm}",
         )
         return aborted
 
@@ -2165,9 +2036,7 @@ class LogParser:
 
     def _start_new_session(self, session_type: str, _line: str) -> None:
         """Fallback session creator for edge cases (no 'Game Started!' seen)."""
-        self._reset_session_boundary(
-            "fallback session start", finalize_current_session=True
-        )
+        self._reset_session_boundary("fallback session start", finalize_current_session=True)
         self.context.reset_for_new_session()
         self.current_session = SessionData(
             session_type=SESSION_TYPE_MAP.get(session_type, session_type),
@@ -2191,9 +2060,10 @@ class LogParser:
         session_car = self.current_session.car
         session_lap_count = len(self.current_session.laps)
         has_pending = self._pending_lap is not None
-        log_debug(Component.LOG_PARSER,
+        log_debug(
+            Component.LOG_PARSER,
             f"[FINALISE] car={session_car}  laps={session_lap_count}  "
-            f"pending_lap={has_pending}  session_id={self.current_session.session_id[:8]}..."
+            f"pending_lap={has_pending}  session_id={self.current_session.session_id[:8]}...",
         )
         self._flush_pending_compound_batch()
         # Session-end metadata should reflect the latest known tyre state even
@@ -2205,21 +2075,22 @@ class LogParser:
         # the lap is recorded in `session.laps`.
         flushed_pending = self._flush_pending_lap()
         if flushed_pending is not None:
-            log_debug(Component.LOG_PARSER,
+            log_debug(
+                Component.LOG_PARSER,
                 f"[FINALISE] flushed pending lap #{flushed_pending.lap_number} "
-                f"{flushed_pending.lap_time_str} into session {session_car}"
+                f"{flushed_pending.lap_time_str} into session {session_car}",
             )
         # Emit aborted lap if the session ends mid-lap
         aborted = self._maybe_emit_aborted_lap()
         if aborted is not None:
-            log_debug(Component.LOG_PARSER,
-                f"[FINALISE] emitted ABORTED lap #{aborted.lap_number} for session {session_car}"
+            log_debug(
+                Component.LOG_PARSER, f"[FINALISE] emitted ABORTED lap #{aborted.lap_number} for session {session_car}"
             )
         self._finalise_stints()
         self._session_manager.update_from_logs(self.current_session)
-        log_debug(Component.LOG_PARSER,
-            f"[FINALISE] pushed {len(self.current_session.laps)} laps into shared session "
-            f"for car={session_car}"
+        log_debug(
+            Component.LOG_PARSER,
+            f"[FINALISE] pushed {len(self.current_session.laps)} laps into shared session for car={session_car}",
         )
         if self.current_session.laps:
             self.sessions.append(self.current_session)
@@ -2261,11 +2132,7 @@ class LogParser:
     def _preprocess_line(self, line: str) -> None:
         """Extract timestamp, flush pending compound batch, add to buffer."""
         line_ts = self._extract_line_timestamp(line)
-        if (
-            self._pending_compound_ts
-            and line_ts
-            and line_ts != self._pending_compound_ts
-        ):
+        if self._pending_compound_ts and line_ts and line_ts != self._pending_compound_ts:
             self._flush_pending_compound_batch()
         self._add_to_log_buffer(line)
         self._last_activity_ts = time.time()
@@ -2375,7 +2242,6 @@ class LogParser:
             _restart = False
 
             with open(self.log_path, "r", encoding="utf-8", errors="ignore") as fh:
-
                 # ── Historical pass ────────────────────────────────────────────────
                 historical_laps = 0
                 async for line in _iter_lines_cooperatively(fh):
@@ -2388,9 +2254,9 @@ class LogParser:
                     except (RuntimeError, ValueError, TypeError) as exc:
                         log_debug(Component.LOG_PARSER, f"[ERROR] Historical parse: {exc}")
 
-                log_debug(Component.LOG_PARSER, 
-                    f"Historical pass: {historical_laps} lap(s). "
-                    f"Session: {self.current_session is not None}"
+                log_debug(
+                    Component.LOG_PARSER,
+                    f"Historical pass: {historical_laps} lap(s). Session: {self.current_session is not None}",
                 )
 
                 # Discard historical laps — only lines observed after the
@@ -2401,11 +2267,12 @@ class LogParser:
                 # still preserved and flushed by the exit/session-end paths.
                 if self.current_session:
                     historical_pending = self._pending_lap
-                    log_debug(Component.LOG_PARSER,
+                    log_debug(
+                        Component.LOG_PARSER,
                         f"[HISTORICAL] Clearing laps from session: "
                         f"car={self.current_session.car}  "
                         f"track={self.current_session.track}  "
-                        f"pending_discarded={historical_pending is not None}"
+                        f"pending_discarded={historical_pending is not None}",
                     )
                     self.current_session.laps.clear()
                     self.current_session.stints.clear()
@@ -2414,9 +2281,7 @@ class LogParser:
                     self._reconciled_lap = None
                     self._shm_emitted_laps.clear()
                     latest_completion = self._session_manager.get_latest_lap_completion()
-                    self._last_shm_completion_observed_at = (
-                        latest_completion.observed_at if latest_completion else 0.0
-                    )
+                    self._last_shm_completion_observed_at = latest_completion.observed_at if latest_completion else 0.0
                     self._finalise_stints()
                     self._reset_in_progress()
 
@@ -2472,8 +2337,7 @@ class LogParser:
                         # or "Exit to Desktop" (GameModeRequestQuitGame) — the
                         # user is leaving the session entirely.
                         elif (
-                            "request made GameModeRequestExit" in line
-                            or "request made GameModeRequestQuitGame" in line
+                            "request made GameModeRequestExit" in line or "request made GameModeRequestQuitGame" in line
                         ):
                             # Flush any pending lap whose authoritative
                             # validity never arrived (critical for
@@ -2483,11 +2347,12 @@ class LogParser:
                             session_car = self.current_session.car if self.current_session else "None"
                             completed = self._flush_pending_lap()
                             if completed is not None and self.current_session is not None:
-                                log_debug(Component.LOG_PARSER,
+                                log_debug(
+                                    Component.LOG_PARSER,
                                     f"[EXIT] Flushing pending lap on game exit: "
                                     f"#{completed.lap_number} {completed.lap_time_str}  "
                                     f"session_car={session_car}  "
-                                    f"lap_state={completed.lap_state.value}"
+                                    f"lap_state={completed.lap_state.value}",
                                 )
                                 await self._emit_lap(self.current_session, completed)
                             self._finalise_current_session()
@@ -2518,16 +2383,15 @@ class LogParser:
                             await self._emit_lap_update(self.current_session, reconciled)
 
                         if completed:
-                            session = self.current_session or SessionData(
-                                track="Unknown", car="Unknown"
-                            )
+                            session = self.current_session or SessionData(track="Unknown", car="Unknown")
                             using_fallback = self.current_session is None
-                            log_debug(Component.LOG_PARSER,
+                            log_debug(
+                                Component.LOG_PARSER,
                                 f"[LIVE_EMIT] Emitting lap #{completed.lap_number} "
                                 f"{completed.lap_time_str}  "
                                 f"session_car={session.car}  "
                                 f"fallback_session={using_fallback}  "
-                                f"lap_state={completed.lap_state.value}"
+                                f"lap_state={completed.lap_state.value}",
                             )
                             try:
                                 await self._emit_lap(session, completed)
@@ -2561,9 +2425,7 @@ class LogParser:
                             log_debug(Component.LOG_PARSER, f"[NEW_LOG] Switching to {_latest.name}")
                             if self._last_emitted_game_status is not False:
                                 await self._emit_game_status(False, trigger="new log file detected")
-                            self._reset_session_boundary(
-                                "log rotation", finalize_current_session=False
-                            )
+                            self._reset_session_boundary("log rotation", finalize_current_session=False)
                             self.context = LogContext()
                             self._emit_callbacks = True
                             self._last_emitted_game_status = None
@@ -2583,9 +2445,7 @@ class LogParser:
                         log_debug(Component.LOG_PARSER, "[TRUNCATE] Log file reset — restarting context")
                         if self._last_emitted_game_status is not False:
                             await self._emit_game_status(False, trigger="log file truncated")
-                        self._reset_session_boundary(
-                            "log truncation", finalize_current_session=False
-                        )
+                        self._reset_session_boundary("log truncation", finalize_current_session=False)
                         self.context = LogContext()
                         self._emit_callbacks = True
                         self._last_emitted_game_status = None

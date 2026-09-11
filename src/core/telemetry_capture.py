@@ -14,17 +14,21 @@ import time
 import traceback
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, TextIO
 
-from src.core.security import is_game_running, GameProcessStatus
+from src.core.security import GameProcessStatus, is_game_running
 from src.core.telemetry_decoder import (
-    decode_physics, decode_graphics, decode_static,
+    GRAPHICS_SHM_SIZE,
+    PHYSICS_SHM_SIZE,
+    STATIC_SHM_SIZE,
+    decode_graphics,
+    decode_physics,
+    decode_static,
     peek_graphics_validity,
-    PHYSICS_SHM_SIZE, GRAPHICS_SHM_SIZE, STATIC_SHM_SIZE,
 )
 from src.models import SharedSessionManager
-from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, NamedTuple, TextIO
+from src.utils.structured_logger import Component, log_debug, log_error, log_exception, log_info, log_warning
 
 # Windows-specific imports for safe shared memory access. Keep the public
 # handle defined on every platform so tests and callers can replace the
@@ -76,9 +80,9 @@ SHM_STATIC_NAME: str = f"{SHM_NAME_PREFIX}static"
 # OpenFileMappingW + MapViewOfFile will surface that and the region will
 # simply fail to open — capture continues with whichever regions did connect.
 REGIONS: Dict[str, tuple[str, int]] = {
-    "physics":  (SHM_PHYSICS_NAME,  PHYSICS_SHM_SIZE),
+    "physics": (SHM_PHYSICS_NAME, PHYSICS_SHM_SIZE),
     "graphics": (SHM_GRAPHICS_NAME, GRAPHICS_SHM_SIZE),
-    "static":   (SHM_STATIC_NAME,   STATIC_SHM_SIZE),
+    "static": (SHM_STATIC_NAME, STATIC_SHM_SIZE),
 }
 
 # Candidate Win32 object-manager paths for OpenFileMappingW.
@@ -102,6 +106,7 @@ class FrameData:
     The ``*_raw`` fields hold the full hex blob; the decoded ``graphics``
     / ``static`` dicts stay empty until a typed decoder is wired in.
     """
+
     timestamp: str
     frame_number: int
     physics: Dict[str, Any]
@@ -118,6 +123,7 @@ class FrameData:
 @dataclass
 class CaptureMetadata:
     """Metadata about the capture session."""
+
     captured_at: str
     hz: float
     regions_found: List[str]
@@ -190,11 +196,15 @@ class RegionReader:
                         # Get detailed error for MapViewOfFile
                         error_code = ctypes.get_last_error()
                         kernel32.CloseHandle(handle)
-                        self._log(f"[TELEMETRY] FAILED: MapViewOfFile failed for {self.name} at {path} (error code: {error_code})")
+                        self._log(
+                            f"[TELEMETRY] FAILED: MapViewOfFile failed for {self.name} at {path} (error code: {error_code})"  # noqa: E501
+                        )
                 else:
                     # Get detailed Windows error code
                     error_code = ctypes.get_last_error()
-                    self._log(f"[TELEMETRY] FAILED: OpenFileMappingW failed for {self.name} at {path} (error code: {error_code}: {self._get_error_message(error_code)})")
+                    self._log(
+                        f"[TELEMETRY] FAILED: OpenFileMappingW failed for {self.name} at {path} (error code: {error_code}: {self._get_error_message(error_code)})"  # noqa: E501
+                    )
             except Exception as e:
                 self._log(f"[TELEMETRY] EXCEPTION: Error opening {self.name} at {path}: {e}")
                 # Silently continue - game might still be initializing
@@ -329,8 +339,7 @@ class TelemetryCapture:
             self._lap_boundaries.clear()
             self._recording_awaiting_boundary = False
             self._awaiting_lap_time_ms = None
-            log_info(Component.TELEMETRY, "Switched to validity-only mode",
-                     frames_dropped="cleared")
+            log_info(Component.TELEMETRY, "Switched to validity-only mode", frames_dropped="cleared")
         elif record and not was_recording:
             self._frames.clear()
             self._lap_boundaries.clear()
@@ -438,12 +447,15 @@ class TelemetryCapture:
         # buffer. Absolute sample numbers continue across the armed outlap and
         # therefore point at the wrong lap after that prefix is discarded.
         frame_idx = len(self._frames) - 1
-        self._lap_boundaries.append(
-            LapBoundary(frame_idx, lap_time_ms, lap_number, lap_type)
+        self._lap_boundaries.append(LapBoundary(frame_idx, lap_time_ms, lap_number, lap_type))
+        log_info(
+            Component.TELEMETRY,
+            "Lap boundary recorded",
+            frame=frame_idx,
+            lap_time_ms=lap_time_ms,
+            lap_number=lap_number,
+            lap_type=lap_type,
         )
-        log_info(Component.TELEMETRY, "Lap boundary recorded",
-                 frame=frame_idx, lap_time_ms=lap_time_ms,
-                 lap_number=lap_number, lap_type=lap_type)
 
     def _start_recording_at_timing_boundary(self, frame: FrameData) -> bool:
         """Start an armed recording when ACE resets its live lap timer.
@@ -520,6 +532,7 @@ class TelemetryCapture:
         """
         try:
             import json
+
             output_dir = os.path.dirname(output_path)
             if output_dir:
                 os.makedirs(output_dir, exist_ok=True)
@@ -549,7 +562,9 @@ class TelemetryCapture:
             "_output_prefix": self._output_prefix,
             "_hz": self._hz,
             "_regions_known": list(REGIONS.keys()),
-            "_regions_found": list(self._readers.keys()) if self._readers else (list(self._metadata.regions_found) if self._metadata else []),
+            "_regions_found": list(self._readers.keys())
+            if self._readers
+            else (list(self._metadata.regions_found) if self._metadata else []),
             "_region_names": {key: REGIONS[key][0] for key in REGIONS},
             "_region_paths": self._region_paths.copy(),
             "_region_sizes": {key: size for key, (_, size) in REGIONS.items()},
@@ -772,23 +787,25 @@ class TelemetryCapture:
 
         log_info(Component.TELEMETRY, "Starting telemetry capture")
         log_info(Component.TELEMETRY, "Waiting for game to start and create shared memory regions")
-        
+
         # Open diagnostic log file (only when debug_logs setting is enabled)
         if self._debug_logs:
             try:
                 os.makedirs(self._output_dir, exist_ok=True)
-                diag_path = os.path.join(self._output_dir, f"telemetry_diagnostics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+                diag_path = os.path.join(
+                    self._output_dir, f"telemetry_diagnostics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+                )
                 self._diag_file = open(diag_path, "w", encoding="utf-8")
                 log_info(Component.TELEMETRY, "Diagnostic log opened", path=diag_path)
             except Exception as e:
                 log_error(Component.TELEMETRY, "Could not open diagnostic log", error=str(e))
         else:
             self._diag_file = None
-        
+
         # Try to connect to regions, but don't fail if game hasn't started yet
         # The capture loop will continuously retry
         self._readers = self._connect_regions()
-        
+
         if self._readers:
             log_info(Component.TELEMETRY, "Found regions", count=len(self._readers), regions=list(self._readers.keys()))
         else:
@@ -809,7 +826,7 @@ class TelemetryCapture:
 
         # Start the capture loop task
         self._task = asyncio.create_task(self._capture_loop_wrapper())
-        
+
         # Add exception handler to catch task cancellation/crashes
         def task_done_callback(task):
             if task.cancelled():
@@ -821,7 +838,7 @@ class TelemetryCapture:
                 traceback.print_exception(type(e), e, e.__traceback__)
                 self._stop_reason = f"task_exception: {e}"
                 self._running = False
-        
+
         self._task.add_done_callback(task_done_callback)
 
         return True
@@ -835,7 +852,7 @@ class TelemetryCapture:
             self._stop_reason = f"unhandled_exception: {e}"
             self._running = False
             self._close_readers()
-            
+
             # Try to save any frames we captured before the crash. These
             # are debug artefacts only - gated on the same setting as the
             # normal-path dumps so a disabled telemetry-debug-logs toggle
@@ -897,9 +914,7 @@ class TelemetryCapture:
                                 "Disconnect timeout",
                                 timeout=f"{self.DISCONNECT_TIMEOUT_SECONDS:.1f}s",
                             )
-                            self._stop_reason = (
-                                f"disconnect_timeout ({self.DISCONNECT_TIMEOUT_SECONDS:.1f}s)"
-                            )
+                            self._stop_reason = f"disconnect_timeout ({self.DISCONNECT_TIMEOUT_SECONDS:.1f}s)"
                             self._running = False
                             break
 
@@ -921,7 +936,9 @@ class TelemetryCapture:
 
                 # Check if game process is still running (treat UNKNOWN as NOT_RUNNING for safety)
                 if is_game_running() != GameProcessStatus.RUNNING:
-                    log_warning(Component.TELEMETRY, "Game process no longer running or detection uncertain - stopping capture")
+                    log_warning(
+                        Component.TELEMETRY, "Game process no longer running or detection uncertain - stopping capture"
+                    )
                     self._stop_reason = "game_not_running"
                     self._running = False
                     break
@@ -930,25 +947,18 @@ class TelemetryCapture:
                 if self._last_sample_had_data:
                     self._last_valid_frame_time = now_mono
                     self._start_recording_at_timing_boundary(frame)
-                    if (
-                        self._record_frames
-                        and not self._recording_awaiting_boundary
-                    ):
+                    if self._record_frames and not self._recording_awaiting_boundary:
                         self._frames.append(frame)
                     frame_num += 1
                     self._all_disconnected_since = None
-                    
+
                     # Idle timeout is only meaningful once full recording has
                     # started. Validity-only capture must remain available for
                     # the lifetime of ACE, and an armed recorder may sit in the
                     # pits for several minutes before its clean start boundary.
                     if self._record_frames and not self._recording_awaiting_boundary:
                         physics = frame.physics if frame.physics else {}
-                        speed_kmh = (
-                            physics.get("speed_kmh", 0)
-                            if isinstance(physics, dict)
-                            else 0
-                        )
+                        speed_kmh = physics.get("speed_kmh", 0) if isinstance(physics, dict) else 0
                         if speed_kmh < 1.0:
                             if not self._lap_boundaries:
                                 if self._idle_since is None:
@@ -959,9 +969,7 @@ class TelemetryCapture:
                                         "Idle timeout",
                                         timeout=f"{self.IDLE_TIMEOUT_SECONDS:.1f}s",
                                     )
-                                    self._stop_reason = (
-                                        f"idle_timeout ({self.IDLE_TIMEOUT_SECONDS:.1f}s)"
-                                    )
+                                    self._stop_reason = f"idle_timeout ({self.IDLE_TIMEOUT_SECONDS:.1f}s)"
                                     self._running = False
                                     break
                             else:
@@ -970,7 +978,7 @@ class TelemetryCapture:
                             self._idle_since = None
                     else:
                         self._idle_since = None
-                    
+
                     # Debug: log first frame
                     if frame_num == 1:
                         mode_label = "validity-only" if not self._record_frames else "telemetry active"
@@ -992,11 +1000,11 @@ class TelemetryCapture:
             self._running = False
 
         # Loop exited - perform cleanup
-        log_info(Component.TELEMETRY, "Capture loop ended", reason=self._stop_reason or 'manual_stop')
+        log_info(Component.TELEMETRY, "Capture loop ended", reason=self._stop_reason or "manual_stop")
         self._running = False
 
         self._close_readers()
-        
+
         # Close diagnostic log
         if self._diag_file:
             try:
@@ -1055,7 +1063,7 @@ class TelemetryCapture:
                 self._task = None
 
         self._close_readers()
-        
+
         # Close diagnostic log
         if self._diag_file:
             try:

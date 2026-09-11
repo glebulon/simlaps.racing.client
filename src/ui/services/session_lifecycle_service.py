@@ -4,8 +4,8 @@ import asyncio
 from typing import Any, Awaitable, Callable, Optional
 
 from src.utils.structured_logger import Component, log_debug, log_info
-from ..components.status_bar import ConnectionStatus
 
+from ..components.status_bar import ConnectionStatus
 
 StartCaptureCallback = Callable[[], Awaitable[None]]
 StopCaptureCallback = Callable[..., Awaitable[None]]
@@ -46,9 +46,7 @@ class SessionLifecycleService:
     def _delayed_stop_is_current(self, generation: int, capture: Any) -> bool:
         """Return whether a delayed stop still belongs to the active run."""
         return (
-            generation == self._lifecycle_generation
-            and capture is self._telemetry_capture
-            and capture.is_capturing()
+            generation == self._lifecycle_generation and capture is self._telemetry_capture and capture.is_capturing()
         )
 
     async def handle_car_removed(self) -> None:

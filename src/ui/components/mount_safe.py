@@ -19,7 +19,7 @@ def safe_update(control: Any) -> bool:
     """
 
     try:
-        control.page
+        control.page  # noqa: B018
     except RuntimeError:
         return False
 

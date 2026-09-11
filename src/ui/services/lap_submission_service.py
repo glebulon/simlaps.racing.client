@@ -6,7 +6,7 @@ Owns lap submit result mapping and optional Discord post flow.
 from typing import Awaitable, Callable, Optional
 
 from src.core.api_client import APIClient, SubmissionStatus
-from src.core.discord_notifier import DiscordNotifier, DiscordLapPayload
+from src.core.discord_notifier import DiscordLapPayload, DiscordNotifier
 from src.models import LapData, SessionData
 from src.utils.config import AppConfig
 from src.utils.structured_logger import (
@@ -17,6 +17,7 @@ from src.utils.structured_logger import (
     log_info,
     log_warning,
 )
+
 from ..components.lap_card import LapCard, LapCardStatus
 from ..pages.history import HistoryEntry
 

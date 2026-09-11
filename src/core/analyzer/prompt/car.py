@@ -5,6 +5,7 @@ from typing import Dict, List
 
 from src.core.analyzer.metrics import analyze_brake_thermals, analyze_suspension
 from src.core.car_tuning_catalog import format_tuning_block
+
 from .context import PromptContext
 
 
@@ -12,19 +13,16 @@ def build_aero_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
-    ref_corners = list(ctx.ref_corners)
-    hz = ctx.hz
+    list(ctx.ref_corners)
     lines: List[str] = []
     # ── DRS/Aerodynamics analysis — gate on data presence
-    _any_drs_available = any(
-        any(pt.get("drs_available", False) for pt in lap.get("track", []))
-        for lap in laps
-    )
+    _any_drs_available = any(any(pt.get("drs_available", False) for pt in lap.get("track", [])) for lap in laps)
     if _any_drs_available:
         lines.append("AERODYNAMICS & DRS ANALYSIS:")
-        lines.append("(drs_state = DRS flap position; drs_available = activation permitted; drs_enabled = currently active)")
+        lines.append(
+            "(drs_state = DRS flap position; drs_available = activation permitted; drs_enabled = currently active)"
+        )
         lines.append("")
 
         # Analyze DRS usage patterns
@@ -46,11 +44,13 @@ def build_aero_sections(
                 drs_usage_per_lap[lap_num] = {
                     "active_frames": drs_active_frames,
                     "available_frames": drs_available_frames,
-                    "usage_pct": drs_usage_pct
+                    "usage_pct": drs_usage_pct,
                 }
 
-                lines.append(f"  Lap {lap_num}: DRS used {drs_usage_pct:.1f}% of available time "
-                           f"({drs_active_frames}/{drs_available_frames} frames)")
+                lines.append(
+                    f"  Lap {lap_num}: DRS used {drs_usage_pct:.1f}% of available time "
+                    f"({drs_active_frames}/{drs_available_frames} frames)"
+                )
 
         if not drs_usage_per_lap:
             lines.append("  No DRS usage detected or DRS not available in this session")
@@ -70,7 +70,8 @@ def build_aero_sections(
     # ── Aerodynamics setup analysis — gate on data presence
     _any_aero_data = any(
         (pt.get("ride_height_front", 0) or 0) > 1.0 or (pt.get("pitch", 0) or 0) != 0
-        for lap in laps for pt in lap.get("track", [])
+        for lap in laps
+        for pt in lap.get("track", [])
     )
     if _any_aero_data:
         lines.append("AERODYNAMICS SETUP ANALYSIS:")
@@ -87,8 +88,12 @@ def build_aero_sections(
             lap_track = lap.get("track", [])
 
             # Collect ride height and pitch data (filter <1mm — likely uninitialized SHM in AC Evo EA)
-            front_heights = [pt.get("ride_height_front", 0) for pt in lap_track if (pt.get("ride_height_front", 0) or 0) > 1.0]
-            rear_heights = [pt.get("ride_height_rear", 0) for pt in lap_track if (pt.get("ride_height_rear", 0) or 0) > 1.0]
+            front_heights = [
+                pt.get("ride_height_front", 0) for pt in lap_track if (pt.get("ride_height_front", 0) or 0) > 1.0
+            ]
+            rear_heights = [
+                pt.get("ride_height_rear", 0) for pt in lap_track if (pt.get("ride_height_rear", 0) or 0) > 1.0
+            ]
             pitch_values = [pt.get("pitch", 0) for pt in lap_track if (pt.get("pitch", 0) or 0) != 0]
             air_densities = [pt.get("air_density", 0) for pt in lap_track if (pt.get("air_density", 0) or 0) > 0]
 
@@ -97,8 +102,10 @@ def build_aero_sections(
                 avg_rear = sum(rear_heights) / len(rear_heights)
                 ride_height_data.append((lap_num, avg_front, avg_rear, avg_rear - avg_front))
 
-                lines.append(f"  Lap {lap_num}: Ride Height F={avg_front:.1f}mm R={avg_rear:.1f}mm "
-                           f"Rake={(avg_rear - avg_front):.1f}mm")
+                lines.append(
+                    f"  Lap {lap_num}: Ride Height F={avg_front:.1f}mm R={avg_rear:.1f}mm "
+                    f"Rake={(avg_rear - avg_front):.1f}mm"
+                )
 
             if pitch_values:
                 avg_pitch = sum(pitch_values) / len(pitch_values)
@@ -130,15 +137,21 @@ def build_aero_sections(
             rake_variance = max(rakes) - min(rakes)
 
             if avg_rake < 10.0:  # Less than 10mm rake
-                lines.append(f"    >> LOW RAKE: {avg_rake:.1f}mm average - consider increasing rear ride height "
-                           f"or lowering front for more rear downforce")
+                lines.append(
+                    f"    >> LOW RAKE: {avg_rake:.1f}mm average - consider increasing rear ride height "
+                    f"or lowering front for more rear downforce"
+                )
             elif avg_rake > 50.0:  # More than 50mm rake
-                lines.append(f"    >> HIGH RAKE: {avg_rake:.1f}mm average - may be excessive drag, "
-                           f"consider reducing rake for better top speed")
+                lines.append(
+                    f"    >> HIGH RAKE: {avg_rake:.1f}mm average - may be excessive drag, "
+                    f"consider reducing rake for better top speed"
+                )
 
             if rake_variance > 15.0:  # More than 15mm variation
-                lines.append(f"    >> INCONSISTENT RAKE: varies by {rake_variance:.1f}mm - "
-                           f"suspension compliance issue or inconsistent ride heights")
+                lines.append(
+                    f"    >> INCONSISTENT RAKE: varies by {rake_variance:.1f}mm - "
+                    f"suspension compliance issue or inconsistent ride heights"
+                )
 
             # Check for pitch sensitivity
             if pitch_data:
@@ -148,8 +161,10 @@ def build_aero_sections(
                 avg_pitch_range_deg = avg_pitch_range * (180.0 / math.pi)
 
                 if avg_pitch_range_deg > 2.0:  # More than 2 degrees pitch variation
-                    lines.append(f"    >> HIGH PITCH SENSITIVITY: {avg_pitch_range_deg:.1f}° variation - "
-                           f"consider stiffer springs or more aero balance")
+                    lines.append(
+                        f"    >> HIGH PITCH SENSITIVITY: {avg_pitch_range_deg:.1f}° variation - "
+                        f"consider stiffer springs or more aero balance"
+                    )
 
         lines.append("")
         lines.append("")
@@ -161,15 +176,12 @@ def build_gearing_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
     ref_corners = list(ctx.ref_corners)
-    hz = ctx.hz
     lines: List[str] = []
     # ── Gear optimization analysis (if data available)
     gear_rpm_available = any(
-        lap.get("track", [{}])[0].get("gear_rpm_window") is not None
-        for lap in laps if lap.get("track")
+        lap.get("track", [{}])[0].get("gear_rpm_window") is not None for lap in laps if lap.get("track")
     )
 
     if gear_rpm_available:
@@ -188,8 +200,7 @@ def build_gearing_sections(
                     continue
 
                 corner_track = [
-                    pt for pt in lap["track"]
-                    if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
+                    pt for pt in lap["track"] if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
                 ]
 
                 if corner_track:
@@ -219,11 +230,13 @@ def build_gearing_sections(
                     lines.append(f"    Lap {ln} ({label}): Gear {gear}  GearOpt={gw:.2f}{rpm_str}{gear_hint}")
                 # Flag gear changes mid-corner
                 _by_lap: Dict[int, List[int]] = {}
-                for ln, gear, gw, rpm_pct, label in gear_data:
+                for ln, gear, gw, rpm_pct, label in gear_data:  # noqa: B007
                     _by_lap.setdefault(ln, []).append(gear)
                 for ln, gears in _by_lap.items():
                     if len(set(gears)) > 1:
-                        lines.append(f"    >> Lap {ln}: Gear changes mid-corner ({' → '.join(str(g) for g in gears)}) — consider earlier downshift")
+                        lines.append(
+                            f"    >> Lap {ln}: Gear changes mid-corner ({' → '.join(str(g) for g in gears)}) — consider earlier downshift"  # noqa: E501
+                        )
                 lines.append("")
 
     return lines
@@ -233,16 +246,12 @@ def build_brake_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    data = ctx.data
     laps = list(ctx.valid_laps)
     ref_corners = list(ctx.ref_corners)
-    hz = ctx.hz
     lines: List[str] = []
     # ── Brake bias analysis (if data available)
     brake_bias_available = any(
-        pt.get("brake_bias") is not None and pt.get("brake_bias") > 0
-        for lap in laps
-        for pt in lap.get("track", [])
+        pt.get("brake_bias") is not None and pt.get("brake_bias") > 0 for lap in laps for pt in lap.get("track", [])
     )
 
     if brake_bias_available:
@@ -261,8 +270,7 @@ def build_brake_sections(
                     continue
 
                 corner_track = [
-                    pt for pt in lap["track"]
-                    if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
+                    pt for pt in lap["track"] if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
                 ]
 
                 # Sample brake bias during braking phase
@@ -280,15 +288,12 @@ def build_brake_sections(
                         bias_hint = " <- front-heavy, risk of front lock"
                     elif bias < 0.45:
                         bias_hint = " <- rear-heavy, risk of rear lock"
-                    lines.append(f"    Lap {ln}: {bias:.2f} ({bias*100:.0f}% front){bias_hint}")
+                    lines.append(f"    Lap {ln}: {bias:.2f} ({bias * 100:.0f}% front){bias_hint}")
                 lines.append("")
 
     # ── Brake thermal analysis (front/rear imbalance, fade, extremes)
     _brake_thermals = analyze_brake_thermals(laps)
-    _bt_rows = [
-        e for e in _brake_thermals["per_lap"]
-        if e["front_avg"] is not None or e["rear_avg"] is not None
-    ]
+    _bt_rows = [e for e in _brake_thermals["per_lap"] if e["front_avg"] is not None or e["rear_avg"] is not None]
     if _bt_rows:
         lines.append("BRAKE THERMAL ANALYSIS:")
         lines.append("(averages over heavy-braking frames, brake > 40%)")
@@ -303,7 +308,7 @@ def build_brake_sections(
             lines.append(f"  >> FADE RISK: {_brake_thermals['fade_note']}")
         # ── Cross-reference brake bias with brake thermals
         if brake_bias_available and _brake_thermals["imbalance_note"]:
-            _session_bias: Optional[float] = None
+            _session_bias: Optional[float] = None  # noqa: F821
             for spec in ref_corners:
                 cid = spec["id"]
                 for lap in laps:
@@ -311,12 +316,13 @@ def build_brake_sections(
                     if not corner:
                         continue
                     corner_track = [
-                        pt for pt in lap["track"]
-                        if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
+                        pt for pt in lap["track"] if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
                     ]
                     braking_pts = [pt for pt in corner_track if (pt.get("brake", 0) or 0) > 0.3]
                     if braking_pts:
-                        _biases = [pt.get("brake_bias", 0) or 0 for pt in braking_pts if (pt.get("brake_bias", 0) or 0) > 0]
+                        _biases = [
+                            pt.get("brake_bias", 0) or 0 for pt in braking_pts if (pt.get("brake_bias", 0) or 0) > 0
+                        ]
                         if _biases:
                             _session_bias = sum(_biases) / len(_biases)
                             break
@@ -329,7 +335,9 @@ def build_brake_sections(
                     _fmean = sum(_front_avgs) / len(_front_avgs)
                     _rmean = sum(_rear_avgs) / len(_rear_avgs)
                     if _fmean > _rmean * 1.3:
-                        lines.append(f"  >> COMBINED: Front-heavy bias ({_session_bias:.2f}) with elevated front brake temps ({_fmean:.0f}C vs {_rmean:.0f}C rear) — consider reducing front bias.")
+                        lines.append(
+                            f"  >> COMBINED: Front-heavy bias ({_session_bias:.2f}) with elevated front brake temps ({_fmean:.0f}C vs {_rmean:.0f}C rear) — consider reducing front bias."  # noqa: E501
+                        )
         lines.append("")
 
     # ── Brake temperature extreme flag
@@ -356,15 +364,12 @@ def build_suspension_sections(
 ) -> List[str]:
     data = ctx.data
     laps = list(ctx.valid_laps)
-    ref_corners = list(ctx.ref_corners)
-    hz = ctx.hz
+    list(ctx.ref_corners)
     lines: List[str] = []
     # ── Suspension / alignment analysis
     profile_corners = data.get("profile_corners", [])
     _suspension = analyze_suspension(laps, profile_corners, lap_corner_map=lap_corner_map)
-    _has_sus = any(
-        _suspension[k] for k in ("bottoming_notes", "travel_delta_notes", "camber_notes")
-    )
+    _has_sus = any(_suspension[k] for k in ("bottoming_notes", "travel_delta_notes", "camber_notes"))
     if _has_sus:
         lines.append("SUSPENSION & ALIGNMENT ANALYSIS:")
         for note in _suspension["bottoming_notes"]:

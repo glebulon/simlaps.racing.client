@@ -7,9 +7,8 @@ covered in other test modules — this file focuses on parser behaviour.
 """
 
 import pytest
-from pathlib import Path
+
 from src.core.log_parser import LogParser
-from src.models import SessionData
 
 
 class TestPatternMatching:
@@ -19,9 +18,7 @@ class TestPatternMatching:
     @pytest.mark.asyncio
     async def test_pattern_track_name_direct(self, tmp_path):
         """``TRACK NAME`` line sets ``context.current_track``."""
-        log_content = (
-            "[2024-01-01 12:00:00] TRACK NAME spa_francorchamps\n"
-        )
+        log_content = "[2024-01-01 12:00:00] TRACK NAME spa_francorchamps\n"
         log_file = tmp_path / "track.log"
         log_file.write_text(log_content)
 
@@ -44,8 +41,8 @@ class TestPatternMatching:
             "[2024-01-01 12:00:00] "
             "76561198321627695 connected on car porsche_992_gt3_cup, "
             "with new carId abc123-456\n"
-            '[2024-01-01 12:00:01] '
-            'Loading scene file content\\tracks\\spa_francorchamps\n'
+            "[2024-01-01 12:00:01] "
+            "Loading scene file content\\tracks\\spa_francorchamps\n"
         )
         log_file = tmp_path / "load.log"
         log_file.write_text(log_content)
@@ -59,9 +56,7 @@ class TestPatternMatching:
     @pytest.mark.asyncio
     async def test_pattern_driver_line(self, tmp_path):
         """``Driver ... on car`` line sets ``context.current_car``."""
-        log_content = (
-            "[2024-01-01 12:00:00]\tDriver TestDriver on car porsche_992_gt3_cup\n"
-        )
+        log_content = "[2024-01-01 12:00:00]\tDriver TestDriver on car porsche_992_gt3_cup\n"
         log_file = tmp_path / "driver.log"
         log_file.write_text(log_content)
 
@@ -75,9 +70,7 @@ class TestPatternMatching:
     async def test_pattern_connect(self, tmp_path):
         """``connected on car`` line sets ``context.current_car`` and player UUID."""
         log_content = (
-            "[2024-01-01 12:00:00] "
-            "76561198321627695 connected on car porsche_992_gt3_cup, "
-            "with new carId abc123-456\n"
+            "[2024-01-01 12:00:00] 76561198321627695 connected on car porsche_992_gt3_cup, with new carId abc123-456\n"
         )
         log_file = tmp_path / "connect.log"
         log_file.write_text(log_content)
@@ -120,9 +113,7 @@ class TestPatternMatching:
     @pytest.mark.asyncio
     async def test_pattern_set_compound_old(self, tmp_path):
         """Old ``setCompound`` line is processed without error."""
-        log_content = (
-            "[2024-01-01 12:00:00] setCompound Tyre: 0 compound name: Dry\n"
-        )
+        log_content = "[2024-01-01 12:00:00] setCompound Tyre: 0 compound name: Dry\n"
         log_file = tmp_path / "compound.log"
         log_file.write_text(log_content)
 
@@ -136,9 +127,7 @@ class TestPatternMatching:
     @pytest.mark.asyncio
     async def test_pattern_fuel_filled(self, tmp_path):
         """``FUEL ... filled with`` line is processed without error."""
-        log_content = (
-            "[2024-01-01 12:00:00] FUEL car abc123-456 filled with 50.0 L\n"
-        )
+        log_content = "[2024-01-01 12:00:00] FUEL car abc123-456 filled with 50.0 L\n"
         log_file = tmp_path / "fuel.log"
         log_file.write_text(log_content)
 
@@ -179,8 +168,8 @@ class TestParserCallbacks:
             "[2024-01-01 12:00:00] [gameplay] [info] "
             "Game Started! GameModeType_PRACTICE | TestTrack | "
             "porsche_992_gt3_cup | GameModeSelectionWeatherType_Clear\n"
-            '[2024-01-01 12:00:01] [gameplay] [info] '
-            'New lap carId abc123-456: 1:23.456\n'
+            "[2024-01-01 12:00:01] [gameplay] [info] "
+            "New lap carId abc123-456: 1:23.456\n"
         )
         log_file = tmp_path / "callback.log"
         log_file.write_text(log_content)

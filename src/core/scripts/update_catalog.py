@@ -3,6 +3,7 @@
 Phase 1b: Expand aliases for better game-log matching
 Phase 1c: Add ~10 new tracks with estimated corner windows
 """
+
 import json
 from pathlib import Path
 
@@ -14,59 +15,58 @@ with open(CATALOG_PATH, "r", encoding="utf-8") as f:
 # ── Phase 1b: Expand aliases for existing tracks ──
 
 ALIAS_EXTENSIONS = {
-    "brands_hatch": {
-        "aliases": ["brands_hatch", "brands", "brands-hatch", "brands hatch", "brands hatch gp"]
-    },
+    "brands_hatch": {"aliases": ["brands_hatch", "brands", "brands-hatch", "brands hatch", "brands hatch gp"]},
     "circuit_de_spa_francorchamps": {
         "aliases": [
-            "circuit_de_spa_francorchamps", "spa", "spa-francorchamps",
-            "circuit_de_spa_", "spa francorchamps", "circuit de spa-francorchamps"
+            "circuit_de_spa_francorchamps",
+            "spa",
+            "spa-francorchamps",
+            "circuit_de_spa_",
+            "spa francorchamps",
+            "circuit de spa-francorchamps",
         ]
     },
-    "circuit_of_the_americas": {
-        "aliases": ["circuit_of_the_americas", "cota", "circuit-of-the-americas", "americas"]
-    },
+    "circuit_of_the_americas": {"aliases": ["circuit_of_the_americas", "cota", "circuit-of-the-americas", "americas"]},
     "donington_park_national": {
         "aliases": ["donington_park_national", "donington_park", "donington", "donington park"]
     },
-    "fuji_speedway": {
-        "aliases": ["fuji_speedway", "fuji", "fuji-speedway", "fuji speedway"]
-    },
-    "imola": {
-        "aliases": ["imola", "autodromo-enzo-e-dino-ferrari", "enzo e dino ferrari"]
-    },
+    "fuji_speedway": {"aliases": ["fuji_speedway", "fuji", "fuji-speedway", "fuji speedway"]},
+    "imola": {"aliases": ["imola", "autodromo-enzo-e-dino-ferrari", "enzo e dino ferrari"]},
     "laguna_seca": {
         "aliases": [
-            "laguna_seca", "laguna", "laguna-seca", "mazda-raceway",
-            "weathertech-raceway", "laguna seca", "mazda raceway laguna seca"
+            "laguna_seca",
+            "laguna",
+            "laguna-seca",
+            "mazda-raceway",
+            "weathertech-raceway",
+            "laguna seca",
+            "mazda raceway laguna seca",
         ]
     },
-    "monza": {
-        "aliases": ["monza", "autodromo nazionale di monza"]
-    },
-    "mount_panorama": {
-        "aliases": ["mount_panorama", "bathurst", "mount-panorama", "mount panorama"]
-    },
+    "monza": {"aliases": ["monza", "autodromo nazionale di monza"]},
+    "mount_panorama": {"aliases": ["mount_panorama", "bathurst", "mount-panorama", "mount panorama"]},
     "nurburgring_nordschleife": {
         "aliases": [
-            "nurburgring_nordschleife", "nordschleife", "nurburgring-nordschleife",
-            "nurburgring_touristenfahrten", "nurburgring_24h", "nürburgring",
-            "nurburgring", "nordschleife", "nürburgring nordschleife"
+            "nurburgring_nordschleife",
+            "nordschleife",
+            "nurburgring-nordschleife",
+            "nurburgring_touristenfahrten",
+            "nurburgring_24h",
+            "nürburgring",
+            "nurburgring",
+            "nordschleife",
+            "nürburgring nordschleife",
         ]
     },
-    "oulton_park_international": {
-        "aliases": ["oulton_park_international", "oulton park", "oulton"]
-    },
-    "red_bull_ring": {
-        "aliases": ["red_bull_ring", "red-bull-ring", "rbr", "red bull ring", "spielberg"]
-    },
-    "suzuka": {
-        "aliases": ["suzuka", "suzuka-circuit", "suzuka_circuit", "suzuka circuit"]
-    },
+    "oulton_park_international": {"aliases": ["oulton_park_international", "oulton park", "oulton"]},
+    "red_bull_ring": {"aliases": ["red_bull_ring", "red-bull-ring", "rbr", "red bull ring", "spielberg"]},
+    "suzuka": {"aliases": ["suzuka", "suzuka-circuit", "suzuka_circuit", "suzuka circuit"]},
     "watkins_glen_international": {
         "aliases": [
-            "watkins_glen_international", "watkins_glen_internati",
-            "watkins glen", "watkins glen international"
+            "watkins_glen_international",
+            "watkins_glen_internati",
+            "watkins glen",
+            "watkins glen international",
         ]
     },
 }
@@ -109,9 +109,9 @@ ESTIMATED_TRACKS = {
                     {"id": 16, "name": "Vale", "start": 0.700, "end": 0.730},
                     {"id": 17, "name": "Club", "start": 0.730, "end": 0.765},
                     {"id": 18, "name": "Hamilton Straight Kink", "start": 0.820, "end": 0.845},
-                ]
+                ],
             }
-        }
+        },
     },
     "nurburgring_gp": {
         "name": "Nurburgring GP",
@@ -134,9 +134,9 @@ ESTIMATED_TRACKS = {
                     {"id": 10, "name": "T10 (Mobil 1)", "start": 0.82, "end": 0.87},
                     {"id": 11, "name": "T11 (Aral)", "start": 0.92, "end": 0.96},
                     {"id": 12, "name": "T12 (Michael Schumacher S)", "start": 0.96, "end": 0.99},
-                ]
+                ],
             }
-        }
+        },
     },
     "barcelona": {
         "name": "Circuit de Barcelona-Catalunya",
@@ -161,9 +161,9 @@ ESTIMATED_TRACKS = {
                     {"id": 12, "name": "T12", "start": 0.82, "end": 0.86},
                     {"id": 13, "name": "T13 (European)", "start": 0.90, "end": 0.94},
                     {"id": 14, "name": "T14 (New Holland)", "start": 0.94, "end": 0.97},
-                ]
+                ],
             }
-        }
+        },
     },
     "hungaroring": {
         "name": "Hungaroring",
@@ -187,9 +187,9 @@ ESTIMATED_TRACKS = {
                     {"id": 11, "name": "T11", "start": 0.86, "end": 0.90},
                     {"id": 12, "name": "T12", "start": 0.92, "end": 0.96},
                     {"id": 13, "name": "T13", "start": 0.96, "end": 0.99},
-                ]
+                ],
             }
-        }
+        },
     },
     "zandvoort": {
         "name": "Circuit Zandvoort",
@@ -212,9 +212,9 @@ ESTIMATED_TRACKS = {
                     {"id": 10, "name": "T10 (Bocht 10)", "start": 0.80, "end": 0.85},
                     {"id": 11, "name": "T11 (Arie Luyendijk)", "start": 0.88, "end": 0.92},
                     {"id": 12, "name": "T12 (Chicane)", "start": 0.95, "end": 0.99},
-                ]
+                ],
             }
-        }
+        },
     },
     "portimao": {
         "name": "Algarve International Circuit",
@@ -239,9 +239,9 @@ ESTIMATED_TRACKS = {
                     {"id": 12, "name": "T12", "start": 0.90, "end": 0.94},
                     {"id": 13, "name": "T13", "start": 0.94, "end": 0.97},
                     {"id": 14, "name": "T14", "start": 0.97, "end": 0.99},
-                ]
+                ],
             }
-        }
+        },
     },
     "kyalami": {
         "name": "Kyalami Grand Prix Circuit",
@@ -264,9 +264,9 @@ ESTIMATED_TRACKS = {
                     {"id": 10, "name": "T10 (Coca-Cola)", "start": 0.75, "end": 0.82},
                     {"id": 11, "name": "T11 (Kink)", "start": 0.88, "end": 0.91},
                     {"id": 12, "name": "T12", "start": 0.94, "end": 0.98},
-                ]
+                ],
             }
-        }
+        },
     },
     "road_america": {
         "name": "Road America",
@@ -289,9 +289,9 @@ ESTIMATED_TRACKS = {
                     {"id": 10, "name": "T10", "start": 0.84, "end": 0.88},
                     {"id": 11, "name": "T11 (Bill Mitchell)", "start": 0.90, "end": 0.95},
                     {"id": 12, "name": "T12 (Victory)", "start": 0.96, "end": 0.99},
-                ]
+                ],
             }
-        }
+        },
     },
     "misano": {
         "name": "Misano World Circuit",
@@ -315,9 +315,9 @@ ESTIMATED_TRACKS = {
                     {"id": 11, "name": "T11 (Del Rio)", "start": 0.85, "end": 0.90},
                     {"id": 12, "name": "T12 (Curvone)", "start": 0.92, "end": 0.96},
                     {"id": 13, "name": "T13 (Variante)", "start": 0.96, "end": 0.99},
-                ]
+                ],
             }
-        }
+        },
     },
     "valencia": {
         "name": "Circuit Ricardo Tormo",
@@ -341,21 +341,21 @@ ESTIMATED_TRACKS = {
                     {"id": 11, "name": "T11", "start": 0.88, "end": 0.92},
                     {"id": 12, "name": "T12", "start": 0.94, "end": 0.98},
                     {"id": 13, "name": "T13", "start": 0.98, "end": 0.99},
-                ]
+                ],
             }
-        }
+        },
     },
 }
 
 # Add _confidence to EVERY existing corner
-for track_key, track in catalog.items():
-    for config_key, config in track.get("configs", {}).items():
+for _track_key, track in catalog.items():
+    for _config_key, config in track.get("configs", {}).items():
         for corner in config.get("corners", []):
             corner["_confidence"] = "profiled"
 
 # Add estimated tracks with _confidence: "estimated" on each corner
 for key, track_data in ESTIMATED_TRACKS.items():
-    for config_key, config in track_data["configs"].items():
+    for _config_key, config in track_data["configs"].items():
         for corner in config.get("corners", []):
             corner["_confidence"] = "estimated"
     catalog[key] = track_data
@@ -370,7 +370,19 @@ print(f"  - Existing tracks updated: {existing_tracks}")
 print(f"  - New estimated tracks added: {new_tracks}")
 
 # Count confidence types
-profiled = sum(1 for t in catalog.values() for c in t.get("configs", {}).values() for _ in c.get("corners", []) if _.get("_confidence") == "profiled")
-estimated = sum(1 for t in catalog.values() for c in t.get("configs", {}).values() for _ in c.get("corners", []) if _.get("_confidence") == "estimated")
+profiled = sum(
+    1
+    for t in catalog.values()
+    for c in t.get("configs", {}).values()
+    for _ in c.get("corners", [])
+    if _.get("_confidence") == "profiled"
+)
+estimated = sum(
+    1
+    for t in catalog.values()
+    for c in t.get("configs", {}).values()
+    for _ in c.get("corners", [])
+    if _.get("_confidence") == "estimated"
+)
 print(f"  - Profiled corners: {profiled}")
 print(f"  - Estimated corners: {estimated}")

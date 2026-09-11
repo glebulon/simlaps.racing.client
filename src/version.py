@@ -7,7 +7,7 @@ Single source of truth for version numbers.
 # Game name (for client display - bottom right)
 GAME_NAME = "SimLaps Client"
 
-# Game display name (for game version display - top left)  
+# Game display name (for game version display - top left)
 GAME_DISPLAY_NAME = "AC EVO"
 
 # Version components
@@ -34,4 +34,3 @@ def get_version() -> str:
 def get_version_tuple() -> tuple[int, int, int]:
     """Get version as tuple for comparison."""
     return (VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH)
-

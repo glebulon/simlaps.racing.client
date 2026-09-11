@@ -5,6 +5,7 @@ Owns telemetry capture start/stop transitions and post-capture analysis flow.
 
 from typing import TYPE_CHECKING, Optional
 
+from src.core.telemetry_capture import TelemetryCapture
 from src.utils.structured_logger import (
     Component,
     log_debug,
@@ -12,10 +13,10 @@ from src.utils.structured_logger import (
     log_exception,
     log_info,
 )
+
 from ..components.status_bar import ConnectionStatus
 from ..components.telemetry_status import TelemetryStatus
 from ..pages.home import HomePage
-from src.core.telemetry_capture import TelemetryCapture
 
 if TYPE_CHECKING:
     from src.core.analyzer import TelemetryAnalyzer
@@ -138,11 +139,7 @@ class TelemetryLifecycleService:
                         Component.APP,
                         "Analysis complete",
                         laps=result.laps_detected,
-                        best_lap_time=(
-                            f"{result.best_lap_time:.1f}s"
-                            if result.best_lap_time is not None
-                            else "none"
-                        ),
+                        best_lap_time=(f"{result.best_lap_time:.1f}s" if result.best_lap_time is not None else "none"),
                     )
                     if home_page:
                         home_page.set_telemetry_status(
@@ -232,11 +229,7 @@ class TelemetryLifecycleService:
                     Component.APP,
                     "Telemetry analysis complete",
                     laps=result.laps_detected,
-                    best_lap_time=(
-                        f"{result.best_lap_time:.2f}s"
-                        if result.best_lap_time is not None
-                        else "none"
-                    ),
+                    best_lap_time=(f"{result.best_lap_time:.2f}s" if result.best_lap_time is not None else "none"),
                     html_path=result.html_path,
                     ai_prompt_path=result.ai_prompt_path,
                 )

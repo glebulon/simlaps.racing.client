@@ -38,6 +38,7 @@ If a car uses new protobuf field numbers for a known parameter, add or adjust
 an entry in PARAMETER_PATTERNS. For entirely new parameters, dump the car's
 setup/limits with inspect_car_setup.py first to find the relevant field numbers.
 """
+
 import json
 import os
 import re
@@ -63,46 +64,361 @@ IGNORED_FILE_TOKENS = {
 
 PARAMETER_PATTERNS = [
     # Tyres / alignment  (limits top_field=4, 4 occurrences: FL FR RL RR)
-    {"label": "Front tyre pressure", "top_field": 4, "occurrence_kind": "front_axle", "setup_field": 1, "limits_child_fields": [1], "validator": "pressure", "category": "basic"},
-    {"label": "Rear tyre pressure", "top_field": 4, "occurrence_kind": "rear_axle", "setup_field": 1, "limits_child_fields": [1], "validator": "pressure", "category": "basic"},
-    {"label": "Front camber", "top_field": 4, "occurrence_kind": "front_axle", "setup_field": 2, "limits_child_fields": [2, 5], "validator": "camber", "max_zero": True, "category": "basic"},
-    {"label": "Rear camber", "top_field": 4, "occurrence_kind": "rear_axle", "setup_field": 2, "limits_child_fields": [2, 5], "validator": "camber", "max_zero": True, "category": "basic"},
-    {"label": "Front toe", "top_field": 4, "occurrence_kind": "front_axle", "setup_field": 3, "limits_child_fields": [3], "validator": "toe", "category": "basic"},
-    {"label": "Rear toe", "top_field": 4, "occurrence_kind": "rear_axle", "setup_field": 3, "limits_child_fields": [3], "validator": "toe", "category": "basic"},
+    {
+        "label": "Front tyre pressure",
+        "top_field": 4,
+        "occurrence_kind": "front_axle",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "validator": "pressure",
+        "category": "basic",
+    },
+    {
+        "label": "Rear tyre pressure",
+        "top_field": 4,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "validator": "pressure",
+        "category": "basic",
+    },
+    {
+        "label": "Front camber",
+        "top_field": 4,
+        "occurrence_kind": "front_axle",
+        "setup_field": 2,
+        "limits_child_fields": [2, 5],
+        "validator": "camber",
+        "max_zero": True,
+        "category": "basic",
+    },
+    {
+        "label": "Rear camber",
+        "top_field": 4,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 2,
+        "limits_child_fields": [2, 5],
+        "validator": "camber",
+        "max_zero": True,
+        "category": "basic",
+    },
+    {
+        "label": "Front toe",
+        "top_field": 4,
+        "occurrence_kind": "front_axle",
+        "setup_field": 3,
+        "limits_child_fields": [3],
+        "validator": "toe",
+        "category": "basic",
+    },
+    {
+        "label": "Rear toe",
+        "top_field": 4,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 3,
+        "limits_child_fields": [3],
+        "validator": "toe",
+        "category": "basic",
+    },
     # Ride height / aero  (limits top_field=6, single occurrence)
-    {"label": "Front ride height", "top_field": 6, "occurrence_kind": "first", "setup_field": 2, "limits_child_fields": [2], "validator": "ride_height", "category": "aero"},
-    {"label": "Rear ride height", "top_field": 6, "occurrence_kind": "first", "setup_field": 3, "limits_child_fields": [3], "validator": "ride_height", "category": "aero"},
-    {"label": "Rear wing angle", "top_field": 6, "occurrence_kind": "first", "setup_field": 5, "limits_child_fields": [5], "validator": "wing_angle", "min_zero": True, "require_enabled": True, "category": "aero"},
+    {
+        "label": "Front ride height",
+        "top_field": 6,
+        "occurrence_kind": "first",
+        "setup_field": 2,
+        "limits_child_fields": [2],
+        "validator": "ride_height",
+        "category": "aero",
+    },
+    {
+        "label": "Rear ride height",
+        "top_field": 6,
+        "occurrence_kind": "first",
+        "setup_field": 3,
+        "limits_child_fields": [3],
+        "validator": "ride_height",
+        "category": "aero",
+    },
+    {
+        "label": "Rear wing angle",
+        "top_field": 6,
+        "occurrence_kind": "first",
+        "setup_field": 5,
+        "limits_child_fields": [5],
+        "validator": "wing_angle",
+        "min_zero": True,
+        "require_enabled": True,
+        "category": "aero",
+    },
     # Fuel  (limits top_field=7)
-    {"label": "Fuel load", "top_field": 7, "occurrence_kind": "first", "setup_field": 1, "limits_child_fields": [1], "validator": "fuel", "category": "basic"},
+    {
+        "label": "Fuel load",
+        "top_field": 7,
+        "occurrence_kind": "first",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "validator": "fuel",
+        "category": "basic",
+    },
     # Electronics  (limits top_field=5, single occurrence, zero-based)
-    {"label": "Traction control", "top_field": 5, "occurrence_kind": "first", "setup_field": 1, "limits_child_fields": [1], "validator": "electronics", "min_zero": True, "require_enabled": True, "category": "electronics"},
-    {"label": "Traction control 2", "top_field": 5, "occurrence_kind": "first", "setup_field": 2, "limits_child_fields": [2], "validator": "electronics", "min_zero": True, "require_enabled": True, "category": "electronics"},
-    {"label": "ABS", "top_field": 5, "occurrence_kind": "first", "setup_field": 3, "limits_child_fields": [3], "validator": "electronics", "min_zero": True, "require_enabled": True, "category": "electronics"},
-    {"label": "Stability control", "top_field": 5, "occurrence_kind": "first", "limits_child_fields": [6], "validator": "electronics", "min_zero": True, "limits_only": True, "require_enabled": True, "category": "electronics"},
+    {
+        "label": "Traction control",
+        "top_field": 5,
+        "occurrence_kind": "first",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "validator": "electronics",
+        "min_zero": True,
+        "require_enabled": True,
+        "category": "electronics",
+    },
+    {
+        "label": "Traction control 2",
+        "top_field": 5,
+        "occurrence_kind": "first",
+        "setup_field": 2,
+        "limits_child_fields": [2],
+        "validator": "electronics",
+        "min_zero": True,
+        "require_enabled": True,
+        "category": "electronics",
+    },
+    {
+        "label": "ABS",
+        "top_field": 5,
+        "occurrence_kind": "first",
+        "setup_field": 3,
+        "limits_child_fields": [3],
+        "validator": "electronics",
+        "min_zero": True,
+        "require_enabled": True,
+        "category": "electronics",
+    },
+    {
+        "label": "Stability control",
+        "top_field": 5,
+        "occurrence_kind": "first",
+        "limits_child_fields": [6],
+        "validator": "electronics",
+        "min_zero": True,
+        "limits_only": True,
+        "require_enabled": True,
+        "category": "electronics",
+    },
     # Suspension  (limits top_field=1, single occurrence)
-    {"label": "Front anti-roll bar", "top_field": 1, "occurrence_kind": "first", "limits_child_fields": [1], "limits_occurrence": 0, "limits_only": True, "require_enabled": True, "validator": "arb", "category": "suspension"},
-    {"label": "Rear anti-roll bar", "top_field": 1, "occurrence_kind": "first", "limits_child_fields": [1], "limits_occurrence": 1, "limits_only": True, "require_enabled": True, "validator": "arb", "category": "suspension"},
-    {"label": "Steer ratio", "top_field": 1, "occurrence_kind": "first", "limits_child_fields": [2], "limits_only": True, "require_enabled": True, "validator": "steer_ratio", "category": "suspension"},
-    {"label": "Brake bias", "top_field": 1, "occurrence_kind": "first", "limits_child_fields": [3], "limits_nested": [1], "limits_only": True, "require_enabled": True, "validator": "brake_bias", "category": "brakes"},
-    {"label": "Brake torque", "top_field": 1, "occurrence_kind": "first", "limits_child_fields": [3], "limits_nested": [2], "limits_only": True, "require_enabled": True, "validator": "brake_torque", "category": "brakes"},
-    {"label": "Differential preload", "top_field": 1, "occurrence_kind": "first", "limits_child_fields": [4], "limits_nested": [3], "limits_only": True, "require_enabled": True, "validator": "diff_preload", "category": "suspension"},
+    {
+        "label": "Front anti-roll bar",
+        "top_field": 1,
+        "occurrence_kind": "first",
+        "limits_child_fields": [1],
+        "limits_occurrence": 0,
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "arb",
+        "category": "suspension",
+    },
+    {
+        "label": "Rear anti-roll bar",
+        "top_field": 1,
+        "occurrence_kind": "first",
+        "limits_child_fields": [1],
+        "limits_occurrence": 1,
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "arb",
+        "category": "suspension",
+    },
+    {
+        "label": "Steer ratio",
+        "top_field": 1,
+        "occurrence_kind": "first",
+        "limits_child_fields": [2],
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "steer_ratio",
+        "category": "suspension",
+    },
+    {
+        "label": "Brake bias",
+        "top_field": 1,
+        "occurrence_kind": "first",
+        "limits_child_fields": [3],
+        "limits_nested": [1],
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "brake_bias",
+        "category": "brakes",
+    },
+    {
+        "label": "Brake torque",
+        "top_field": 1,
+        "occurrence_kind": "first",
+        "limits_child_fields": [3],
+        "limits_nested": [2],
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "brake_torque",
+        "category": "brakes",
+    },
+    {
+        "label": "Differential preload",
+        "top_field": 1,
+        "occurrence_kind": "first",
+        "limits_child_fields": [4],
+        "limits_nested": [3],
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "diff_preload",
+        "category": "suspension",
+    },
     # Springs  (limits top_field=2, 4 occurrences: FL FR RL RR)
-    {"label": "Front wheel rate", "top_field": 2, "occurrence_kind": "front_axle", "setup_field": 1, "limits_child_fields": [1], "require_enabled": True, "validator": "wheel_rate", "category": "suspension"},
-    {"label": "Rear wheel rate", "top_field": 2, "occurrence_kind": "rear_axle", "setup_field": 1, "limits_child_fields": [1], "require_enabled": True, "validator": "wheel_rate", "category": "suspension"},
-    {"label": "Front bumpstop rate", "top_field": 2, "occurrence_kind": "front_axle", "limits_child_fields": [2], "limits_nested": [2], "limits_only": True, "require_enabled": True, "validator": "bumpstop_rate", "category": "suspension"},
-    {"label": "Rear bumpstop rate", "top_field": 2, "occurrence_kind": "rear_axle", "limits_child_fields": [2], "limits_nested": [2], "limits_only": True, "require_enabled": True, "validator": "bumpstop_rate", "category": "suspension"},
-    {"label": "Front bumpstop range", "top_field": 2, "occurrence_kind": "front_axle", "limits_child_fields": [2], "limits_nested": [1], "limits_only": True, "min_zero": True, "require_enabled": True, "validator": "bumpstop_range", "category": "suspension"},
-    {"label": "Rear bumpstop range", "top_field": 2, "occurrence_kind": "rear_axle", "limits_child_fields": [2], "limits_nested": [1], "limits_only": True, "min_zero": True, "require_enabled": True, "validator": "bumpstop_range", "category": "suspension"},
+    {
+        "label": "Front wheel rate",
+        "top_field": 2,
+        "occurrence_kind": "front_axle",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "require_enabled": True,
+        "validator": "wheel_rate",
+        "category": "suspension",
+    },
+    {
+        "label": "Rear wheel rate",
+        "top_field": 2,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "require_enabled": True,
+        "validator": "wheel_rate",
+        "category": "suspension",
+    },
+    {
+        "label": "Front bumpstop rate",
+        "top_field": 2,
+        "occurrence_kind": "front_axle",
+        "limits_child_fields": [2],
+        "limits_nested": [2],
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "bumpstop_rate",
+        "category": "suspension",
+    },
+    {
+        "label": "Rear bumpstop rate",
+        "top_field": 2,
+        "occurrence_kind": "rear_axle",
+        "limits_child_fields": [2],
+        "limits_nested": [2],
+        "limits_only": True,
+        "require_enabled": True,
+        "validator": "bumpstop_rate",
+        "category": "suspension",
+    },
+    {
+        "label": "Front bumpstop range",
+        "top_field": 2,
+        "occurrence_kind": "front_axle",
+        "limits_child_fields": [2],
+        "limits_nested": [1],
+        "limits_only": True,
+        "min_zero": True,
+        "require_enabled": True,
+        "validator": "bumpstop_range",
+        "category": "suspension",
+    },
+    {
+        "label": "Rear bumpstop range",
+        "top_field": 2,
+        "occurrence_kind": "rear_axle",
+        "limits_child_fields": [2],
+        "limits_nested": [1],
+        "limits_only": True,
+        "min_zero": True,
+        "require_enabled": True,
+        "validator": "bumpstop_range",
+        "category": "suspension",
+    },
     # Dampers  (limits top_field=3, 4 occurrences: FL FR RL RR)
-    {"label": "Front slow bump", "top_field": 3, "occurrence_kind": "front_axle", "setup_field": 1, "limits_child_fields": [1], "require_enabled": True, "validator": "slow_damper", "category": "dampers"},
-    {"label": "Rear slow bump", "top_field": 3, "occurrence_kind": "rear_axle", "setup_field": 1, "limits_child_fields": [1], "require_enabled": True, "validator": "slow_damper", "category": "dampers"},
-    {"label": "Front fast bump", "top_field": 3, "occurrence_kind": "front_axle", "setup_field": 2, "limits_child_fields": [2], "require_enabled": True, "validator": "fast_damper", "category": "dampers"},
-    {"label": "Rear fast bump", "top_field": 3, "occurrence_kind": "rear_axle", "setup_field": 2, "limits_child_fields": [2], "require_enabled": True, "validator": "fast_damper", "category": "dampers"},
-    {"label": "Front slow rebound", "top_field": 3, "occurrence_kind": "front_axle", "setup_field": 3, "limits_child_fields": [3], "require_enabled": True, "validator": "slow_damper", "category": "dampers"},
-    {"label": "Rear slow rebound", "top_field": 3, "occurrence_kind": "rear_axle", "setup_field": 3, "limits_child_fields": [3], "require_enabled": True, "validator": "slow_damper", "category": "dampers"},
-    {"label": "Front fast rebound", "top_field": 3, "occurrence_kind": "front_axle", "setup_field": 4, "limits_child_fields": [4], "require_enabled": True, "validator": "fast_damper", "category": "dampers"},
-    {"label": "Rear fast rebound", "top_field": 3, "occurrence_kind": "rear_axle", "setup_field": 4, "limits_child_fields": [4], "require_enabled": True, "validator": "fast_damper", "category": "dampers"},
+    {
+        "label": "Front slow bump",
+        "top_field": 3,
+        "occurrence_kind": "front_axle",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "require_enabled": True,
+        "validator": "slow_damper",
+        "category": "dampers",
+    },
+    {
+        "label": "Rear slow bump",
+        "top_field": 3,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 1,
+        "limits_child_fields": [1],
+        "require_enabled": True,
+        "validator": "slow_damper",
+        "category": "dampers",
+    },
+    {
+        "label": "Front fast bump",
+        "top_field": 3,
+        "occurrence_kind": "front_axle",
+        "setup_field": 2,
+        "limits_child_fields": [2],
+        "require_enabled": True,
+        "validator": "fast_damper",
+        "category": "dampers",
+    },
+    {
+        "label": "Rear fast bump",
+        "top_field": 3,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 2,
+        "limits_child_fields": [2],
+        "require_enabled": True,
+        "validator": "fast_damper",
+        "category": "dampers",
+    },
+    {
+        "label": "Front slow rebound",
+        "top_field": 3,
+        "occurrence_kind": "front_axle",
+        "setup_field": 3,
+        "limits_child_fields": [3],
+        "require_enabled": True,
+        "validator": "slow_damper",
+        "category": "dampers",
+    },
+    {
+        "label": "Rear slow rebound",
+        "top_field": 3,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 3,
+        "limits_child_fields": [3],
+        "require_enabled": True,
+        "validator": "slow_damper",
+        "category": "dampers",
+    },
+    {
+        "label": "Front fast rebound",
+        "top_field": 3,
+        "occurrence_kind": "front_axle",
+        "setup_field": 4,
+        "limits_child_fields": [4],
+        "require_enabled": True,
+        "validator": "fast_damper",
+        "category": "dampers",
+    },
+    {
+        "label": "Rear fast rebound",
+        "top_field": 3,
+        "occurrence_kind": "rear_axle",
+        "setup_field": 4,
+        "limits_child_fields": [4],
+        "require_enabled": True,
+        "validator": "fast_damper",
+        "category": "dampers",
+    },
 ]
 
 
@@ -135,7 +451,7 @@ def decode_message(data: bytes, start: int = 0, end: int | None = None) -> list[
             entry["value"] = value
         elif wire == 2:
             size, pos = read_varint(data, pos)
-            raw = data[pos:pos + size]
+            raw = data[pos : pos + size]
             if len(raw) < size:
                 raise ValueError("truncated length-delimited field")
             pos += size
@@ -145,7 +461,7 @@ def decode_message(data: bytes, start: int = 0, end: int | None = None) -> list[
             except ValueError:
                 entry["raw_hex"] = raw.hex()
         elif wire == 5:
-            raw = data[pos:pos + 4]
+            raw = data[pos : pos + 4]
             if len(raw) < 4:
                 raise ValueError("truncated 32-bit field")
             pos += 4
@@ -317,25 +633,53 @@ def value_in_range(value: float, minimum: float, maximum: float, step: float) ->
 
 
 def is_pressure_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    return 15.0 <= value <= 40.0 and 10.0 <= minimum <= 40.0 and minimum <= maximum <= 45.0 and 0.009 <= step <= 5.0 and 1 <= count <= 200
+    return (
+        15.0 <= value <= 40.0
+        and 10.0 <= minimum <= 40.0
+        and minimum <= maximum <= 45.0
+        and 0.009 <= step <= 5.0
+        and 1 <= count <= 200
+    )
 
 
 def is_camber_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    return -8.0 <= value <= 1.0 and -10.0 <= minimum <= 1.0 and minimum <= maximum <= 2.0 and 0.001 <= step <= 1.0 and 1 <= count <= 100
+    return (
+        -8.0 <= value <= 1.0
+        and -10.0 <= minimum <= 1.0
+        and minimum <= maximum <= 2.0
+        and 0.001 <= step <= 1.0
+        and 1 <= count <= 100
+    )
 
 
 def is_toe_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    return -2.0 <= value <= 2.0 and -2.5 <= minimum <= 2.0 and -2.5 <= maximum <= 2.5 and 0.00001 <= step <= 0.5 and 1 <= count <= 200
+    return (
+        -2.0 <= value <= 2.0
+        and -2.5 <= minimum <= 2.0
+        and -2.5 <= maximum <= 2.5
+        and 0.00001 <= step <= 0.5
+        and 1 <= count <= 200
+    )
 
 
 def is_ride_height_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    metric_scaled = 0.02 <= value <= 0.2 and 0.02 <= minimum <= 0.2 and minimum <= maximum <= 0.25 and 0.0001 <= step <= 0.02
-    millimetre_scaled = 20.0 <= value <= 250.0 and 20.0 <= minimum <= 250.0 and minimum <= maximum <= 250.0 and 1.0 <= step <= 20.0
+    metric_scaled = (
+        0.02 <= value <= 0.2 and 0.02 <= minimum <= 0.2 and minimum <= maximum <= 0.25 and 0.0001 <= step <= 0.02
+    )
+    millimetre_scaled = (
+        20.0 <= value <= 250.0 and 20.0 <= minimum <= 250.0 and minimum <= maximum <= 250.0 and 1.0 <= step <= 20.0
+    )
     return (metric_scaled or millimetre_scaled) and 1 <= count <= 100
 
 
 def is_fuel_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    return 0.0 <= value <= 250.0 and 0.0 <= minimum <= 250.0 and 10.0 <= maximum <= 250.0 and 0.5 <= step <= 10.0 and 1 <= count <= 300
+    return (
+        0.0 <= value <= 250.0
+        and 0.0 <= minimum <= 250.0
+        and 10.0 <= maximum <= 250.0
+        and 0.5 <= step <= 10.0
+        and 1 <= count <= 300
+    )
 
 
 def is_electronics_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
@@ -343,7 +687,12 @@ def is_electronics_candidate(value: float, minimum: float, maximum: float, step:
 
 
 def is_arb_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    return 5000.0 <= minimum <= 100000.0 and minimum <= maximum <= 200000.0 and 100.0 <= step <= 10000.0 and 2 <= count <= 200
+    return (
+        5000.0 <= minimum <= 100000.0
+        and minimum <= maximum <= 200000.0
+        and 100.0 <= step <= 10000.0
+        and 2 <= count <= 200
+    )
 
 
 def is_steer_ratio_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
@@ -363,7 +712,12 @@ def is_diff_preload_candidate(value: float, minimum: float, maximum: float, step
 
 
 def is_wheel_rate_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    return 30000.0 <= minimum <= 300000.0 and minimum <= maximum <= 500000.0 and 100.0 <= step <= 20000.0 and 2 <= count <= 200
+    return (
+        30000.0 <= minimum <= 300000.0
+        and minimum <= maximum <= 500000.0
+        and 100.0 <= step <= 20000.0
+        and 2 <= count <= 200
+    )
 
 
 def is_bumpstop_rate_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
@@ -379,7 +733,9 @@ def is_slow_damper_candidate(value: float, minimum: float, maximum: float, step:
 
 
 def is_fast_damper_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
-    return 500.0 <= minimum <= 5000.0 and minimum <= maximum <= 30000.0 and 100.0 <= step <= 2000.0 and 2 <= count <= 100
+    return (
+        500.0 <= minimum <= 5000.0 and minimum <= maximum <= 30000.0 and 100.0 <= step <= 2000.0 and 2 <= count <= 100
+    )
 
 
 def is_wing_angle_candidate(value: float, minimum: float, maximum: float, step: float, count: int) -> bool:
@@ -457,7 +813,9 @@ def find_matching_limits_child(
             step, minimum, maximum = range_info
             count = settings_count(step, minimum, maximum)
             probe = default_value if default_value is not None else (minimum + maximum) / 2.0
-            if (limits_only or value_in_range(probe, minimum, maximum, step)) and validator(probe, minimum, maximum, step, count):
+            if (limits_only or value_in_range(probe, minimum, maximum, step)) and validator(
+                probe, minimum, maximum, step, count
+            ):
                 return child, count
     return None, None
 

@@ -4,21 +4,23 @@ Owns apply-settings orchestration: runtime service refresh, telemetry toggles,
 and parser restart behavior.
 """
 
-from typing import Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 from src.core.analyzer import TelemetryAnalyzer
 from src.core.discord_notifier import DiscordNotifier
 from src.core.track_catalog import TRACK_CATALOG
-from src.utils.structured_logger import Component, log_info
 from src.utils.config import AppConfig
+from src.utils.structured_logger import Component, log_info
+
 from ..components.telemetry_status import TelemetryButton
 
 if TYPE_CHECKING:
-    from ..app import SimLapsApp
-    from src.core.discord_notifier import DiscordNotifier
-    from src.core.pb_cache import PBCache
     from src.core.api_client import APIClient
+    from src.core.discord_notifier import DiscordNotifier
     from src.core.log_parser import LogParser
+    from src.core.pb_cache import PBCache
+
+    from ..app import SimLapsApp
 
 
 class SettingsService:
@@ -40,19 +42,13 @@ class SettingsService:
         # Validate the enabled webhook before constructing or persisting any
         # replacement state. Disabled integrations may retain an old value,
         # but enabling Discord must never save a URL the notifier would reject.
-        if config.discord_enabled and not DiscordNotifier.validate_webhook_url(
-            config.discord_webhook_url
-        ):
+        if config.discord_enabled and not DiscordNotifier.validate_webhook_url(config.discord_webhook_url):
             raise ValueError("Invalid Discord webhook URL")
 
         server_changed = previous.server_url != config.server_url
         log_path_changed = previous.log_path != config.log_path
-        telemetry_output_changed = (
-            previous.telemetry_output_path != config.telemetry_output_path
-        )
-        telemetry_debug_changed = (
-            previous.telemetry_debug_logs != config.telemetry_debug_logs
-        )
+        telemetry_output_changed = previous.telemetry_output_path != config.telemetry_output_path
+        telemetry_debug_changed = previous.telemetry_debug_logs != config.telemetry_debug_logs
 
         # Construct every replacement before mutating live application state.
         # This prevents a bad import or constructor from leaving Settings half
@@ -146,7 +142,7 @@ class SettingsService:
                 )
             app._telemetry_analyzer = staged_analyzer
             app._telemetry_button = staged_button
-            assert app._telemetry_button is not None
+            assert app._telemetry_button is not None  # noqa: S101
             app._telemetry_button.update_path(config.telemetry_output_path)
             app._attach_telemetry_ui()
         elif not config.telemetry_enabled and app._telemetry_capture:

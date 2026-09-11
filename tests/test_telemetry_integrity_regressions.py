@@ -143,10 +143,13 @@ def _prompt_data(laps: list[dict], *, comparison_lap_num: int | None) -> dict:
 
 
 def test_build_track_uses_contact_centroid_and_preserves_fuel():
-    track = build_track([
-        _frame(0, fuel=5.0, x=-306.0, z=-206.0),
-        _frame(1, fuel=4.9, x=-300.0, z=-200.0),
-    ], hz=10.0)
+    track = build_track(
+        [
+            _frame(0, fuel=5.0, x=-306.0, z=-206.0),
+            _frame(1, fuel=4.9, x=-300.0, z=-200.0),
+        ],
+        hz=10.0,
+    )
 
     assert [(point["x"], point["z"]) for point in track] == [
         (-306.0, -206.0),
@@ -173,15 +176,17 @@ def test_opposite_sign_equal_magnitude_camber_is_not_a_mismatch():
     lap = {
         "lap_num": 1,
         "corners": [corner],
-        "track": [{
-            "frame": 10,
-            "sus_fl": 0.05,
-            "sus_fr": 0.05,
-            "sus_rl": 0.05,
-            "sus_rr": 0.05,
-            "camber_fl": -0.02943,
-            "camber_fr": 0.03020,
-        }],
+        "track": [
+            {
+                "frame": 10,
+                "sus_fl": 0.05,
+                "sus_fr": 0.05,
+                "sus_rl": 0.05,
+                "sus_rr": 0.05,
+                "camber_fl": -0.02943,
+                "camber_fr": 0.03020,
+            }
+        ],
     }
 
     result = analyze_suspension(
@@ -207,9 +212,7 @@ async def test_ai_prompt_excludes_invalid_lap_from_coaching_aggregates(tmp_path)
         data,
         output_prefix="invalid_exclusion",
     )
-    prompt = (tmp_path / "telemetry_invalid_exclusion_ai_prompt.txt").read_text(
-        encoding="utf-8"
-    )
+    prompt = (tmp_path / "telemetry_invalid_exclusion_ai_prompt.txt").read_text(encoding="utf-8")
 
     assert path == str(tmp_path / "telemetry_invalid_exclusion_ai_prompt.txt")
     assert "Top speed: 178.0 km/h" in prompt
@@ -227,9 +230,7 @@ async def test_one_valid_lap_has_no_self_comparison_coaching(tmp_path):
         data,
         output_prefix="one_valid",
     )
-    prompt = (tmp_path / "telemetry_one_valid_ai_prompt.txt").read_text(
-        encoding="utf-8"
-    )
+    prompt = (tmp_path / "telemetry_one_valid_ai_prompt.txt").read_text(encoding="utf-8")
 
     assert "COMPARATIVE COACHING UNAVAILABLE" in prompt
     assert "TIME LOSS RANKING" not in prompt
@@ -262,9 +263,7 @@ async def test_all_invalid_prompt_does_not_blame_good_progress_coverage(tmp_path
         data,
         output_prefix="all_invalid",
     )
-    prompt = (tmp_path / "telemetry_all_invalid_ai_prompt.txt").read_text(
-        encoding="utf-8"
-    )
+    prompt = (tmp_path / "telemetry_all_invalid_ai_prompt.txt").read_text(encoding="utf-8")
 
     assert "no valid completed lap is available" in prompt
     assert "record at least one valid lap for coaching" in prompt
@@ -377,7 +376,7 @@ def test_html_template_substitutes_trusted_scripts_before_report_data():
     assert "<script>trusted-chart __DATA__</script>" in html
     assert "<script>trusted-annotation __CHART_JS__</script>" in html
     assert 'const DATA = {"value":"__CHART_JS__"};' in html
-    assert html.count('trusted-chart') == 1
+    assert html.count("trusted-chart") == 1
 
 
 @pytest.mark.asyncio

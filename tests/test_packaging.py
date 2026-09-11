@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import sys
 import zipfile
+from pathlib import Path
 
 import pytest
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,7 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 def _copy_tracked_tree(destination: Path) -> None:
     """Copy the current tracked-file tree to an isolated build directory."""
     result = subprocess.run(
-        ["git", "ls-files", "-z"],
+        ["git", "ls-files", "-z"],  # noqa: S607
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
@@ -41,7 +40,7 @@ def test_wheel_contains_catalogs_and_importable_console_entrypoint(tmp_path: Pat
 
     wheel_dir = tmp_path / "wheels"
     wheel_dir.mkdir()
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [
             sys.executable,
             "-m",
@@ -70,7 +69,7 @@ def test_wheel_contains_catalogs_and_importable_console_entrypoint(tmp_path: Pat
     assert "src/core/analyzer/vendor/chartjs-plugin-annotation.LICENSE.md" in names
 
     install_target = tmp_path / "installed"
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [
             sys.executable,
             "-m",
@@ -107,7 +106,7 @@ assert callable(entry_point.load())
 """
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
-    subprocess.run(
+    subprocess.run(  # noqa: S603
         [sys.executable, "-c", probe],
         cwd=install_target,
         env=env,

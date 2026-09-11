@@ -3,9 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 from src.ui.components.telemetry_status import (
-    TelemetryStatusIndicator,
     TelemetryButton,
     TelemetryStatus,
+    TelemetryStatusIndicator,
 )
 
 
@@ -72,10 +72,10 @@ def test_set_status_complete():
         indicator = TelemetryStatusIndicator()
 
         with patch.object(indicator, "update"):
-            indicator.set_status(TelemetryStatus.COMPLETE, result_path="/tmp/out.html")
+            indicator.set_status(TelemetryStatus.COMPLETE, result_path="/tmp/out.html")  # noqa: S108
 
         assert indicator._status == TelemetryStatus.COMPLETE
-        assert indicator._last_result_path == "/tmp/out.html"
+        assert indicator._last_result_path == "/tmp/out.html"  # noqa: S108
         assert indicator.visible is True
 
 
@@ -123,11 +123,11 @@ def test_telemetry_button_handle_click():
         mock_ft.Text.return_value = MagicMock()
         mock_ft.Button.return_value = MagicMock()
         callback = MagicMock()
-        button = TelemetryButton(on_click=callback, output_path="/tmp/telemetry")
+        button = TelemetryButton(on_click=callback, output_path="/tmp/telemetry")  # noqa: S108
 
         event = MagicMock()
         button._handle_click(event)
-        callback.assert_called_once_with(event, "/tmp/telemetry")
+        callback.assert_called_once_with(event, "/tmp/telemetry")  # noqa: S108
 
 
 def test_telemetry_button_handle_click_no_callback():

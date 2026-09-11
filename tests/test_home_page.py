@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
 
 import flet as ft
 
-from src.ui.pages.home import HomePage, UPDATE_DOWNLOAD_URL
+from src.ui.pages.home import UPDATE_DOWNLOAD_URL, HomePage
 from src.utils.config import AppConfig
 
 

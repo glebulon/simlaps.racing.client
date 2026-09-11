@@ -93,9 +93,7 @@ async def test_trimmed_history_entry_binding_is_discarded():
     ],
     ids=["session-restart", "car-removed", "game-stopped", "game-started"],
 )
-async def test_session_boundaries_keep_bindings_for_delayed_updates_and_retries(
-    callback_name, callback_args
-):
+async def test_session_boundaries_keep_bindings_for_delayed_updates_and_retries(callback_name, callback_args):
     app = _app()
     app._session_lifecycle_service = MagicMock()
     app._session_lifecycle_service.handle_session_restart = AsyncMock()

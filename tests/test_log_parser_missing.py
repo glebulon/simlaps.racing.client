@@ -119,10 +119,7 @@ class TestHistoricalPassClearsLaps:
     @pytest.mark.asyncio
     async def test_historical_pass_clears_laps_before_live_tail(self, tmp_path):
         log_file = tmp_path / "test.log"
-        log_file.write_text(
-            "TRACK NAME spa\n"
-            "New lap carId=abc123 time=1:30.000\n"
-        )
+        log_file.write_text("TRACK NAME spa\nNew lap carId=abc123 time=1:30.000\n")
 
         parser = LogParser(log_path=str(log_file))
         parser.context.car_uuid = "abc123"
@@ -130,9 +127,7 @@ class TestHistoricalPassClearsLaps:
         parser._running = True
 
         try:
-            await asyncio.wait_for(
-                parser.follow(poll_interval=0.01), timeout=0.1
-            )
+            await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=0.1)
         except asyncio.TimeoutError:
             pass
 

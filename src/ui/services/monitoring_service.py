@@ -11,8 +11,9 @@ from typing import Awaitable, Callable, Optional
 import flet as ft
 
 from src.core.log_parser import LogParser
-from src.core.security import is_game_running, GameProcessStatus
-from src.utils.structured_logger import log_info, Component
+from src.core.security import GameProcessStatus, is_game_running
+from src.utils.structured_logger import Component, log_info
+
 from ..components.status_bar import ConnectionStatus
 from ..pages.home import HomePage
 
@@ -120,6 +121,6 @@ class MonitoringService:
                             match = re.search(r"Build release ([^,]+),", line)
                             if match:
                                 return match.group(1)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         return None

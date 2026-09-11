@@ -11,10 +11,9 @@ import pytest
 
 from src.core.log_parser import LogParser
 from src.core.telemetry_analyzer import TelemetryAnalyzer, build_track, detect_laps
-from src.core.telemetry_capture import FrameData, TelemetryCapture, GameProcessStatus
+from src.core.telemetry_capture import FrameData, GameProcessStatus, TelemetryCapture
 from src.core.telemetry_decoder import decode_graphics, decode_physics, decode_static
 from src.models import SharedSessionManager
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -68,7 +67,10 @@ def test_capture_retains_contiguous_race_and_invalidation_signals(captured_rows)
     }
     for index, values in expected.items():
         graphics = decode_frame(captured_rows[index]).graphics
-        assert tuple(graphics[key] for key in ("current_lap_time_ms", "last_laptime_ms", "completed_laps", "is_valid_lap")) == values
+        assert (
+            tuple(graphics[key] for key in ("current_lap_time_ms", "last_laptime_ms", "completed_laps", "is_valid_lap"))
+            == values
+        )
 
 
 @pytest.mark.asyncio
@@ -78,7 +80,9 @@ async def test_captured_two_complete_laps_reach_analyzer(captured_rows, tmp_path
     # completion samples. Capture output indices are relative to this slice.
     rows = captured_rows[251:1362]
     manager = SharedSessionManager()
-    capture = TelemetryCapture(output_dir=str(tmp_path), hz=10.0, debug_logs=False, session_manager=manager, record_frames=record_frames)
+    capture = TelemetryCapture(
+        output_dir=str(tmp_path), hz=10.0, debug_logs=False, session_manager=manager, record_frames=record_frames
+    )
     cursor = 0
 
     class CapturedRegionReader:
@@ -97,9 +101,14 @@ async def test_captured_two_complete_laps_reach_analyzer(captured_rows, tmp_path
         def close(self):
             pass
 
-    readers = {key: CapturedRegionReader(key, size) for key, size in (("physics", 1024), ("graphics", 4096), ("static", 2048))}
+    readers = {
+        key: CapturedRegionReader(key, size) for key, size in (("physics", 1024), ("graphics", 4096), ("static", 2048))
+    }
     monkeypatch.setattr(capture, "_connect_regions", lambda: readers)
-    monkeypatch.setattr("src.core.telemetry_capture.is_game_running", lambda: GameProcessStatus.RUNNING if cursor < len(rows) else GameProcessStatus.NOT_RUNNING)
+    monkeypatch.setattr(
+        "src.core.telemetry_capture.is_game_running",
+        lambda: GameProcessStatus.RUNNING if cursor < len(rows) else GameProcessStatus.NOT_RUNNING,
+    )
     # Sampling data already has the original cadence. Replay it without a
     # 111-second wall-clock wait; analysis still uses the captured 10 Hz rate.
     capture._interval = 0
@@ -125,9 +134,7 @@ async def test_captured_two_complete_laps_reach_analyzer(captured_rows, tmp_path
         return await original_generate(data, prefix)
 
     monkeypatch.setattr(analyzer, "_generate_ai_prompt", observe_prompt)
-    result = await analyzer.analyze(
-        frames, hz=10.0, output_prefix="captured_race"
-    )
+    result = await analyzer.analyze(frames, hz=10.0, output_prefix="captured_race")
     assert result.laps_detected == 2
     # The invalid second lap is faster; it must not become the reference/PB.
     assert result.best_lap_time == pytest.approx(56.350, abs=0.2)
@@ -165,8 +172,11 @@ async def test_real_log_follow_replays_ordered_player_laps(tmp_path, historical)
             finished.set()
 
     parser = LogParser(
-        log_path=str(path), on_status_change=status, on_lap_complete=on_lap,
-        on_session_restart=restart, on_game_status_change=game_status,
+        log_path=str(path),
+        on_status_change=status,
+        on_lap_complete=on_lap,
+        on_session_restart=restart,
+        on_game_status_change=game_status,
     )
     task = asyncio.create_task(parser.follow(poll_interval=0.001))
     try:
@@ -178,7 +188,19 @@ async def test_real_log_follow_replays_ordered_player_laps(tmp_path, historical)
             with path.open("ab") as handle:
                 handle.write(data)
             await asyncio.wait_for(finished.wait(), timeout=5)
-            assert [lap[0] for lap in laps] == [115264, 105177, 108180, 123071, 105879, 104859, 115214, 102186, 112717, 102957, 103215]
+            assert [lap[0] for lap in laps] == [
+                115264,
+                105177,
+                108180,
+                123071,
+                105879,
+                104859,
+                115214,
+                102186,
+                112717,
+                102957,
+                103215,
+            ]
             assert restarts == [3, 6]
             assert all(lap[2] != "Unknown" and lap[3] == "ks_mazda_mx5_nd_cup" for lap in laps)
     finally:

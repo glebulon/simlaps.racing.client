@@ -38,11 +38,7 @@ class PromptContext:
         invalid_laps = tuple(lap for lap in all_laps if not lap.get("is_valid", True))
         requested_best_lap_num = data.get("best_lap_num")
         best_lap = next(
-            (
-                lap
-                for lap in valid_laps
-                if lap.get("lap_num") == requested_best_lap_num
-            ),
+            (lap for lap in valid_laps if lap.get("lap_num") == requested_best_lap_num),
             None,
         )
         if best_lap is None and valid_laps:
@@ -52,9 +48,7 @@ class PromptContext:
             best_lap = min(all_laps, key=lambda lap: lap["lap_time_s"])
         worst_lap = max(valid_laps or all_laps, key=lambda lap: lap["lap_time_s"]) if all_laps else None
         time_diff = (
-            worst_lap["lap_time_s"] - best_lap["lap_time_s"]
-            if best_lap is not None and worst_lap is not None
-            else 0.0
+            worst_lap["lap_time_s"] - best_lap["lap_time_s"] if best_lap is not None and worst_lap is not None else 0.0
         )
         analysis_mode = data.get("analysis_mode", "diagnostic")
         ref_corners = tuple(data.get("ref_corners", []))
@@ -62,10 +56,7 @@ class PromptContext:
         if no_valid_laps and all_laps:
             analysis_mode = "diagnostic"
             ref_corners = ()
-            note = (
-                "No valid completed laps were available; invalid laps are shown "
-                "for diagnostics only."
-            )
+            note = "No valid completed laps were available; invalid laps are shown for diagnostics only."
             if note not in analysis_notes:
                 analysis_notes.append(note)
         reference_lap_num = data.get("reference_lap_num")

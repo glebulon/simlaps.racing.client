@@ -16,6 +16,7 @@ from src.utils.structured_logger import (
     log_error,
     log_exception,
 )
+
 from ..components.lap_card import LapCardStatus
 from ..pages.history import HistoryEntry
 from ..pages.home import HomePage
@@ -93,9 +94,7 @@ class LapProcessingService:
         # invalidate a lap, so SHM validity is only used for the real-time
         # in-progress display — never to override a completed-lap verdict.
         effective_is_valid = lap.is_valid
-        should_submit = config.auto_submit and (
-            effective_is_valid or config.submit_invalid_laps
-        )
+        should_submit = config.auto_submit and (effective_is_valid or config.submit_invalid_laps)
         log_debug(
             Component.APP,
             "Lap submission decision",

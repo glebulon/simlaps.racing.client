@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import re
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
-
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -31,7 +30,7 @@ def _fixture_files() -> list[Path]:
     """Return tracked fixtures, with a source-tree fallback for sdists."""
     repo_root = FIXTURES_DIR.parents[1]
     result = subprocess.run(
-        ["git", "ls-files", "--cached", "--", "tests/fixtures"],
+        ["git", "ls-files", "--cached", "--", "tests/fixtures"],  # noqa: S607
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -85,7 +84,7 @@ def test_captured_fixture_provenance_and_identity_fields() -> None:
             assert len(bytes.fromhex(frame[key])) == size
         graphics = bytes.fromhex(frame["graphics_raw"])
         for start, allowed in ((3020, b"Fixture Driver"), (3053, b"Fixture Surname")):
-            assert graphics[start:start + 33] in (b"\0" * 33, allowed.ljust(33, b"\0"))
+            assert graphics[start : start + 33] in (b"\0" * 33, allowed.ljust(33, b"\0"))
     log = (FIXTURES_DIR / "sample_log.txt").read_bytes()
     assert len(log.splitlines()) == 14672
     # IDs and timestamp syntax are not inherently sensitive. Check the actual

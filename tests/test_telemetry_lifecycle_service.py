@@ -101,9 +101,7 @@ async def test_stop_capture_logs_none_when_all_invalid_session_has_no_best():
         )
 
     completion_logs = [
-        call
-        for call in log_info.call_args_list
-        if len(call.args) > 1 and call.args[1] == "Telemetry analysis complete"
+        call for call in log_info.call_args_list if len(call.args) > 1 and call.args[1] == "Telemetry analysis complete"
     ]
     assert len(completion_logs) == 1
     assert completion_logs[0].kwargs["best_lap_time"] == "none"
@@ -388,6 +386,7 @@ async def test_handle_auto_stop_sets_connection_status():
     )
 
     from src.ui.components.status_bar import ConnectionStatus
+
     home_page.set_connection_status.assert_called_once_with(
         ConnectionStatus.CONNECTED,
         "Session ended (game_not_running)",

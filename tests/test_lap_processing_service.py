@@ -3,13 +3,16 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.models import SessionData, LapData as SessionLapData
+from src.models import LapData as SessionLapData
+from src.models import SessionData
 from src.ui.components.lap_card import LapCardStatus
 from src.ui.services.lap_processing_service import LapProcessingService
 from src.utils.config import AppConfig
 
 
-def _make_deps(*, auto_submit: bool = False, submit_invalid_laps: bool = False, telemetry_enabled: bool = False) -> dict:
+def _make_deps(
+    *, auto_submit: bool = False, submit_invalid_laps: bool = False, telemetry_enabled: bool = False
+) -> dict:
     config = AppConfig(
         auto_submit=auto_submit,
         submit_invalid_laps=submit_invalid_laps,
@@ -279,9 +282,7 @@ async def test_handle_lap_complete_records_telemetry_boundary_when_capturing():
         **deps,
     )
 
-    deps["telemetry_capture"].record_lap_boundary.assert_called_once_with(
-        90000, 1, "VALID"
-    )
+    deps["telemetry_capture"].record_lap_boundary.assert_called_once_with(90000, 1, "VALID")
 
 
 @pytest.mark.asyncio
@@ -312,9 +313,7 @@ async def test_handle_lap_complete_records_structural_outlap_boundary():
         **deps,
     )
 
-    deps["telemetry_capture"].record_lap_boundary.assert_called_once_with(
-        120000, 1, "OUTLAP"
-    )
+    deps["telemetry_capture"].record_lap_boundary.assert_called_once_with(120000, 1, "OUTLAP")
     deps["home_page"].add_lap.assert_not_called()
     deps["pb_cache"].check_and_update_pb.assert_not_called()
     deps["schedule_submission"].assert_not_called()

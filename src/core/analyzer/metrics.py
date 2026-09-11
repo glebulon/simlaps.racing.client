@@ -1,11 +1,10 @@
 """Analysis metric functions — extracted from telemetry_analyzer.py."""
+
 import math
 from typing import Any, Dict, List, Optional
 
 from src.core.analyzer._util import (
     _avg,
-    _find_frame_index,
-    _optional_float,
     _trend_direction,
 )
 
@@ -77,14 +76,11 @@ def analyze_corner_phases(
 
     # Coast frames
     coast_frames_half_window = int(0.5 * hz)
-    apex_vicinity = [
-        pt for pt in corner_zone
-        if abs(pt["frame"] - apex_frame) <= coast_frames_half_window
-    ]
+    apex_vicinity = [pt for pt in corner_zone if abs(pt["frame"] - apex_frame) <= coast_frames_half_window]
     coast_frames = sum(
-        1 for pt in apex_vicinity
-        if ((pt.get("gas_percent", pt.get("gas", 0)) or 0) < 0.10
-            and (pt.get("brake", 0) or 0) < 0.10)
+        1
+        for pt in apex_vicinity
+        if ((pt.get("gas_percent", pt.get("gas", 0)) or 0) < 0.10 and (pt.get("brake", 0) or 0) < 0.10)
     )
 
     # Peak braking G
@@ -113,10 +109,7 @@ def analyze_grip_utilization(
     hz: float,
 ) -> Optional[Dict]:
     """Analyze grip usage through friction circle metrics."""
-    corner_pts = [
-        pt for pt in track
-        if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
-    ]
+    corner_pts = [pt for pt in track if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]]
     if len(corner_pts) < 3:
         return None
 
@@ -129,7 +122,7 @@ def analyze_grip_utilization(
     for pt in corner_pts:
         lat_g = abs(pt.get("acc_g_x", 0) or 0)
         long_g = abs(pt.get("acc_g_z", 0) or 0)
-        total_g = math.sqrt(lat_g ** 2 + long_g ** 2)
+        total_g = math.sqrt(lat_g**2 + long_g**2)
         total_gs.append(total_g)
         lat_gs.append(lat_g)
         long_gs.append(long_g)
@@ -244,8 +237,7 @@ def analyze_tyre_grip_degradation(laps: List[Dict]) -> Dict:
             )
         if trends["peak_slip_angle"] == "RISING":
             flags.append(
-                "Peak slip angles are growing each lap — the car is sliding more, "
-                "another sign of grip falloff."
+                "Peak slip angles are growing each lap — the car is sliding more, another sign of grip falloff."
             )
         if trends["wear"] == "RISING" and end_wear and end_wear[-1] - end_wear[0] > 1.0:
             flags.append(
@@ -275,68 +267,73 @@ def analyze_electronics_per_lap(laps: List[Dict]) -> List[Dict]:
             return int(v) if v is not None else None
 
         def _changed(key: str) -> bool:
-            f = first.get(key)
-            ll = last.get(key)
+            f = first.get(key)  # noqa: B023
+            ll = last.get(key)  # noqa: B023
             return f is not None and ll is not None and f != ll
 
-        result.append({
-            "lap_num": lap["lap_num"],
-            "tc_level": _val(first, "tc_level"),
-            "abs_level": _val(first, "abs_level"),
-            "engine_map": _val(first, "engine_map_level"),
-            "diff_power": _val(first, "diff_power_level"),
-            "diff_coast": _val(first, "diff_coast_level"),
-            "front_bump_damper": _val(first, "front_bump_damper"),
-            "front_rebound_damper": _val(first, "front_rebound_damper"),
-            "rear_bump_damper": _val(first, "rear_bump_damper"),
-            "rear_rebound_damper": _val(first, "rear_rebound_damper"),
-            "perf_mode": _val(first, "electronics_perf_mode"),
-            "tc_changed": _changed("tc_level"),
-            "abs_changed": _changed("abs_level"),
-            "engine_map_changed": _changed("engine_map_level"),
-            "tc_level_min": _val(first, "tc_level_min"),
-            "abs_level_min": _val(first, "abs_level_min"),
-            "brake_bias_min": first.get("brake_bias_min"),
-            "engine_map_min": _val(first, "engine_map_min"),
-            "diff_power_min": _val(first, "diff_power_min"),
-            "diff_coast_min": _val(first, "diff_coast_min"),
-            "front_bump_damper_min": _val(first, "front_bump_damper_min"),
-            "front_rebound_damper_min": _val(first, "front_rebound_damper_min"),
-            "rear_bump_damper_min": _val(first, "rear_bump_damper_min"),
-            "rear_rebound_damper_min": _val(first, "rear_rebound_damper_min"),
-            "perf_mode_min": _val(first, "perf_mode_min"),
-            "tc_level_max": _val(first, "tc_level_max"),
-            "abs_level_max": _val(first, "abs_level_max"),
-            "brake_bias_max": first.get("brake_bias_max"),
-            "engine_map_max": _val(first, "engine_map_max"),
-            "diff_power_max": _val(first, "diff_power_max"),
-            "diff_coast_max": _val(first, "diff_coast_max"),
-            "front_bump_damper_max": _val(first, "front_bump_damper_max"),
-            "front_rebound_damper_max": _val(first, "front_rebound_damper_max"),
-            "rear_bump_damper_max": _val(first, "rear_bump_damper_max"),
-            "rear_rebound_damper_max": _val(first, "rear_rebound_damper_max"),
-            "perf_mode_max": _val(first, "perf_mode_max"),
-            "tc_level_modifiable": first.get("tc_level_modifiable"),
-            "abs_level_modifiable": first.get("abs_level_modifiable"),
-            "brake_bias_modifiable": first.get("brake_bias_modifiable"),
-            "engine_map_modifiable": first.get("engine_map_modifiable"),
-            "diff_power_modifiable": first.get("diff_power_modifiable"),
-            "diff_coast_modifiable": first.get("diff_coast_modifiable"),
-            "front_bump_damper_modifiable": first.get("front_bump_damper_modifiable"),
-            "front_rebound_damper_modifiable": first.get("front_rebound_damper_modifiable"),
-            "rear_bump_damper_modifiable": first.get("rear_bump_damper_modifiable"),
-            "rear_rebound_damper_modifiable": first.get("rear_rebound_damper_modifiable"),
-            "pitlimiter_modifiable": first.get("pitlimiter_modifiable"),
-            "perf_mode_modifiable": first.get("perf_mode_modifiable"),
-        })
+        result.append(
+            {
+                "lap_num": lap["lap_num"],
+                "tc_level": _val(first, "tc_level"),
+                "abs_level": _val(first, "abs_level"),
+                "engine_map": _val(first, "engine_map_level"),
+                "diff_power": _val(first, "diff_power_level"),
+                "diff_coast": _val(first, "diff_coast_level"),
+                "front_bump_damper": _val(first, "front_bump_damper"),
+                "front_rebound_damper": _val(first, "front_rebound_damper"),
+                "rear_bump_damper": _val(first, "rear_bump_damper"),
+                "rear_rebound_damper": _val(first, "rear_rebound_damper"),
+                "perf_mode": _val(first, "electronics_perf_mode"),
+                "tc_changed": _changed("tc_level"),
+                "abs_changed": _changed("abs_level"),
+                "engine_map_changed": _changed("engine_map_level"),
+                "tc_level_min": _val(first, "tc_level_min"),
+                "abs_level_min": _val(first, "abs_level_min"),
+                "brake_bias_min": first.get("brake_bias_min"),
+                "engine_map_min": _val(first, "engine_map_min"),
+                "diff_power_min": _val(first, "diff_power_min"),
+                "diff_coast_min": _val(first, "diff_coast_min"),
+                "front_bump_damper_min": _val(first, "front_bump_damper_min"),
+                "front_rebound_damper_min": _val(first, "front_rebound_damper_min"),
+                "rear_bump_damper_min": _val(first, "rear_bump_damper_min"),
+                "rear_rebound_damper_min": _val(first, "rear_rebound_damper_min"),
+                "perf_mode_min": _val(first, "perf_mode_min"),
+                "tc_level_max": _val(first, "tc_level_max"),
+                "abs_level_max": _val(first, "abs_level_max"),
+                "brake_bias_max": first.get("brake_bias_max"),
+                "engine_map_max": _val(first, "engine_map_max"),
+                "diff_power_max": _val(first, "diff_power_max"),
+                "diff_coast_max": _val(first, "diff_coast_max"),
+                "front_bump_damper_max": _val(first, "front_bump_damper_max"),
+                "front_rebound_damper_max": _val(first, "front_rebound_damper_max"),
+                "rear_bump_damper_max": _val(first, "rear_bump_damper_max"),
+                "rear_rebound_damper_max": _val(first, "rear_rebound_damper_max"),
+                "perf_mode_max": _val(first, "perf_mode_max"),
+                "tc_level_modifiable": first.get("tc_level_modifiable"),
+                "abs_level_modifiable": first.get("abs_level_modifiable"),
+                "brake_bias_modifiable": first.get("brake_bias_modifiable"),
+                "engine_map_modifiable": first.get("engine_map_modifiable"),
+                "diff_power_modifiable": first.get("diff_power_modifiable"),
+                "diff_coast_modifiable": first.get("diff_coast_modifiable"),
+                "front_bump_damper_modifiable": first.get("front_bump_damper_modifiable"),
+                "front_rebound_damper_modifiable": first.get("front_rebound_damper_modifiable"),
+                "rear_bump_damper_modifiable": first.get("rear_bump_damper_modifiable"),
+                "rear_rebound_damper_modifiable": first.get("rear_rebound_damper_modifiable"),
+                "pitlimiter_modifiable": first.get("pitlimiter_modifiable"),
+                "perf_mode_modifiable": first.get("perf_mode_modifiable"),
+            }
+        )
     return result
 
 
 def analyze_brake_thermals(laps: List[Dict]) -> Dict[str, Any]:
     """Analyze brake temperatures across laps for imbalance and fade."""
+
     def _avg_temp(points: List[Dict], keys: List[str]) -> Optional[float]:
         values = [
-            pt.get(key, 0) for pt in points for key in keys
+            pt.get(key, 0)
+            for pt in points
+            for key in keys
             if isinstance(pt.get(key, 0), (int, float)) and pt.get(key, 0) > 0
         ]
         return sum(values) / len(values) if values else None
@@ -346,15 +343,19 @@ def analyze_brake_thermals(laps: List[Dict]) -> Dict[str, Any]:
         track_pts = lap.get("track", [])
         braking_pts = [pt for pt in track_pts if (pt.get("brake") or 0) > 0.4]
         front_peaks = [
-            pt.get(key, 0) for pt in track_pts for key in ("brake_temp_fl", "brake_temp_fr")
+            pt.get(key, 0)
+            for pt in track_pts
+            for key in ("brake_temp_fl", "brake_temp_fr")
             if isinstance(pt.get(key, 0), (int, float)) and pt.get(key, 0) > 0
         ]
-        per_lap.append({
-            "lap_num": lap["lap_num"],
-            "front_avg": _avg_temp(braking_pts, ["brake_temp_fl", "brake_temp_fr"]),
-            "rear_avg": _avg_temp(braking_pts, ["brake_temp_rl", "brake_temp_rr"]),
-            "peak_front": max(front_peaks) if front_peaks else None,
-        })
+        per_lap.append(
+            {
+                "lap_num": lap["lap_num"],
+                "front_avg": _avg_temp(braking_pts, ["brake_temp_fl", "brake_temp_fr"]),
+                "rear_avg": _avg_temp(braking_pts, ["brake_temp_rl", "brake_temp_rr"]),
+                "peak_front": max(front_peaks) if front_peaks else None,
+            }
+        )
 
     imbalance_note: Optional[str] = None
     front_avgs = [e["front_avg"] for e in per_lap if e["front_avg"] is not None]
@@ -377,7 +378,7 @@ def analyze_brake_thermals(laps: List[Dict]) -> Dict[str, Any]:
     fade_note: Optional[str] = None
     peaks = [e["peak_front"] for e in per_lap if e["peak_front"] is not None]
     if len(peaks) >= 3:
-        rising = all(later >= earlier for earlier, later in zip(peaks, peaks[1:]))
+        rising = all(later >= earlier for earlier, later in zip(peaks, peaks[1:], strict=False))
         total_rise = peaks[-1] - peaks[0]
         if rising and total_rise > 60:
             fade_note = (
@@ -402,10 +403,7 @@ def analyze_steering_smoothness(
     Returns ``{reversals, peak_steer_rate, avg_steer_rate, smoothness_score}``
     or ``None`` if the corner zone is too short.
     """
-    corner_pts = [
-        pt for pt in lap_track
-        if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
-    ]
+    corner_pts = [pt for pt in lap_track if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]]
     if len(corner_pts) < 4:
         return None
 
@@ -464,10 +462,7 @@ def analyze_throttle_exit(
     Returns ``{time_to_full_throttle, throttle_variance, modulation_count, exit_profile}``
     or ``None`` if the exit zone is too short.
     """
-    corner_pts = [
-        pt for pt in lap_track
-        if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]
-    ]
+    corner_pts = [pt for pt in lap_track if corner["start_frame"] <= pt["frame"] <= corner["end_frame"]]
     if len(corner_pts) < 4:
         return None
 
@@ -494,19 +489,13 @@ def analyze_throttle_exit(
             break
 
     # Throttle deltas (variance of step changes)
-    gas_values = [
-        pt.get("gas_percent", pt.get("gas", 0)) or 0
-        for pt in exit_pts
-    ]
+    gas_values = [pt.get("gas_percent", pt.get("gas", 0)) or 0 for pt in exit_pts]
     gas_deltas: List[float] = []
     for i in range(1, len(gas_values)):
         gas_deltas.append(gas_values[i] - gas_values[i - 1])
 
     avg_delta = sum(gas_deltas) / len(gas_deltas) if gas_deltas else 0.0
-    throttle_variance = (
-        sum((d - avg_delta) ** 2 for d in gas_deltas) / len(gas_deltas)
-        if gas_deltas else 0.0
-    )
+    throttle_variance = sum((d - avg_delta) ** 2 for d in gas_deltas) / len(gas_deltas) if gas_deltas else 0.0
 
     # Modulation count (direction reversals in throttle)
     modulation_count = 0
@@ -555,8 +544,7 @@ def analyze_suspension(
     }
 
     _any_sus = any(
-        pt.get(f"sus_{w}", 0) != 0
-        for lap in laps for pt in lap.get("track", []) for w in ("fl", "fr", "rl", "rr")
+        pt.get(f"sus_{w}", 0) != 0 for lap in laps for pt in lap.get("track", []) for w in ("fl", "fr", "rl", "rr")
     )
     if not _any_sus:
         return notes
@@ -583,14 +571,14 @@ def analyze_suspension(
                     _ef = _dc.get("end_frame")
                     if _sf is None or _ef is None:
                         continue
-                    corner_pts = [
-                        pt for pt in lap.get("track", [])
-                        if _sf <= pt["frame"] <= _ef
-                    ]
+                    corner_pts = [pt for pt in lap.get("track", []) if _sf <= pt["frame"] <= _ef]
                 else:
                     corner_pts = [
-                        pt for pt in lap.get("track", [])
-                        if spec["start"] <= (pt.get("lap_progress") if pt.get("lap_progress") is not None else -1) < spec["end"]
+                        pt
+                        for pt in lap.get("track", [])
+                        if spec["start"]
+                        <= (pt.get("lap_progress") if pt.get("lap_progress") is not None else -1)
+                        < spec["end"]
                     ]
                 if len(corner_pts) < 3:
                     continue
@@ -606,8 +594,7 @@ def analyze_suspension(
                         streak = 0
                 if max_streak > 2:
                     notes["bottoming_notes"].append(
-                        f"{w.upper()} bottoming at {name} "
-                        f"({max_streak} frames near max travel)"
+                        f"{w.upper()} bottoming at {name} ({max_streak} frames near max travel)"
                     )
 
     for spec in ref_corners:
@@ -644,16 +631,12 @@ def analyze_suspension(
                         break
         if len(apex_sus) >= 2:
             for w in ("fl", "fr", "rl", "rr"):
-                vals = [
-                    apex_sus[ln].get(w, 0)
-                    for ln in apex_sus
-                    if (apex_sus[ln].get(w, 0) or 0) > 0
-                ]
+                vals = [apex_sus[ln].get(w, 0) for ln in apex_sus if (apex_sus[ln].get(w, 0) or 0) > 0]
                 if vals and max(vals) - min(vals) > 0.005:
                     notes["travel_delta_notes"].append(
                         f"{name} {w.upper()} apex travel varies "
-                        f"{min(vals)*1000:.0f}-{max(vals)*1000:.0f}mm "
-                        f"({(max(vals)-min(vals))*1000:.1f}mm spread) - line/curb usage tip"
+                        f"{min(vals) * 1000:.0f}-{max(vals) * 1000:.0f}mm "
+                        f"({(max(vals) - min(vals)) * 1000:.1f}mm spread) - line/curb usage tip"
                     )
 
     for spec in ref_corners:
@@ -672,11 +655,7 @@ def analyze_suspension(
                 if start_frame is None or end_frame is None:
                     continue
                 sample = next(
-                    (
-                        point
-                        for point in lap.get("track", [])
-                        if start_frame <= point["frame"] <= end_frame
-                    ),
+                    (point for point in lap.get("track", []) if start_frame <= point["frame"] <= end_frame),
                     None,
                 )
             else:
@@ -685,11 +664,7 @@ def analyze_suspension(
                         point
                         for point in lap.get("track", [])
                         if spec["start"]
-                        <= (
-                            point.get("lap_progress")
-                            if point.get("lap_progress") is not None
-                            else -1
-                        )
+                        <= (point.get("lap_progress") if point.get("lap_progress") is not None else -1)
                         < spec["end"]
                     ),
                     None,
@@ -699,9 +674,7 @@ def analyze_suspension(
                 continue
             camber_left = sample.get("camber_fl", 0)
             camber_right = sample.get("camber_fr", 0)
-            if isinstance(camber_left, (int, float)) and isinstance(
-                camber_right, (int, float)
-            ):
+            if isinstance(camber_left, (int, float)) and isinstance(camber_right, (int, float)):
                 max_magnitude_delta = max(
                     max_magnitude_delta,
                     abs(abs(camber_left) - abs(camber_right)),

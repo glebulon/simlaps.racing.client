@@ -138,9 +138,7 @@ async def test_handle_startup_user_skips_preload_when_cache_already_for_same_use
 )
 @pytest.mark.parametrize("source", ["detected", "startup"])
 @pytest.mark.asyncio
-async def test_known_user_does_not_replace_discord_notifier_when_not_configured(
-    source, discord_enabled, webhook_url
-):
+async def test_known_user_does_not_replace_discord_notifier_when_not_configured(source, discord_enabled, webhook_url):
     app = _make_app()
     app._config.discord_enabled = discord_enabled
     app._config.discord_webhook_url = webhook_url

@@ -5,10 +5,9 @@ Targeting error handling, exception paths, and edge conditions.
 """
 
 import pytest
-import asyncio
 
 from src.core.log_parser import LogParser
-from src.models import SessionData, InProgressLap, LapState
+from src.models import LapState, SessionData
 
 
 class TestErrorHandling:
@@ -32,9 +31,10 @@ class TestErrorHandling:
     @pytest.mark.asyncio
     async def test_emit_status_error_handling(self):
         """Test _emit_status handles callback errors."""
+
         async def failing_callback(msg):
             raise RuntimeError("Callback failed")
-        
+
         parser = LogParser(on_status_change=failing_callback)
         # Should not raise even if callback fails
         await parser._emit_status("Test message")
@@ -44,20 +44,16 @@ class TestErrorHandling:
     async def test_emit_lap_error_handling(self):
         """Test _emit_lap handles callback errors."""
         from src.models import LapData
-        
+
         async def failing_callback(session, lap):
             raise RuntimeError("Callback failed")
-        
+
         parser = LogParser(on_lap_complete=failing_callback)
         session = SessionData(track="spa", car="porsche")
         lap = LapData(
-            lap_number=1,
-            physics_lap_number=1,
-            lap_time_ms=100000,
-            lap_time_str="1:40.000",
-            lap_state=LapState.VALID
+            lap_number=1, physics_lap_number=1, lap_time_ms=100000, lap_time_str="1:40.000", lap_state=LapState.VALID
         )
-        
+
         # Should not raise even if callback fails
         await parser._emit_lap(session, lap)
         assert True
@@ -71,11 +67,11 @@ class TestFuelTrackingEdgeCases:
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.car_uuid = "abc123"
-        
+
         # Invalid fuel string
         line = "[2024-01-01 12:00:00] Fuel carId=abc123 level=invalid"
         parser._handle_fuel(line)
-        
+
         # Should handle gracefully
         assert True
 
@@ -86,7 +82,7 @@ class TestFuelTrackingEdgeCases:
         parser.current_session.fuel_reliable = False
         parser._ip.fuel_used = 2.5
         parser._ip.fuel_reliable = False
-        
+
         # Fuel should be marked unreliable
         assert parser._ip.fuel_reliable is False
 
@@ -98,10 +94,10 @@ class TestMaybeEmitAbortedLap:
         """Test no aborted lap when no lap data."""
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
-        
+
         # No lap data set
         result = parser._maybe_emit_aborted_lap()
-        
+
         assert result is None
 
     def test_emit_aborted_distance_alone_is_enough(self):
@@ -129,14 +125,14 @@ class TestMaybeEmitAbortedLap:
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.tyre.set_all("SC")
-        
+
         # Set enough data for aborted lap
         parser._ip.physics_lap_num = 3
         parser._ip.splits = {0: 30000}
         parser._ip.distance_hundredm = 50
-        
+
         result = parser._maybe_emit_aborted_lap()
-        
+
         # Should create aborted lap
         assert result is not None
 
@@ -147,44 +143,36 @@ class TestSessionTypeHandling:
     def test_qualifying_session(self):
         """Test behavior in qualifying session."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa", 
-            car="porsche", 
-            session_type="QUALIFYING"
-        )
+        parser.current_session = SessionData(track="spa", car="porsche", session_type="QUALIFYING")
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000, 1: 30000, 2: 38456}
         parser._ip.split_end_confirmed = True
-        
+
         line = "New lap carId=abc123 time=1:38.456"
-        result = parser._handle_lap_complete(line)
-        
+        parser._handle_lap_complete(line)
+
         # Qualifying-specific behavior
         assert True
 
     def test_race_session(self):
         """Test behavior in race session."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa", 
-            car="porsche", 
-            session_type="RACE"
-        )
+        parser.current_session = SessionData(track="spa", car="porsche", session_type="RACE")
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000, 1: 30000, 2: 38456}
         parser._ip.split_end_confirmed = True
-        
+
         line = "New lap carId=abc123 time=1:38.456"
-        result = parser._handle_lap_complete(line)
-        
+        parser._handle_lap_complete(line)
+
         # Race-specific behavior (e.g., no outlap clearing)
         assert True
 
@@ -196,20 +184,22 @@ class TestEmitGameStatusVariations:
     async def test_emit_game_status_stopping(self):
         """Test game status False (stopping)."""
         calls = []
+
         async def on_status(running):
             calls.append(running)
-        
+
         parser = LogParser(on_game_status_change=on_status)
         await parser._emit_game_status(False)
-        
+
         assert False in calls
 
     @pytest.mark.asyncio
     async def test_emit_game_status_with_error(self):
         """Test game status with failing callback."""
+
         async def failing_callback(running):
             raise RuntimeError("Game status callback failed")
-        
+
         parser = LogParser(on_game_status_change=failing_callback)
         # Should not raise
         await parser._emit_game_status(True)
@@ -229,40 +219,34 @@ class TestOutlapFlagClearing:
         """
         parser = LogParser()
         parser.current_session = SessionData(
-            track="nurburgring touristenfahrten",
-            car="porsche",
-            session_type="PRACTICE"
+            track="nurburgring touristenfahrten", car="porsche", session_type="PRACTICE"
         )
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
-        
+
         # Simulate pit exit: "Outplap split" detected
         parser._ip.is_outlap = True
         assert parser._ip.is_outlap is True
-        
+
         # First sector of the full pit-exit circuit.
         line = "[2024-01-01 12:00:00] [gameplay] [info] On Split start 0 end 123456 id 0 splittime 123456"
         parser._handle_splits_practice(line)
-        
+
         assert parser._ip.is_outlap is True
         assert 0 not in parser._ip.splits
-        
+
     def test_outlap_flag_not_cleared_on_non_first_split(self):
         """Outlap flag should only clear on S1 (split id=0), not other splits."""
         parser = LogParser()
-        parser.current_session = SessionData(
-            track="spa",
-            car="porsche",
-            session_type="PRACTICE"
-        )
-        
+        parser.current_session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
+
         # Set outlap flag
         parser._ip.is_outlap = True
-        
+
         # Trigger S2 detection (split id=1, not first split)
         line = "[2024-01-01 12:00:00] [gameplay] [info] On Split start 30456 end 65789 id 1 splittime 35333"
         parser._handle_splits_practice(line)
-        
+
         # Flag should still be set (only S1 clears it)
         assert parser._ip.is_outlap is True
         # No splits should be recorded during outlap
@@ -281,8 +265,7 @@ class TestOutlapFlagClearing:
         parser._ip.is_outlap = True
 
         # Real AC Evo format: start-line crossing marker (start true, splittime 0)
-        line = ("[2026-06-05 23:41:15.072] [gameplay] [info] "
-                "On Split start true end false id 0 splittime 0")
+        line = "[2026-06-05 23:41:15.072] [gameplay] [info] On Split start true end false id 0 splittime 0"
         parser._handle_splits_practice(line)
 
         # A zero-time start marker is the special Tourist-layout transition.

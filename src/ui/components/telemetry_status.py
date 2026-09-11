@@ -4,14 +4,17 @@ Telemetry Status Component
 Displays telemetry capture status on the home page.
 """
 
-import flet as ft
 from enum import Enum
 from typing import Optional
+
+import flet as ft
+
 from .mount_safe import safe_update
 
 
 class TelemetryStatus(Enum):
     """Telemetry status states."""
+
     IDLE = "idle"
     CAPTURING = "capturing"
     ANALYZING = "analyzing"

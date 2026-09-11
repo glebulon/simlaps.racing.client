@@ -10,9 +10,10 @@ import src.ui.app as app_mod
 
 
 def test_main_runs_app_without_creating_an_event_loop() -> None:
-    with patch("src.main.run_app") as run_app, patch(
-        "asyncio.new_event_loop", side_effect=AssertionError("unexpected loop")
-    ) as new_event_loop:
+    with (
+        patch("src.main.run_app") as run_app,
+        patch("asyncio.new_event_loop", side_effect=AssertionError("unexpected loop")) as new_event_loop,
+    ):
         main_mod.main()
 
     run_app.assert_called_once()
@@ -47,9 +48,7 @@ def test_main_exception_exits_one(mock_exit, _mock_run_app) -> None:
 @patch("src.main.run_app", side_effect=RuntimeError("fatal"))
 @patch("src.main.sys.exit")
 @patch("builtins.input")
-def test_main_exception_frozen_prompts_user(
-    mock_input, mock_exit, _mock_run_app
-) -> None:
+def test_main_exception_frozen_prompts_user(mock_input, mock_exit, _mock_run_app) -> None:
     with patch.object(main_mod.sys, "frozen", True, create=True):
         with patch.object(main_mod.sys, "_MEIPASS", "C:\\fake", create=True):
             main_mod.main()
@@ -86,10 +85,11 @@ async def test_flet_entrypoint_installs_handler_on_running_loop() -> None:
     loop = MagicMock()
     page = MagicMock()
 
-    with patch("src.ui.app.asyncio.get_running_loop", return_value=loop), patch(
-        "src.ui.components.debug_logs.start_log_capture"
-    ), patch.object(app_mod, "SimLapsApp") as app_class, patch(
-        "src.ui.app.get_steam_user", return_value=(None, None)
+    with (
+        patch("src.ui.app.asyncio.get_running_loop", return_value=loop),
+        patch("src.ui.components.debug_logs.start_log_capture"),
+        patch.object(app_mod, "SimLapsApp") as app_class,
+        patch("src.ui.app.get_steam_user", return_value=(None, None)),
     ):
         _configure_mock_app(app_class)
         await app_mod.main(page)
@@ -111,11 +111,12 @@ async def test_background_exception_routes_to_structured_logger() -> None:
     page = MagicMock()
 
     try:
-        with patch("src.ui.components.debug_logs.start_log_capture"), patch.object(
-            app_mod, "SimLapsApp"
-        ) as app_class, patch(
-            "src.ui.app.get_steam_user", return_value=(None, None)
-        ), patch("src.ui.app.log_exception") as log_exception:
+        with (
+            patch("src.ui.components.debug_logs.start_log_capture"),
+            patch.object(app_mod, "SimLapsApp") as app_class,
+            patch("src.ui.app.get_steam_user", return_value=(None, None)),
+            patch("src.ui.app.log_exception") as log_exception,
+        ):
             _configure_mock_app(app_class)
             await app_mod.main(page)
 
@@ -127,9 +128,7 @@ async def test_background_exception_routes_to_structured_logger() -> None:
             error = task.exception()
             loop.call_exception_handler({"message": "task failed", "exception": error})
 
-            log_exception.assert_called_once_with(
-                app_mod.Component.APP, "task failed", error
-            )
+            log_exception.assert_called_once_with(app_mod.Component.APP, "task failed", error)
     finally:
         loop.set_exception_handler(previous_handler)
 
@@ -139,10 +138,11 @@ async def test_async_exception_handler_without_exception() -> None:
     loop = MagicMock()
     page = MagicMock()
 
-    with patch("src.ui.app.asyncio.get_running_loop", return_value=loop), patch(
-        "src.ui.components.debug_logs.start_log_capture"
-    ), patch.object(app_mod, "SimLapsApp") as app_class, patch(
-        "src.ui.app.get_steam_user", return_value=(None, None)
+    with (
+        patch("src.ui.app.asyncio.get_running_loop", return_value=loop),
+        patch("src.ui.components.debug_logs.start_log_capture"),
+        patch.object(app_mod, "SimLapsApp") as app_class,
+        patch("src.ui.app.get_steam_user", return_value=(None, None)),
     ):
         _configure_mock_app(app_class)
         await app_mod.main(page)

@@ -4,12 +4,13 @@ Final targeted tests to reach 80% coverage.
 Targeting specific uncovered branches and edge cases.
 """
 
-import pytest
 import asyncio
 from unittest.mock import patch
 
+import pytest
+
 from src.core.log_parser import LogParser
-from src.models import SessionData, LapState, LapData
+from src.models import LapState
 
 
 class TestLapTimeParsing:
@@ -146,16 +147,9 @@ class TestTrackNameCleaning:
     def test_clean_track_name_strips_session_length_descriptor(self):
         """Newer ACE builds append 'N laps'/'N seconds' before the @date."""
         parser = LogParser()
+        assert parser._clean_track_name("Laguna Seca GP Race Race  5 laps @2014/8/15 15:0:0") == "Laguna Seca GP"
         assert (
-            parser._clean_track_name(
-                "Laguna Seca GP Race Race  5 laps @2014/8/15 15:0:0"
-            )
-            == "Laguna Seca GP"
-        )
-        assert (
-            parser._clean_track_name(
-                "Laguna Seca GP Time Attack Practice  5400 seconds @2014/8/15 15:0:0"
-            )
+            parser._clean_track_name("Laguna Seca GP Time Attack Practice  5400 seconds @2014/8/15 15:0:0")
             == "Laguna Seca GP"
         )
 
@@ -196,15 +190,15 @@ class TestFollowMoreScenarios:
         """Test follow with empty file."""
         log_file = tmp_path / "test.log"
         log_file.write_text("")  # Empty
-        
+
         parser = LogParser(log_path=str(log_file))
         parser._running = True
-        
+
         try:
             await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=0.1)
         except asyncio.TimeoutError:
             pass
-        
+
         parser.stop()
         assert True  # Should not crash
 
@@ -214,15 +208,15 @@ class TestFollowMoreScenarios:
         log_file = tmp_path / "test.log"
         # Write some text then binary-like content
         log_file.write_bytes(b"Game Started!\n\x00\xff\xfeSome binary\n")
-        
+
         parser = LogParser(log_path=str(log_file))
         parser._running = True
-        
+
         try:
             await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=0.1)
         except asyncio.TimeoutError:
             pass
-        
+
         parser.stop()
         assert True  # Should handle gracefully
 
@@ -286,10 +280,10 @@ class TestLogBufferOperations:
     def test_add_to_log_buffer(self):
         """Test adding lines to log buffer."""
         parser = LogParser()
-        
+
         parser._add_to_log_buffer("Line 1")
         parser._add_to_log_buffer("Line 2")
-        
+
         buffer = parser.get_log_buffer()
         assert len(buffer) == 2
         assert buffer[0] == "Line 1"
@@ -312,25 +306,25 @@ class TestLogBufferOperations:
     def test_clear_log_buffer(self):
         """Test clearing log buffer."""
         parser = LogParser()
-        
+
         parser._add_to_log_buffer("Line 1")
         parser._add_to_log_buffer("Line 2")
-        
+
         parser.clear_log_buffer()
-        
+
         buffer = parser.get_log_buffer()
         assert len(buffer) == 0
 
     def test_export_logs_to_file(self, tmp_path):
         """Test exporting logs to file."""
         parser = LogParser()
-        
+
         parser._add_to_log_buffer("Line 1")
         parser._add_to_log_buffer("Line 2")
-        
+
         export_file = tmp_path / "export.txt"
         result = parser.export_logs_to_file(str(export_file))
-        
+
         assert result is True
         content = export_file.read_text()
         assert "Line 1" in content

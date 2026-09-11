@@ -17,7 +17,6 @@ from src.core.telemetry_decoder import (
     decode_static_evo,
 )
 
-
 FIXTURE = Path(__file__).parent / "fixtures" / "ac_evo_static_frame.txt"
 
 

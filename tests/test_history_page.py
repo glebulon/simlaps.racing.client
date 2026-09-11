@@ -1,6 +1,6 @@
 """Regression tests for HistoryPage timestamp parsing behavior."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from src.ui.pages.history import HistoryEntry, HistoryPage
 from src.utils.structured_logger import Component
