@@ -109,6 +109,10 @@ class TestLoadEmbeddedSecret:
 
 
 class TestStageEmbeddedSecret:
+    @pytest.mark.skipif(
+        sys.platform != "win32",
+        reason="Produces a Windows .pyd; native extension is .so on other platforms",
+    )
     def test_compiles_native_module(self, tmp_path, monkeypatch):
         pytest.importorskip("Cython")
         monkeypatch.setenv("APP_SECRET", TEST_SECRET)
