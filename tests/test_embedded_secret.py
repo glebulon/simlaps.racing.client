@@ -135,6 +135,7 @@ class TestStageEmbeddedSecret:
 
     def test_fails_without_secret(self, tmp_path, monkeypatch):
         monkeypatch.delenv("APP_SECRET", raising=False)
+        monkeypatch.setattr(build, "dotenv_values", lambda path: {})
         monkeypatch.chdir(tmp_path)
         monkeypatch.setattr(build, "SECRET_STAGE_DIR", str(tmp_path / "secret_stage"))
 

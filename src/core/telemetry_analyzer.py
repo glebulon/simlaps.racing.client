@@ -13,12 +13,21 @@ from typing import Any, Dict, List, Optional
 from src.core.analyzer._util import (
     _PLAUSIBLE_FRAME_THRESHOLD,
     _confidence_label,
+    _corner_measurement_window,
     _decide_analysis_mode,
+    _find_frame_index,
     _fraction,
     _optional_float,
     _profile_corner_sanity_notes,
+    _safe_4,
+    _sanitize_slip,
     _select_track_profile_for_analysis,
+    balance_hint,
+    classify_corner_issue,
+    extract_car_state,
+    format_car_state,
     get_physics,
+    variation_label,
 )
 from src.core.analyzer.ai_prompt import generate_ai_prompt
 from src.core.analyzer.analysis_result import AnalysisResult
@@ -35,11 +44,49 @@ from src.core.analyzer.corner_detection import (
 from src.core.analyzer.html_renderer import render_html
 from src.core.analyzer.lap_detection import (
     _detect_laps_by_timing_state,
+    detect_laps,
+)
+from src.core.analyzer.metrics import (
+    analyze_corner_phases,
+    analyze_grip_utilization,
+    analyze_lap_tyre_state,
+    analyze_tyre_grip_degradation,
 )
 from src.core.analyzer.session_summary import _load_previous_summary, _write_session_summary
 from src.core.telemetry_capture import CaptureMetadata, FrameData
 from src.models import SharedSessionManager
 from src.utils.structured_logger import Component, log_debug, log_info, log_warning
+
+# Re-exported for backward compatibility with existing import sites/tests.
+__all__ = [
+    "TelemetryAnalyzer",
+    "AnalysisResult",
+    "_corner_measurement_window",
+    "_decide_analysis_mode",
+    "_detect_profiled_corners_canonical",
+    "_find_frame_index",
+    "_read_static_track_config",
+    "_safe_4",
+    "_sanitize_slip",
+    "_select_track_profile_for_analysis",
+    "analyze_corner_phases",
+    "analyze_grip_utilization",
+    "analyze_lap_tyre_state",
+    "analyze_tyre_grip_degradation",
+    "balance_hint",
+    "build_track",
+    "classify_corner_issue",
+    "corner_segment_time",
+    "detect_corners",
+    "detect_laps",
+    "detect_profiled_corners",
+    "extract_car_state",
+    "format_car_state",
+    "get_physics",
+    "match_corners",
+    "match_profiled_corners",
+    "variation_label",
+]
 
 _LAP_TIME_ALIGNMENT_TOLERANCE_MS = 2.0
 _LAP_SEGMENT_MIN_TRIM_MS = 2_000.0
