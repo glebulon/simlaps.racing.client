@@ -4,13 +4,13 @@ Comprehensive tests for log parser with mock log data and edge cases.
 Tests complete session parsing, state management, and error handling.
 """
 
-import pytest
 import asyncio
-import tempfile
-import os
 from pathlib import Path
+
+import pytest
+
 from src.core.log_parser import LogParser
-from src.models import SessionData, LapData
+from src.models import LapData, SessionData
 
 
 class TestLogParserInitialization:
@@ -19,7 +19,7 @@ class TestLogParserInitialization:
     def test_parser_initialization(self):
         """Test creating a log parser."""
         parser = LogParser()
-        
+
         assert parser is not None
         assert parser.context is not None
         assert parser.sessions == []
@@ -28,9 +28,9 @@ class TestLogParserInitialization:
         """Test creating parser with custom log path."""
         log_file = tmp_path / "test.log"
         log_file.write_text("")
-        
+
         parser = LogParser(log_path=str(log_file))
-        
+
         assert parser.log_path == log_file
 
 
@@ -61,10 +61,10 @@ class TestLogParserFlow:
         """Test parsing an empty log file."""
         log_file = tmp_path / "empty.log"
         log_file.write_text("")
-        
+
         parser = LogParser(log_path=str(log_file))
         result = await parser.parse_file()
-        
+
         assert result is not None
         assert isinstance(result, list)
 
@@ -76,10 +76,10 @@ class TestLogParserFlow:
 """
         log_file = tmp_path / "lap.log"
         log_file.write_text(log_content)
-        
+
         parser = LogParser(log_path=str(log_file))
         result = await parser.parse_file()
-        
+
         assert result is not None
         assert isinstance(result, list)
 
@@ -93,10 +93,10 @@ class TestLogParserFlow:
 """
         log_file = tmp_path / "multilap.log"
         log_file.write_text(log_content)
-        
+
         parser = LogParser(log_path=str(log_file))
         result = await parser.parse_file()
-        
+
         assert result is not None
         assert isinstance(result, list)
 
@@ -107,14 +107,14 @@ class TestSessionState:
     def test_session_initialization(self):
         """Test session data initialization."""
         session = SessionData()
-        
+
         assert session is not None
         assert session.laps == []
 
     def test_parser_context_initialization(self):
         """Test parser context initialization."""
         parser = LogParser()
-        
+
         assert parser.context is not None
         assert parser.current_session is None
 
@@ -127,7 +127,7 @@ class TestEdgeCases:
         """Test parsing non-existent log file."""
         parser = LogParser(log_path="/nonexistent/path/to/log.txt")
         result = await parser.parse_file()
-        
+
         # Should handle missing file gracefully
         assert result is not None
 
@@ -140,10 +140,10 @@ Another invalid line
 """
         log_file = tmp_path / "malformed.log"
         log_file.write_text(log_content)
-        
+
         parser = LogParser(log_path=str(log_file))
         result = await parser.parse_file()
-        
+
         # Should handle malformed lines gracefully
         assert result is not None
 
@@ -164,7 +164,7 @@ class TestLapData:
             is_valid=True,
             tyre_compound="Dry"
         )
-        
+
         assert lap.lap_number == 1
         assert lap.lap_time_ms == 83456
         assert lap.is_valid is True
@@ -178,9 +178,9 @@ class TestLapData:
             lap_time_ms=83456,
             lap_time_str="1:23.456"
         )
-        
+
         result = lap.to_dict()
-        
+
         assert isinstance(result, dict)
         assert result["lap_number"] == 1
         assert result["lap_time_ms"] == 83456
@@ -193,13 +193,13 @@ class TestLogContext:
         """Test creating log context."""
         from src.models.context import LogContext
         context = LogContext()
-        
+
         assert context is not None
 
     def test_parser_context_attribute(self):
         """Test parser has context attribute."""
         parser = LogParser()
-        
+
         assert hasattr(parser, 'context')
         assert parser.context is not None
 
@@ -210,24 +210,24 @@ class TestParserCallbacks:
     def test_parser_with_lap_callback(self):
         """Test parser with lap complete callback."""
         callback_called = []
-        
+
         def on_lap(lap):
             callback_called.append(lap)
-        
+
         parser = LogParser(on_lap_complete=on_lap)
-        
+
         assert parser.on_lap_complete is not None
         assert parser.on_lap_complete == on_lap
 
     def test_parser_with_status_callback(self):
         """Test parser with status change callback."""
         callback_called = []
-        
+
         def on_status(status):
             callback_called.append(status)
-        
+
         parser = LogParser(on_status_change=on_status)
-        
+
         assert parser.on_status_change is not None
         assert parser.on_status_change == on_status
 
@@ -238,7 +238,7 @@ class TestParserConfiguration:
     def test_default_log_path(self):
         """Test default log path."""
         parser = LogParser()
-        
+
         assert parser.log_path is not None
         assert isinstance(parser.log_path, Path)
 
@@ -246,15 +246,15 @@ class TestParserConfiguration:
         """Test custom log path."""
         log_file = tmp_path / "custom.log"
         log_file.write_text("")
-        
+
         parser = LogParser(log_path=str(log_file))
-        
+
         assert parser.log_path == log_file
 
     def test_log_buffer_initialization(self):
         """Test log buffer initialization."""
         parser = LogParser()
-        
+
         assert hasattr(parser, 'log_buffer')
         assert isinstance(parser.log_buffer, list)
         assert parser.max_log_lines == 100_000
@@ -267,68 +267,68 @@ class TestLogParserHelpers:
         """Test parsing lap time with minutes."""
         parser = LogParser()
         result = parser._parse_lap_time_ms("1:23.456")
-        
+
         assert result == 83456  # 1*60*1000 + 23*1000 + 456
 
     def test_parse_lap_time_ms_seconds_only(self):
         """Test parsing lap time with seconds only."""
         parser = LogParser()
         result = parser._parse_lap_time_ms("23.456")
-        
+
         assert result == 23456  # 23*1000 + 456
 
     def test_parse_lap_time_ms_invalid(self):
         """Test parsing invalid lap time."""
         parser = LogParser()
         result = parser._parse_lap_time_ms("invalid")
-        
+
         assert result == 0
 
     def test_extract_line_timestamp_valid(self):
         """Test extracting timestamp from valid line."""
         parser = LogParser()
         result = parser._extract_line_timestamp("[2024-01-01 12:00:00] Some log message")
-        
+
         assert result == "2024-01-01 12:00:00"
 
     def test_extract_line_timestamp_no_bracket(self):
         """Test extracting timestamp from line without bracket."""
         parser = LogParser()
         result = parser._extract_line_timestamp("Some log message without timestamp")
-        
+
         assert result is None
 
     def test_extract_line_timestamp_empty_bracket(self):
         """Test extracting timestamp from line with empty bracket."""
         parser = LogParser()
         result = parser._extract_line_timestamp("[] Empty bracket")
-        
+
         assert result is None
 
     def test_is_player_car_match(self):
         """Test checking if car is player car."""
         parser = LogParser()
         parser.context.car_uuid = "abc123"
-        
+
         assert parser._is_player_car("abc123") is True
 
     def test_is_player_car_no_match(self):
         """Test checking non-player car."""
         parser = LogParser()
         parser.context.car_uuid = "abc123"
-        
+
         assert parser._is_player_car("xyz789") is False
 
     def test_is_steam_id_valid(self):
         """Test valid Steam ID detection."""
         parser = LogParser()
-        
+
         assert parser._is_steam_id("76561198321627695") is True
 
     def test_is_steam_id_invalid(self):
         """Test invalid Steam ID detection."""
         parser = LogParser()
-        
+
         assert parser._is_steam_id("12345") is False
         assert parser._is_steam_id("7656") is False
 
@@ -336,21 +336,21 @@ class TestLogParserHelpers:
         """Test cleaning track name with session suffix."""
         parser = LogParser()
         result = parser._clean_track_name("Spa Francorchamps Race")
-        
+
         assert result == "Spa Francorchamps"
 
     def test_clean_track_name_with_at_symbol(self):
         """Test cleaning track name with @ symbol."""
         parser = LogParser()
         result = parser._clean_track_name("Spa@12:00 PM")
-        
+
         assert result == "Spa"
 
     def test_clean_track_name_no_suffix(self):
         """Test cleaning track name without suffix."""
         parser = LogParser()
         result = parser._clean_track_name("Brands Hatch")
-        
+
         assert result == "Brands Hatch"
 
     def test_reset_in_progress(self):
@@ -358,9 +358,9 @@ class TestLogParserHelpers:
         parser = LogParser()
         parser._ip.physics_lap_num = 5
         parser._ip.splits = {0: 12345}
-        
+
         parser._reset_in_progress()
-        
+
         assert parser._ip.physics_lap_num is None
         assert parser._ip.splits == {}
 
@@ -372,26 +372,26 @@ class TestLogBufferOperations:
         """Test adding to log buffer."""
         parser = LogParser()
         parser._add_to_log_buffer("Test log line")
-        
+
         assert "Test log line" in parser.log_buffer
 
     def test_add_to_log_buffer_overflow(self):
         """Test log buffer overflow handling."""
         parser = LogParser()
         parser.max_log_lines = 10
-        
+
         for i in range(15):
             parser._add_to_log_buffer(f"Line {i}")
-        
+
         assert len(parser.log_buffer) <= 10
 
     def test_get_log_buffer(self):
         """Test getting log buffer copy."""
         parser = LogParser()
         parser._add_to_log_buffer("Line 1")
-        
+
         buffer = parser.get_log_buffer()
-        
+
         assert buffer == ["Line 1"]
         assert buffer is not parser.log_buffer  # Should be a copy
 
@@ -399,9 +399,9 @@ class TestLogBufferOperations:
         """Test clearing log buffer."""
         parser = LogParser()
         parser._add_to_log_buffer("Line 1")
-        
+
         parser.clear_log_buffer()
-        
+
         assert len(parser.log_buffer) == 0
 
     def test_export_logs_to_file_success(self, tmp_path):
@@ -409,19 +409,19 @@ class TestLogBufferOperations:
         parser = LogParser()
         parser._add_to_log_buffer("Line 1")
         parser._add_to_log_buffer("Line 2")
-        
+
         export_path = tmp_path / "export.log"
         result = parser.export_logs_to_file(str(export_path))
-        
+
         assert result is True
         assert export_path.exists()
 
     def test_export_logs_to_file_failure(self, tmp_path):
         """Test exporting logs with invalid path."""
         parser = LogParser()
-        
+
         result = parser.export_logs_to_file("/invalid/path/that/does/not/exist/export.log")
-        
+
         assert result is False
 
 
@@ -432,13 +432,13 @@ class TestLogParserEmitters:
     async def test_emit_status(self):
         """Test status emission."""
         callback_called = []
-        
+
         async def on_status(status):
             callback_called.append(status)
-        
+
         parser = LogParser(on_status_change=on_status)
         await parser._emit_status("Test status")
-        
+
         assert len(callback_called) == 1
         assert callback_called[0] == "Test status"
 
@@ -446,13 +446,13 @@ class TestLogParserEmitters:
     async def test_emit_lap(self):
         """Test lap emission."""
         callback_called = []
-        
+
         async def on_lap(session, lap):
             callback_called.append((session, lap))
-        
+
         parser = LogParser(on_lap_complete=on_lap)
-        
-        from src.models import SessionData, LapData, LapState
+
+        from src.models import LapData, LapState, SessionData
         session = SessionData(track="spa", car="porsche")
         lap = LapData(
             lap_number=1,
@@ -461,22 +461,22 @@ class TestLogParserEmitters:
             lap_time_str="1:40.000",
             lap_state=LapState.VALID
         )
-        
+
         await parser._emit_lap(session, lap)
-        
+
         assert len(callback_called) == 1
 
     @pytest.mark.asyncio
     async def test_emit_game_status(self):
         """Test game status emission."""
         callback_called = []
-        
+
         async def on_game_status(is_running):
             callback_called.append(is_running)
-        
+
         parser = LogParser(on_game_status_change=on_game_status)
         await parser._emit_game_status(True)
-        
+
         assert len(callback_called) == 1
         assert callback_called[0] is True
 
@@ -484,13 +484,13 @@ class TestLogParserEmitters:
     async def test_emit_user_detected(self):
         """Test user detection emission."""
         callback_called = []
-        
+
         async def on_user(user_id, name):
             callback_called.append((user_id, name))
-        
+
         parser = LogParser(on_user_detected=on_user)
         await parser._emit_user_detected("76561198321627695", "TestUser")
-        
+
         assert len(callback_called) == 1
         assert callback_called[0] == ("76561198321627695", "TestUser")
 
@@ -511,9 +511,9 @@ class TestLogParserStintHandling:
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.tyre.set_all("SC")
-        
+
         stint = parser._ensure_stint("SC")
-        
+
         assert stint is not None
         assert stint.stint_number == 1
         assert stint.tyre_compound == "SC"
@@ -524,10 +524,10 @@ class TestLogParserStintHandling:
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.tyre.set_all("SC")
-        
+
         stint1 = parser._ensure_stint("SC")
         stint2 = parser._ensure_stint("SC")
-        
+
         assert stint1 is stint2
 
     def test_ensure_stint_new_compound(self):
@@ -536,11 +536,11 @@ class TestLogParserStintHandling:
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.tyre.set_all("SC")
-        
+
         stint1 = parser._ensure_stint("SC")
         parser.context.tyre.set_all("MC")
         stint2 = parser._ensure_stint("MC")
-        
+
         assert stint1 is not stint2
         assert stint2.stint_number == 2
 
@@ -551,9 +551,9 @@ class TestLogParserStintHandling:
         parser.current_session = SessionData(track="spa", car="porsche")
         parser._ensure_stint("SC")
         parser._current_stint = None
-        
+
         parser._finalise_stints()
-        
+
         # Should not raise
         assert True
 
@@ -614,26 +614,26 @@ class TestLogParserParserState:
     def test_get_current_session_none(self):
         """Test get_current_session returns None initially."""
         parser = LogParser()
-        
+
         assert parser.get_current_session() is None
 
     def test_get_player_id_none(self):
         """Test get_player_id returns None initially."""
         parser = LogParser()
-        
+
         assert parser.get_player_id() is None
 
     def test_is_running_initially(self):
         """Test is_running property initially."""
         parser = LogParser()
-        
+
         assert parser.is_running is False
 
     def test_stop_parser(self):
         """Test stopping the parser."""
         parser = LogParser()
         parser._running = True
-        
+
         parser.stop()
-        
+
         assert parser._running is False

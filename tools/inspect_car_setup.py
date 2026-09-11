@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Inspect raw protobuf structure of a car's setup and limits files."""
-import json
 import os
 import sys
 

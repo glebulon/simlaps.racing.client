@@ -10,15 +10,16 @@ Helper-function tests (``_safe_4``, ``_sanitize_slip``) and basic
 """
 
 import json
+
 import pytest
+
 from src.core.telemetry_analyzer import (
     build_track,
     detect_laps,
     get_physics,
 )
-from src.core.telemetry_decoder import decode_physics, physics_to_dict
 from src.core.telemetry_capture import FrameData
-
+from src.core.telemetry_decoder import decode_physics, physics_to_dict
 
 pytestmark = pytest.mark.integration
 
@@ -34,7 +35,7 @@ def load_frames(count: int = 100) -> list[FrameData]:
             physics_raw = bytes.fromhex(frame_json['physics_raw'])
             decoded = decode_physics(physics_raw)
             physics_dict = physics_to_dict(decoded)
-            
+
             frame = FrameData(
                 timestamp=frame_json['timestamp'],
                 frame_number=frame_json['frame_number'],
@@ -50,18 +51,18 @@ class TestBuildTrack:
     def test_build_track_with_real_data(self):
         """Test that build_track works with real telemetry frames."""
         frames = load_frames(50)
-        
+
         track = build_track(frames, hz=10.0)
-        
+
         assert isinstance(track, list)
         assert len(track) > 0
 
     def test_build_track_has_coordinates(self):
         """Test that track points have x, z coordinates."""
         frames = load_frames(50)
-        
+
         track = build_track(frames, hz=10.0)
-        
+
         # Check that track points have x and z coordinates
         for point in track[:5]:
             assert 'x' in point
@@ -71,9 +72,9 @@ class TestBuildTrack:
     def test_build_track_has_speed(self):
         """Test that track points have speed information."""
         frames = load_frames(50)
-        
+
         track = build_track(frames, hz=10.0)
-        
+
         # Check that track points have speed
         for point in track[:5]:
             assert 'speed' in point
@@ -84,9 +85,9 @@ class TestBuildTrack:
         # Create mock frames with graphics progress data
         from tests.test_telemetry_analyzer_comprehensive import create_mock_frame
         frames = [create_mock_frame(i, position=i * 0.01, speed=50.0) for i in range(50)]
-        
+
         track = build_track(frames, hz=10.0)
-        
+
         # Check that track points have norm_pos from graphics
         for point in track[:5]:
             assert 'norm_pos' in point
@@ -98,10 +99,10 @@ class TestBuildTrack:
     def test_build_track_start_idx(self):
         """Test that start_idx parameter works correctly."""
         frames = load_frames(100)
-        
+
         track_full = build_track(frames, hz=10.0, start_idx=0)
         track_partial = build_track(frames, hz=10.0, start_idx=20)
-        
+
         # Partial track should be shorter
         assert len(track_partial) < len(track_full)
 
@@ -113,9 +114,9 @@ class TestDetectLaps:
         """detect_laps returns a boundary list (empty for physics-only frames)."""
         frames = load_frames(100)
         track = build_track(frames, hz=10.0)
-        
+
         boundaries = detect_laps(track, hz=10.0)
-        
+
         # Real data frames are physics-only (no graphics SHM timing state),
         # so the simplified detector returns no boundaries.
         assert isinstance(boundaries, list)
@@ -125,10 +126,10 @@ class TestDetectLaps:
         """detect_laps called twice with identical params yields the same result."""
         frames = load_frames(100)
         track = build_track(frames, hz=10.0)
-        
+
         result_1 = detect_laps(track, hz=10.0)
         result_2 = detect_laps(track, hz=10.0)
-        
+
         # Deterministic — same input produces same output
         assert result_1 == result_2
 
@@ -139,7 +140,7 @@ class TestRealDataStructure:
     def test_frames_have_physics(self):
         """Loaded frames carry a non-None physics dict."""
         frames = load_frames(10)
-        
+
         for frame in frames:
             assert frame.physics is not None
             assert isinstance(frame.physics, dict)
@@ -148,7 +149,7 @@ class TestRealDataStructure:
     def test_physics_has_velocity(self):
         """Physics data includes a velocity field with x/y/z components."""
         frames = load_frames(10)
-        
+
         for frame in frames:
             physics = get_physics(frame)
             assert 'velocity' in physics
@@ -160,7 +161,7 @@ class TestRealDataStructure:
     def test_physics_has_speed(self):
         """Physics data includes speed_kmh as a finite number."""
         frames = load_frames(10)
-        
+
         for frame in frames:
             physics = get_physics(frame)
             assert 'speed_kmh' in physics

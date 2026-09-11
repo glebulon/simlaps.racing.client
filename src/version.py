@@ -7,7 +7,7 @@ Single source of truth for version numbers.
 # Game name (for client display - bottom right)
 GAME_NAME = "SimLaps Client"
 
-# Game display name (for game version display - top left)  
+# Game display name (for game version display - top left)
 GAME_DISPLAY_NAME = "AC EVO"
 
 # Version components

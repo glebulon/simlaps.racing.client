@@ -1,7 +1,7 @@
 """Regression tests for version source-of-truth consistency."""
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 from src import __version__
 from src.version import get_version

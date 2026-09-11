@@ -1,7 +1,6 @@
 """Track building from telemetry frames — extracted from telemetry_analyzer.py."""
 from typing import Any, Dict, List
 
-from src.core.telemetry_capture import FrameData
 from src.core.analyzer._util import (
     _optional_float,
     _safe_4,
@@ -9,7 +8,8 @@ from src.core.analyzer._util import (
     get_graphics,
     get_physics,
 )
-from src.utils.structured_logger import log_debug, Component
+from src.core.telemetry_capture import FrameData
+from src.utils.structured_logger import Component, log_debug
 
 
 def _contact_point_centroid(value: Any) -> tuple[float, float] | None:

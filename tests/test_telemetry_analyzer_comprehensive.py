@@ -5,21 +5,22 @@ Tests lap detection, corner detection, and track building with various scenarios
 """
 
 import json
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, patch
+
 from src.core.telemetry_analyzer import (
-    build_track,
-    detect_laps,
-    detect_corners,
-    detect_profiled_corners,
-    get_physics,
     _safe_4,
     _sanitize_slip,
+    build_track,
+    detect_corners,
+    detect_laps,
+    detect_profiled_corners,
+    get_physics,
 )
 from src.core.telemetry_capture import FrameData
 from src.models import SharedSessionManager
-from datetime import datetime, timezone
 
 
 def create_mock_frame(frame_num: int, speed: float = 100.0, position: float = 0.0,
@@ -59,33 +60,33 @@ class TestBuildTrack:
     def test_build_track_with_start_idx(self):
         """Test building track with a start index."""
         frames = [create_mock_frame(i, speed=100.0 + i, position=i * 0.01) for i in range(100)]
-        
+
         track = build_track(frames, hz=10.0, start_idx=10)
-        
+
         assert len(track) == 90  # Should skip first 10 frames
         assert track[0]["frame"] == 10
 
     def test_build_track_with_graphics_progress(self):
         """Test that track building uses graphics-derived progress."""
         frames = [create_mock_frame(i, speed=50.0, position=i * 0.01) for i in range(50)]
-        
+
         track = build_track(frames, hz=10.0)
-        
+
         assert all("speed" in pt for pt in track)
         assert track[0]["speed"] == 50.0
 
     def test_build_track_empty_frames(self):
         """Test building track with empty frames."""
         track = build_track([], hz=10.0)
-        
+
         assert len(track) == 0
 
     def test_build_track_short_session(self):
         """Test building track with very short session."""
         frames = [create_mock_frame(i) for i in range(5)]
-        
+
         track = build_track(frames, hz=10.0)
-        
+
         assert len(track) == 5
 
     def test_build_track_dead_reckons_position_from_velocity(self):
@@ -133,10 +134,10 @@ class TestDetectLaps:
             for i in range(100):
                 frames.append(create_mock_frame(len(frames), speed=100.0, position=0.5,
                                                 last_lap_time_ms=lap * 90000))
-        
+
         track = build_track(frames, hz=10.0)
         lap_bounds = detect_laps(track, hz=10.0)
-        
+
         # Should detect 2 boundaries (last_lap_time changes at lap 1 and lap 2)
         assert len(lap_bounds) >= 1
 
@@ -170,9 +171,9 @@ class TestDetectLaps:
         """Test lap detection when last_lap_time_ms never changes."""
         frames = [create_mock_frame(i, position=i * 0.01, last_lap_time_ms=0) for i in range(200)]
         track = build_track(frames, hz=10.0)
-        
+
         lap_bounds = detect_laps(track, hz=10.0)
-        
+
         # No timing changes means no lap boundaries
         assert len(lap_bounds) == 0
 
@@ -184,9 +185,9 @@ class TestDetectLaps:
             llt = 90000 if i == 20 else (180000 if i == 25 else 0)
             frames.append(create_mock_frame(i, position=0.5, last_lap_time_ms=llt))
         track = build_track(frames, hz=10.0)
-        
+
         lap_bounds = detect_laps(track, hz=10.0)
-        
+
         # Second change at frame 25 is only 5 frames after first (filtered)
         assert len(lap_bounds) <= 1
 
@@ -194,9 +195,9 @@ class TestDetectLaps:
         """Test lap detection with very short session."""
         frames = [create_mock_frame(i) for i in range(10)]
         track = build_track(frames, hz=10.0)
-        
+
         lap_bounds = detect_laps(track, hz=10.0)
-        
+
         # Short sessions should not detect laps
         assert len(lap_bounds) == 0
 
@@ -204,9 +205,9 @@ class TestDetectLaps:
         """Test lap detection when no timing changes exist."""
         frames = [create_mock_frame(i, position=0.0, last_lap_time_ms=0) for i in range(50)]
         track = build_track(frames, hz=10.0)
-        
+
         lap_bounds = detect_laps(track, hz=10.0)
-        
+
         assert len(lap_bounds) == 0
 
     def test_detect_laps_single_lap(self):
@@ -216,9 +217,9 @@ class TestDetectLaps:
             llt = 95000 if i >= 50 else 0
             frames.append(create_mock_frame(i, position=0.5, last_lap_time_ms=llt))
         track = build_track(frames, hz=10.0)
-        
+
         lap_bounds = detect_laps(track, hz=10.0)
-        
+
         # Should detect one boundary at the timing change
         assert len(lap_bounds) >= 1
 
@@ -252,7 +253,7 @@ class TestCornerDetection:
         """Test corner detection using track profile."""
         frames = [create_mock_frame(i, position=i * 0.01) for i in range(200)]
         track = build_track(frames, hz=10.0)
-        
+
         track_profile = {
             "display_name": "Test Track",
             "corners": [
@@ -261,7 +262,7 @@ class TestCornerDetection:
                 {"id": 3, "start": 0.70, "end": 0.80, "name": "Corner 3"},
             ]
         }
-        
+
         corners = detect_profiled_corners(track, 0, 200, track_profile, hz=10.0)
 
         # Should detect corners from profile
@@ -276,11 +277,11 @@ class TestCornerDetection:
         for i in range(200):
             speed = 100.0 if i % 50 < 25 else 50.0  # Slow down every 50 frames
             frames.append(create_mock_frame(i, speed=speed, position=i * 0.01))
-        
+
         track = build_track(frames, hz=10.0)
-        
+
         corners = detect_corners(track, 0, 200, hz=10.0)
-        
+
         # Should detect some corners based on velocity changes
         assert isinstance(corners, list)
 
@@ -289,26 +290,26 @@ class TestCornerDetection:
         # Constant speed, no corners
         frames = [create_mock_frame(i, speed=100.0, position=i * 0.01) for i in range(100)]
         track = build_track(frames, hz=10.0)
-        
+
         corners = detect_corners(track, 0, 100, hz=10.0)
-        
+
         # Might not detect corners with constant speed
         assert isinstance(corners, list)
 
     def test_detect_corners_with_track_catalog_profile(self):
         """Test corner detection using track catalog profile."""
         from src.core.track_catalog import TRACK_CATALOG
-        
+
         if not TRACK_CATALOG:
             pytest.skip("No track catalog available")
-        
+
         # Use a known track from catalog
         track_key = list(TRACK_CATALOG.keys())[0]
         track_profile = TRACK_CATALOG[track_key]
-        
+
         frames = [create_mock_frame(i, position=i * 0.01) for i in range(200)]
         track = build_track(frames, hz=10.0)
-        
+
         corners = detect_profiled_corners(track, 0, 200, track_profile, hz=10.0)
 
         assert isinstance(corners, list)
@@ -320,18 +321,18 @@ class TestGetPhysics:
     def test_get_physics_from_frame(self):
         """Test extracting physics data from frame."""
         frame = create_mock_frame(0, speed=150.0, position=0.5)
-        
+
         physics = get_physics(frame)
-        
+
         assert physics is not None
         assert physics.get("speed_kmh") == 150.0
 
     def test_get_graphics_progress_from_frame(self):
         """Test that graphics carries normalized_car_position."""
         frame = create_mock_frame(0, speed=150.0, position=0.5)
-        
+
         graphics = frame.graphics
-        
+
         assert graphics is not None
         assert graphics.get("normalized_car_position") == 0.5
         assert graphics.get("has_authoritative_progress") is True
@@ -339,9 +340,9 @@ class TestGetPhysics:
     def test_get_physics_returns_dict(self):
         """Test that get_physics returns a dictionary."""
         frame = create_mock_frame(0)
-        
+
         physics = get_physics(frame)
-        
+
         assert isinstance(physics, dict)
 
     def test_get_physics_none_frame(self):
@@ -449,19 +450,16 @@ class TestHelperFunctions:
 
     def test_sanitize_slip_infinity(self):
         """_sanitize_slip returns 0.0 for positive infinity."""
-        import math
         result = _sanitize_slip(float('inf'))
         assert result == 0.0
 
     def test_sanitize_slip_negative_infinity(self):
         """_sanitize_slip returns 0.0 for negative infinity."""
-        import math
         result = _sanitize_slip(float('-inf'))
         assert result == 0.0
 
     def test_sanitize_slip_nan(self):
         """_sanitize_slip returns 0.0 for NaN."""
-        import math
         result = _sanitize_slip(float('nan'))
         assert result == 0.0
 
@@ -513,10 +511,10 @@ class TestExtractCarState:
             "brake_temp_rl": 195.0,
             "brake_temp_rr": 205.0,
         }
-        
+
         from src.core.telemetry_analyzer import extract_car_state
         state = extract_car_state(pt)
-        
+
         assert state is not None
         assert state["abs"] == 1
         assert state["speed"] == 150.0
@@ -525,10 +523,10 @@ class TestExtractCarState:
     def test_extract_car_state_minimal(self):
         """Test extracting car state with minimal data."""
         pt = {"speed": 100.0, "frame": 0}
-        
+
         from src.core.telemetry_analyzer import extract_car_state
         state = extract_car_state(pt)
-        
+
         assert state is not None
         assert state["speed"] == 100.0
         assert state["abs"] == 0  # Default values
@@ -537,7 +535,7 @@ class TestExtractCarState:
         """Test extracting car state from None."""
         from src.core.telemetry_analyzer import extract_car_state
         state = extract_car_state(None)
-        
+
         assert state is None
 
 
@@ -547,7 +545,7 @@ class TestCornerMatching:
     def test_match_profiled_corners(self):
         """Test matching profiled corners by ID."""
         from src.core.telemetry_analyzer import match_profiled_corners
-        
+
         ref_corners = [
             {"id": 1, "lap_pos": 0.1},
             {"id": 2, "lap_pos": 0.3},
@@ -557,9 +555,9 @@ class TestCornerMatching:
             {"id": 1, "lap_pos": 0.11},
             {"id": 2, "lap_pos": 0.31},
         ]
-        
+
         matched = match_profiled_corners(ref_corners, lap_corners)
-        
+
         assert matched[1] is not None
         assert matched[2] is not None
         assert matched[3] is None  # Not in lap corners
@@ -567,7 +565,7 @@ class TestCornerMatching:
     def test_match_corners_sequential(self):
         """Test sequential corner matching."""
         from src.core.telemetry_analyzer import match_corners
-        
+
         ref_corners = [
             {"id": 1, "lap_pos": 0.1},
             {"id": 2, "lap_pos": 0.3},
@@ -578,9 +576,9 @@ class TestCornerMatching:
             {"id": 2, "lap_pos": 0.32},
             {"id": 3, "lap_pos": 0.52},
         ]
-        
+
         matched = match_corners(ref_corners, lap_corners, tol=0.15)
-        
+
         assert matched[1] is not None
         assert matched[2] is not None
         assert matched[3] is not None
@@ -592,58 +590,58 @@ class TestCornerAnalysis:
     def test_corner_segment_time(self):
         """Test corner segment time calculation."""
         from src.core.telemetry_analyzer import corner_segment_time
-        
+
         corner = {"start_frame": 100, "end_frame": 150}
         time = corner_segment_time(corner, hz=10.0)
-        
+
         assert time == 5.0  # (150 - 100) / 10
 
     def test_variation_label_high(self):
         """Test variation label for high delta."""
         from src.core.telemetry_analyzer import variation_label
-        
+
         assert variation_label(30) == "HIGH"
 
     def test_variation_label_medium(self):
         """Test variation label for medium delta."""
         from src.core.telemetry_analyzer import variation_label
-        
+
         assert variation_label(20) == "MEDIUM"
 
     def test_variation_label_low(self):
         """Test variation label for low delta."""
         from src.core.telemetry_analyzer import variation_label
-        
+
         assert variation_label(10) == "LOW"
 
     def test_classify_corner_issue_braking(self):
         """Test corner issue classification - braking."""
         from src.core.telemetry_analyzer import classify_corner_issue
-        
+
         issue = classify_corner_issue(entry_delta=20, apex_delta=5, exit_delta=5)
-        
+
         assert "braking" in issue.lower()
 
     def test_classify_corner_issue_throttle(self):
         """Test corner issue classification - throttle."""
         from src.core.telemetry_analyzer import classify_corner_issue
-        
+
         issue = classify_corner_issue(entry_delta=5, apex_delta=5, exit_delta=20)
-        
+
         assert "throttle" in issue.lower()
 
     def test_classify_corner_issue_line(self):
         """Test corner issue classification - line."""
         from src.core.telemetry_analyzer import classify_corner_issue
-        
+
         issue = classify_corner_issue(entry_delta=5, apex_delta=20, exit_delta=5)
-        
+
         assert "line" in issue.lower()
 
     def test_format_car_state_full(self):
         """Test formatting full car state."""
         from src.core.telemetry_analyzer import format_car_state
-        
+
         state = {
             "abs": 1,
             "tc": 0,
@@ -676,9 +674,9 @@ class TestCornerAnalysis:
             "brake_temp_rl": 195.0,
             "brake_temp_rr": 205.0,
         }
-        
+
         formatted = format_car_state(state)
-        
+
         assert "ABS:YES" in formatted
         assert "TC:no" in formatted
         assert "Steer:" in formatted
@@ -686,15 +684,15 @@ class TestCornerAnalysis:
     def test_format_car_state_none(self):
         """Test formatting None car state."""
         from src.core.telemetry_analyzer import format_car_state
-        
+
         formatted = format_car_state(None)
-        
+
         assert formatted == "No data"
 
     def test_balance_hint_understeer(self):
         """Test balance hint for understeer."""
         from src.core.telemetry_analyzer import balance_hint
-        
+
         state = {
             "slip_fl": 0.3,
             "slip_fr": 0.35,
@@ -703,15 +701,15 @@ class TestCornerAnalysis:
             "steer": 0.1,
             "yaw_rate": 0.1,
         }
-        
+
         hint = balance_hint(state)
-        
+
         assert hint == "understeer"
 
     def test_balance_hint_oversteer(self):
         """Test balance hint for oversteer."""
         from src.core.telemetry_analyzer import balance_hint
-        
+
         state = {
             "slip_fl": 0.1,
             "slip_fr": 0.12,
@@ -720,15 +718,15 @@ class TestCornerAnalysis:
             "steer": 0.1,
             "yaw_rate": 0.3,
         }
-        
+
         hint = balance_hint(state)
-        
+
         assert hint == "oversteer"
 
     def test_balance_hint_neutral(self):
         """Test balance hint for neutral."""
         from src.core.telemetry_analyzer import balance_hint
-        
+
         state = {
             "slip_fl": 0.15,
             "slip_fr": 0.15,
@@ -737,17 +735,17 @@ class TestCornerAnalysis:
             "steer": 0.05,
             "yaw_rate": 0.2,
         }
-        
+
         hint = balance_hint(state)
-        
+
         assert hint == "neutral"
 
     def test_balance_hint_none(self):
         """Test balance hint with None."""
         from src.core.telemetry_analyzer import balance_hint
-        
+
         hint = balance_hint(None)
-        
+
         assert hint == "unknown"
 
 
@@ -757,42 +755,42 @@ class TestFindFrameIndex:
     def test_find_frame_index_exact(self):
         """Test finding exact frame index."""
         from src.core.telemetry_analyzer import _find_frame_index
-        
+
         track = [
             {"frame": 0, "speed": 100},
             {"frame": 10, "speed": 110},
             {"frame": 20, "speed": 120},
         ]
-        
+
         idx = _find_frame_index(track, 10)
-        
+
         assert idx == 1
 
     def test_find_frame_index_between(self):
         """Test finding frame index between points."""
         from src.core.telemetry_analyzer import _find_frame_index
-        
+
         track = [
             {"frame": 0, "speed": 100},
             {"frame": 10, "speed": 110},
             {"frame": 20, "speed": 120},
         ]
-        
+
         idx = _find_frame_index(track, 15)
-        
+
         assert idx == 2  # Should return index of frame >= 15
 
     def test_find_frame_index_beyond(self):
         """Test finding frame index beyond track."""
         from src.core.telemetry_analyzer import _find_frame_index
-        
+
         track = [
             {"frame": 0, "speed": 100},
             {"frame": 10, "speed": 110},
         ]
-        
+
         idx = _find_frame_index(track, 100)
-        
+
         assert idx == 1  # Should return last index
 
 
@@ -802,7 +800,7 @@ class TestAnalyzeCornerPhases:
     def test_analyze_corner_phases_basic(self):
         """Test basic corner phase analysis."""
         from src.core.telemetry_analyzer import analyze_corner_phases
-        
+
         track = []
         # Create track with braking before corner
         for i in range(100):
@@ -816,7 +814,7 @@ class TestAnalyzeCornerPhases:
                 "x": i * 10,
                 "z": 0,
             })
-        
+
         corner = {
             "start_frame": 50,
             "apex_frame": 60,
@@ -825,9 +823,9 @@ class TestAnalyzeCornerPhases:
             "apex_speed": 80,
             "exit_speed": 120,
         }
-        
+
         result = analyze_corner_phases(track, corner, 0, hz=10.0)
-        
+
         assert result is not None
         assert "brake_onset_dt" in result
         assert "turn_in_dt" in result
@@ -836,12 +834,12 @@ class TestAnalyzeCornerPhases:
     def test_analyze_corner_phases_insufficient_data(self):
         """Test corner phase analysis with insufficient data."""
         from src.core.telemetry_analyzer import analyze_corner_phases
-        
+
         track = [{"frame": 0, "speed": 100}]
         corner = {"start_frame": 10, "apex_frame": 15, "end_frame": 20}
-        
+
         result = analyze_corner_phases(track, corner, 0, hz=10.0)
-        
+
         assert result is None
 
 
@@ -851,7 +849,7 @@ class TestAnalyzeGripUtilization:
     def test_analyze_grip_utilization_basic(self):
         """Test basic grip utilization analysis."""
         from src.core.telemetry_analyzer import analyze_grip_utilization
-        
+
         track = []
         for i in range(50):
             track.append({
@@ -860,11 +858,11 @@ class TestAnalyzeGripUtilization:
                 "acc_g_z": -0.5 if 10 <= i < 20 else 0.0,
                 "brake": 0.5 if 10 <= i < 20 else 0.0,
             })
-        
+
         corner = {"start_frame": 10, "end_frame": 40}
-        
+
         result = analyze_grip_utilization(track, corner, hz=10.0)
-        
+
         assert result is not None
         assert "peak_total_g" in result
         assert "avg_total_g" in result
@@ -874,12 +872,12 @@ class TestAnalyzeGripUtilization:
     def test_analyze_grip_utilization_insufficient_data(self):
         """Test grip utilization with insufficient data."""
         from src.core.telemetry_analyzer import analyze_grip_utilization
-        
+
         track = [{"frame": 0}]
         corner = {"start_frame": 0, "end_frame": 1}
-        
+
         result = analyze_grip_utilization(track, corner, hz=10.0)
-        
+
         assert result is None
 
 
@@ -1059,10 +1057,11 @@ class TestTelemetryAnalyzer:
     @pytest.mark.asyncio
     async def test_analyze_with_captured_data(self, tmp_path):
         """Test TelemetryAnalyzer.analyze with captured telemetry data."""
-        from src.core.telemetry_analyzer import TelemetryAnalyzer
         import json
+
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
         from src.core.telemetry_decoder import decode_physics, physics_to_dict
-        
+
         # Load the captured startup frames
         frames = []
         with open('tests/fixtures/sample_telemetry.jsonl', 'r') as f:
@@ -1073,17 +1072,17 @@ class TestTelemetryAnalyzer:
                 physics_raw = bytes.fromhex(frame_json['physics_raw'])
                 decoded = decode_physics(physics_raw)
                 physics_dict = physics_to_dict(decoded)
-                
+
                 frame = FrameData(
                     timestamp=frame_json['timestamp'],
                     frame_number=frame_json['frame_number'],
                     physics=physics_dict,
                 )
                 frames.append(frame)
-        
+
         analyzer = TelemetryAnalyzer(output_dir=str(tmp_path))
         result = await analyzer.analyze(frames, hz=10.0, output_prefix="test")
-        
+
         assert result is not None
         assert hasattr(result, 'html_path')
         assert hasattr(result, 'ai_prompt_path')
@@ -1093,12 +1092,12 @@ class TestTelemetryAnalyzer:
     async def test_analyze_insufficient_frames(self):
         """Test TelemetryAnalyzer.analyze with insufficient frames."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
-        
+
         frames = [create_mock_frame(i) for i in range(5)]
         analyzer = TelemetryAnalyzer(output_dir="tests/output")
-        
+
         result = await analyzer.analyze(frames, hz=10.0, output_prefix="test_short")
-        
+
         assert result is not None
         assert result.laps_detected == 0
 
@@ -1106,32 +1105,32 @@ class TestTelemetryAnalyzer:
     async def test_analyze_with_track_name(self):
         """Test TelemetryAnalyzer.analyze with track name."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
-        
+
         frames = [create_mock_frame(i, speed=100.0, position=i * 0.01) for i in range(100)]
         analyzer = TelemetryAnalyzer(output_dir="tests/output")
-        
+
         result = await analyzer.analyze(frames, hz=10.0, track_name="spa", output_prefix="test_track")
-        
+
         assert result is not None
 
     @pytest.mark.asyncio
     async def test_analyze_with_game_lap_boundaries(self):
         """Test TelemetryAnalyzer.analyze with game-reported lap boundaries."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
-        
+
         frames = [create_mock_frame(i, speed=100.0, position=i * 0.01) for i in range(200)]
         analyzer = TelemetryAnalyzer(output_dir="tests/output")
-        
+
         # Provide game lap boundaries
         game_boundaries = [0, 100, 200]
-        
+
         result = await analyzer.analyze(
-            frames, 
-            hz=10.0, 
+            frames,
+            hz=10.0,
             game_lap_boundaries=game_boundaries,
             output_prefix="test_game_laps"
         )
-        
+
         assert result is not None
 
     @pytest.mark.asyncio
@@ -1572,7 +1571,7 @@ class TestFixedMeasurementWindow:
 
     def test_detect_profiled_corners_fallback_without_norm_pos(self):
         """Without norm_pos confidence is LOW and segment_time_s is None."""
-        from src.core.telemetry_analyzer import detect_profiled_corners, corner_segment_time
+        from src.core.telemetry_analyzer import corner_segment_time, detect_profiled_corners
 
         track = []
         for i in range(200):
@@ -1599,7 +1598,7 @@ class TestFixedMeasurementWindow:
 
     def test_detect_profiled_corners_canonical_uses_fixed_window(self):
         """Canonical path stores segment_time_s over fixed window, not dynamic entry/exit."""
-        from src.core.telemetry_analyzer import _build_canonical_lap, _detect_profiled_corners_canonical
+        from src.core.telemetry_analyzer import _detect_profiled_corners_canonical
 
         # Canonical track with uniform progress and time_s
         samples = []
@@ -1812,8 +1811,8 @@ class TestFixedMeasurementWindow:
         All cars now list brake bias, so the catalog-exists-with-brake-bias scenario
         validates that the prompt correctly defers to the catalog.
         """
-        from src.core.telemetry_analyzer import TelemetryAnalyzer
         from src.core.car_tuning_catalog import get_tuning_params
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         car_model = "Ford Mustang GT3"
         params = get_tuning_params(car_model)
@@ -1918,7 +1917,7 @@ class TestFixedMeasurementWindow:
         (not 0.0) when the measurement window has fewer than 2 points or
         produces zero elapsed time.  A 0.0 value was being selected as the
         'best segment' in theoretical best lap calculation."""
-        from src.core.telemetry_analyzer import _build_canonical_lap, _detect_profiled_corners_canonical
+        from src.core.telemetry_analyzer import _detect_profiled_corners_canonical
 
         # Build a canonical lap where the corner window has very few samples
         samples = []
@@ -1948,7 +1947,7 @@ class TestFixedMeasurementWindow:
         narrow as 0.005 of the lap) got zero canonical corners because the
         fixed 200-bin grid left <4 samples per corner window, suppressing
         all coaching. Bins must adapt to the narrowest corner window."""
-        from src.core.analyzer.canonical import _canonical_bins_for_profile, _build_canonical_lap
+        from src.core.analyzer.canonical import _build_canonical_lap, _canonical_bins_for_profile
         from src.core.analyzer.corner_detection import _detect_profiled_corners_canonical
 
         dense_profile = {

@@ -3,9 +3,7 @@
 import json
 from unittest.mock import patch
 
-import pytest
-
-from src.utils.config import ConfigManager, AppConfig, get_config_path
+from src.utils.config import AppConfig, ConfigManager, get_config_path
 
 
 def test_set_discord_config_post_invalid_maps_to_submit_invalid_laps(tmp_path) -> None:

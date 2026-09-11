@@ -5,37 +5,33 @@ Based on deep multi-log analysis + engineering review of v2.
 This module now imports data models from src.models for better maintainability.
 """
 
-import re
-import os
-import sys
-import time
 import asyncio
+import os
+import re
+import time
 from datetime import datetime
-from typing import AsyncIterator, Optional, Callable, Awaitable, TextIO
 from pathlib import Path
+from typing import AsyncIterator, Awaitable, Callable, Optional, TextIO
 
 # Import data models from the models module
 from ..models import (
-    LapState,
-    InProgressLap,
-    StintData,
-    LapData,
-    LapCompletionData,
-    SessionData,
-    SharedSessionManager,
-    TyreState,
-    LogContext,
-    # Constants
-    SECTOR_SUM_TOLERANCE_MS,
     LAP_TIME_RECONCILIATION_TOLERANCE_MS,
-    MIN_FULL_LAP_HUNDREDM,
-    is_hybrid_car,
-    SESSION_TYPE_MAP,
     PRACTICE_LIKE,
     RACE_LIKE,
+    # Constants
+    SECTOR_SUM_TOLERANCE_MS,
+    SESSION_TYPE_MAP,
+    InProgressLap,
+    LapCompletionData,
+    LapData,
+    LapState,
+    LogContext,
+    SessionData,
+    SharedSessionManager,
+    StintData,
+    is_hybrid_car,
 )
-from ..utils.structured_logger import log_debug, Component
-
+from ..utils.structured_logger import Component, log_debug
 
 # ─── Callback type aliases ────────────────────────────────────────────────────
 
@@ -175,7 +171,7 @@ class LogParser:
         self._last_activity_ts: Optional[float] = None
         self._running: bool = False
         self._emit_callbacks: bool = False
-        
+
         # Track last seen car ID for compound detection
         self._last_car_uuid: Optional[str] = None
         self._last_setup_car_uuid: Optional[str] = None
@@ -224,7 +220,7 @@ class LogParser:
 
     # ── Pattern compilation ───────────────────────────────────────────────────
 
-    
+
     def _compile_patterns(self) -> None:
         self._pats: dict[str, re.Pattern] = {
             "version": re.compile(r"Build release ([^,]+),"),
@@ -628,13 +624,13 @@ class LogParser:
                 f"⚠️ reset() will NOT be called for this event"
             )
             return
-        
+
         log_debug(Component.LOG_PARSER,
             f"[GAME_STATUS] STATE CHANGE: is_running={is_running}, "
             f"trigger={trigger}, last={self._last_emitted_game_status}"
         )
         self._last_emitted_game_status = is_running
-        
+
         if self.on_game_status_change:
             try:
                 await self.on_game_status_change(is_running)
@@ -681,7 +677,7 @@ class LogParser:
             self.context.tyre = preserved_tyre
             if self.current_session:
                 self.current_session.tyre_compound = preserved_tyre.compound_name
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[SESSION_RESTART] Preserved tyre compound "
                 f"{preserved_tyre.compound_name} across restart")
         if self.on_session_restart:
@@ -719,7 +715,7 @@ class LogParser:
 
         # Compound changed → new stint (tyre change at pit stop)
         if compound != self._current_stint.tyre_compound:
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[STINT] Compound changed {self._current_stint.tyre_compound!r} "
                 f"→ {compound!r}: starting stint "
                 f"{self._current_stint.stint_number + 1}"
@@ -802,7 +798,7 @@ class LogParser:
             else:
                 self._start_new_session("UNKNOWN", line)
 
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[CONNECT] pid={pid} car={car} uuid={car_uuid} "
                 f"hybrid={self.context.car_is_hybrid}"
             )
@@ -1003,7 +999,7 @@ class LogParser:
 
         if not line_ts:
             self.context.tyre.set(pos, compound_name)
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[COMPOUND] Tyre {pos} -> {code} "
                 f"(resolved: {self.context.tyre.compound_name})"
             )
@@ -1013,7 +1009,7 @@ class LogParser:
         if not self._pending_compound_updates:
             self._pending_compound_source_car_uuid = self._last_setup_car_uuid
         self._pending_compound_updates[pos] = compound_name
-        log_debug(Component.LOG_PARSER, 
+        log_debug(Component.LOG_PARSER,
             f"[COMPOUND] Pending tyre {pos} -> {code} at {line_ts} "
             f"(positions={sorted(self._pending_compound_updates)})"
         )
@@ -1033,12 +1029,12 @@ class LogParser:
         if player_scoped or (legacy_unscoped and prelap_window):
             for pos, compound in pending.items():
                 self.context.tyre.set(pos, compound)
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[COMPOUND] Applied batch at {self._pending_compound_ts} "
                 f"(positions={sorted(pending)}) -> {self.context.tyre.compound_name}"
             )
         else:
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[COMPOUND] Ignored unscoped batch at {self._pending_compound_ts} "
                 f"(positions={sorted(pending)})"
             )
@@ -1165,12 +1161,12 @@ class LogParser:
             fuel_reliable=not self.context.car_is_hybrid,
             start_time=start_time,
         )
-        
+
         # Apply any setup values that were captured before this session started
         if self.context.setup_values:
             self.current_session.setup_notes = self._serialize_setup_notes()
             log_debug(Component.LOG_PARSER, f"[SESSION] Applied {len(self.context.setup_values)} setup values to new session")
-        
+
         self._reset_in_progress()
         self._finalise_stints()
 
@@ -1220,7 +1216,7 @@ class LogParser:
         # Negative delta = tank fill / init event (race start).
         if fuel_delta < 0:
             self.context.fuel_init_correction = abs(fuel_delta)
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[FUEL] Init correction stored: {self.context.fuel_init_correction} L"
             )
             return
@@ -1237,14 +1233,14 @@ class LogParser:
         net_fuel = fuel_delta
         if self.context.fuel_init_correction > 0.0:
             net_fuel = max(0.0, fuel_delta - self.context.fuel_init_correction)
-            log_debug(Component.LOG_PARSER, 
+            log_debug(Component.LOG_PARSER,
                 f"[FUEL] Init correction applied: raw={fuel_delta:.3f} → "
                 f"net={net_fuel:.3f} L"
             )
             self.context.fuel_init_correction = 0.0
 
         self._ip.fuel_used = net_fuel
-        log_debug(Component.LOG_PARSER, 
+        log_debug(Component.LOG_PARSER,
             f"[FUEL] Lap fuel: {net_fuel:.3f} L  "
             f"dist: {lap_hundredm}×100 m  "
             f"reliable={self._ip.fuel_reliable}"
@@ -1341,13 +1337,13 @@ class LogParser:
             return
         if self.current_session.session_type in RACE_LIKE:
             return
-        
+
         m = self._pats["practice_split"].search(line)
         if not m:
             return
-        
+
         split_idx, split_ms = int(m.group(1)), int(m.group(2))
-        
+
         # Tourist-style layouts can publish a zero-time start marker instead
         # of a ``New lap`` line when the outlap ends. That marker starts the
         # first timed lap. A normal non-zero S1 does not: on tracks whose pit
@@ -1359,7 +1355,7 @@ class LogParser:
                 "[OUTLAP] Clearing outlap flag — zero-time start marker "
                 "for new flying lap detected")
             self._ip.is_outlap = False
-        
+
         # Do not put structural-outlap splits in the ordinary accumulator.
         # Retain them separately, though: some tracks reject the pit prefix
         # and then time the following full circuit as a valid lap. An exact
@@ -1367,7 +1363,7 @@ class LogParser:
         if self._ip.is_outlap:
             self._outlap_candidate_splits[split_idx] = split_ms
             return
-        
+
         # Record the split (including the id 0 start-line marker at splittime 0).
         # Keeping id 0 preserves contiguous split keys ([0,1,...]) for the
         # validity guard; for single-split tracks (e.g. Nurburgring Tourist) the
@@ -1398,7 +1394,7 @@ class LogParser:
                 self._ip.is_outlap = True
                 log_debug(Component.LOG_PARSER, "[OUTLAP] Outplap split detected")
             else:
-                log_debug(Component.LOG_PARSER, 
+                log_debug(Component.LOG_PARSER,
                     "[OUTLAP] Outplap split ignored in race-like session "
                     "(grid-countdown broadcast, not a player outlap marker)"
                 )
@@ -1503,7 +1499,7 @@ class LogParser:
             if overshoot > SECTOR_SUM_TOLERANCE_MS:
                 s1_calc = lap_time_ms - s2 - s3
                 if s1_calc > 0:
-                    log_debug(Component.LOG_PARSER, 
+                    log_debug(Component.LOG_PARSER,
                         f"[SECTORS] S1 corrupted (raw={s1} ms, "
                         f"sum={sector_sum} > lap={lap_time_ms} by {overshoot} ms)"
                         f" → back-calculated: {s1_calc} ms"
@@ -1512,7 +1508,7 @@ class LogParser:
                     if split_keys and split_keys[0] == 0:
                         split_times[0] = s1
                 else:
-                    log_debug(Component.LOG_PARSER, 
+                    log_debug(Component.LOG_PARSER,
                         f"[SECTORS] S1 overshoot detected (raw={s1}, "
                         f"sum={sector_sum} > lap={lap_time_ms}) but "
                         f"back-calc non-positive ({s1_calc}); leaving as-is"
@@ -1812,7 +1808,7 @@ class LogParser:
             self.current_session.laps.append(pending)
             self._pending_lap = None
             self._pending_lap_since = None
-        log_debug(Component.LOG_PARSER, 
+        log_debug(Component.LOG_PARSER,
             f"[LAP] flushed pending #{pending.lap_number} via authoritative "
             f"flag (game_valid={game_valid})"
         )
@@ -1987,7 +1983,7 @@ class LogParser:
         self._pending_lap_since = None
         self._apply_shm_fallback_validity(pending)
         self.current_session.laps.append(pending)
-        log_debug(Component.LOG_PARSER, 
+        log_debug(Component.LOG_PARSER,
             f"[LAP] flushed pending #{pending.lap_number} on session/EOF "
             f"(validity source={pending.validity_source})"
         )
@@ -2155,7 +2151,7 @@ class LogParser:
         )
 
         self.current_session.laps.append(aborted)
-        log_debug(Component.LOG_PARSER, 
+        log_debug(Component.LOG_PARSER,
             f"[LAP] ABORTED #{lap_number}  sectors={sorted(ip.splits.keys())}  "
             f"dist={ip.distance_hundredm}"
         )
@@ -2388,7 +2384,7 @@ class LogParser:
                     except (RuntimeError, ValueError, TypeError) as exc:
                         log_debug(Component.LOG_PARSER, f"[ERROR] Historical parse: {exc}")
 
-                log_debug(Component.LOG_PARSER, 
+                log_debug(Component.LOG_PARSER,
                     f"Historical pass: {historical_laps} lap(s). "
                     f"Session: {self.current_session is not None}"
                 )

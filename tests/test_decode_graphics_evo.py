@@ -22,7 +22,6 @@ from pathlib import Path
 import pytest
 
 from src.core.telemetry_decoder import (
-    GRAPHICS_EVO_MIN_SIZE,
     _GE_TIMING_BEST_LAPTIME,
     _GE_TIMING_CURRENT_LAPTIME,
     _GE_TIMING_DELTA_CURRENT,
@@ -33,6 +32,7 @@ from src.core.telemetry_decoder import (
     _GE_TIMING_IS_INVALID,
     _GE_TIMING_LAST_LAPTIME,
     _GE_TIMING_TOTAL_TIME,
+    GRAPHICS_EVO_MIN_SIZE,
     decode_graphics,
     decode_graphics_evo,
 )

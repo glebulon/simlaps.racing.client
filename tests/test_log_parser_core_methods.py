@@ -4,13 +4,12 @@ Tests for core log parser methods to improve coverage.
 Targets the main parsing logic that's currently uncovered.
 """
 
-import pytest
 import asyncio
-from unittest.mock import patch, MagicMock, mock_open
-from pathlib import Path
+
+import pytest
 
 from src.core.log_parser import LogParser
-from src.models import SessionData, LapData, LapState, InProgressLap
+from src.models import InProgressLap, LapState, SessionData
 
 
 class TestHandleLapComplete:
@@ -88,9 +87,9 @@ class TestMaybeEmitAbortedLap:
         """Test aborted lap with no data returns None."""
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
-        
+
         result = parser._maybe_emit_aborted_lap()
-        
+
         assert result is None
 
     def test_maybe_emit_aborted_no_session(self):
@@ -98,9 +97,9 @@ class TestMaybeEmitAbortedLap:
         parser = LogParser()
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000}
-        
+
         result = parser._maybe_emit_aborted_lap()
-        
+
         assert result is None
 
 
@@ -112,9 +111,9 @@ class TestProcessLineHandlers:
         parser = LogParser()
         parser._emit_callbacks = True
         line = "Build release 0.1.2.3,"
-        
+
         parser._handle_version(line)
-        
+
         assert parser.context.game_version == "0.1.2.3"
 
     def test_handle_track_name(self):
@@ -122,7 +121,7 @@ class TestProcessLineHandlers:
         parser = LogParser()
         line = "TRACK NAME spa_francorchamps"
         parser._handle_track_name(line)
-        
+
         assert parser.context.current_track == "spa_francorchamps"
 
     def test_handle_connect_accepts_new_player_count_format(self):
@@ -184,7 +183,7 @@ class TestFlushPendingCompoundBatch:
     def test_flush_empty_batch(self):
         """Test flushing empty batch does nothing."""
         parser = LogParser()
-        
+
         # Should not raise
         parser._flush_pending_compound_batch()
 
@@ -198,9 +197,9 @@ class TestHandleTyreCompoundLines:
         parser.current_session = SessionData(track="spa", car="porsche")
         parser._emit_callbacks = True
         line = "[2024-01-01 12:00:00] LOADING TYRE COMPOUND SC"
-        
+
         result = parser._handle_compound(line)
-        
+
         # Just verify method runs without error
         assert result is None
 
@@ -210,9 +209,9 @@ class TestHandleTyreCompoundLines:
         parser.current_session = SessionData(track="spa", car="porsche")
         parser._emit_callbacks = True
         line = "[2024-01-01 12:00:00] LOADING TYRE COMPOUND MC"
-        
+
         result = parser._handle_compound(line)
-        
+
         assert result is None
 
 
@@ -224,9 +223,9 @@ class TestHandleOutlap:
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         line = "Outlap split"
-        
+
         result = parser._handle_outlap_signals(line)
-        
+
         # Just verify it runs without error
         assert result is None
 
@@ -239,9 +238,9 @@ class TestHandleOutlap:
         parser._ip.is_outlap = True
         parser._ip.splits = {2: 12345}
         line = "Couldn't create lap from opensplits"
-        
+
         result = parser._handle_outlap_signals(line)
-        
+
         assert result is None
         assert parser._ip.is_outlap is True
         assert parser._ip.splits == {}
@@ -302,9 +301,9 @@ class TestHandleFuelAndLapTracking:
         parser.current_session = SessionData(track="spa", car="porsche")
         parser.context.car_uuid = "abc123"
         line = "[2024-01-01 12:00:00] Fuel carId=abc123 level=45.5"
-        
+
         result = parser._handle_fuel(line)
-        
+
         # Just verify it runs without error
         assert result is None
 
@@ -313,9 +312,9 @@ class TestHandleFuelAndLapTracking:
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche")
         line = "Lap test evOnLapCompleted: lap=3"
-        
+
         parser._handle_physics_lap(line)
-        
+
         # Just verify it runs without error - the pattern may not match
         assert True
 
@@ -329,10 +328,10 @@ class TestResetInProgress:
         parser.current_session = SessionData(track="spa", car="porsche")
         parser._ip.physics_lap_num = 5
         parser._ip.splits = {0: 30000}
-        
+
         old_ip = parser._ip
         parser._reset_in_progress()
-        
+
         assert parser._ip is not old_ip
         assert parser._ip.physics_lap_num is None
         assert len(parser._ip.splits) == 0
@@ -346,25 +345,25 @@ class TestFollowMethod:
         """Test follow waiting for file to exist."""
         log_file = tmp_path / "test.log"
         parser = LogParser(log_path=str(log_file))
-        
+
         # Create file after a short delay
         async def create_file():
             await asyncio.sleep(0.05)
             log_file.write_text("Game Started!\n")
-        
+
         # Run follow for a short time
         parser._running = True
         task = asyncio.create_task(create_file())
-        
+
         try:
             # Run follow with timeout
             await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=0.2)
         except asyncio.TimeoutError:
             pass  # Expected
-        
+
         parser.stop()
         await task
-        
+
         # Should have detected file
         assert True  # Just verify it didn't crash
 
@@ -376,18 +375,18 @@ class TestFollowMethod:
             "TRACK NAME spa_francorchamps\n"
             "CAR NAME ks_porsche_992_gt3_cup\n"
         )
-        
+
         parser = LogParser(log_path=str(log_file))
-        
+
         # Run briefly
         parser._running = True
         try:
             await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=0.1)
         except asyncio.TimeoutError:
             pass
-        
+
         parser.stop()
-        
+
         # Just verify it ran without crash
         assert True
 
@@ -396,21 +395,21 @@ class TestFollowMethod:
         """Test follow detects game start."""
         log_file = tmp_path / "test.log"
         log_file.write_text("Game Started!\n")
-        
+
         status_calls = []
         async def on_status(status):
             status_calls.append(status)
-        
+
         parser = LogParser(log_path=str(log_file), on_status_change=on_status)
-        
+
         parser._running = True
         try:
             await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=0.15)
         except asyncio.TimeoutError:
             pass
-        
+
         parser.stop()
-        
+
         # Should have emitted game status
         assert True  # Just verify no crash
 
@@ -419,27 +418,27 @@ class TestFollowMethod:
         """Test follow detects log truncation."""
         log_file = tmp_path / "test.log"
         log_file.write_text("Initial content\n")
-        
+
         parser = LogParser(log_path=str(log_file))
-        
+
         # Start follow
         parser._running = True
-        
+
         # Run briefly then truncate
         async def truncate_file():
             await asyncio.sleep(0.05)
             log_file.write_text("New content after truncate\n")
-        
+
         task = asyncio.create_task(truncate_file())
-        
+
         try:
             await asyncio.wait_for(parser.follow(poll_interval=0.01), timeout=0.2)
         except asyncio.TimeoutError:
             pass
-        
+
         parser.stop()
         await task
-        
+
         assert True  # Just verify no crash
 
 
@@ -458,17 +457,17 @@ class TestHandleLapCompleteAdvanced:
         parser.context.player_id = "76561198321627695"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         # Set up in-progress lap data
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000, 1: 30000, 2: 38456}
         parser._ip.split_end_confirmed = True
         parser._ip.distance_hundredm = 50
-        
-        line = f"New lap carId=abc123 time=1:38.456"
-        
+
+        line = "New lap carId=abc123 time=1:38.456"
+
         result = parser._handle_lap_complete(line)
-        
+
         # Should return a lap if everything matches
         # Note: May return None due to car_id matching, but at least code path is covered
         assert True  # Code path exercised
@@ -485,15 +484,15 @@ class TestHandleLapCompleteAdvanced:
         parser.context.player_id = "76561198321627695"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         # Simulate S1 corruption - cumulative time from race start
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 120000, 1: 30000, 2: 38456}  # S1 > lap time
         parser._ip.split_end_confirmed = True
-        
-        line = f"New lap carId=abc123 time=1:38.456"
-        
+
+        line = "New lap carId=abc123 time=1:38.456"
+
         result = parser._handle_lap_complete(line)
-        
+
         # Should handle S1 corruption
         assert True  # Code path exercised

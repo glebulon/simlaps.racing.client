@@ -4,8 +4,7 @@ import json
 import os
 from importlib import resources
 from pathlib import Path
-from typing import Optional, Tuple
-
+from typing import Optional
 
 # Path to track catalog JSON file
 _CATALOG_PATH = Path(__file__).parent / "data" / "track_catalog.json"
@@ -25,10 +24,10 @@ def _load_catalog() -> dict:
         catalog_text = _CATALOG_PATH.read_text(encoding="utf-8")
 
     catalog = json.loads(catalog_text)
-    
+
     # Schema validation
     _validate_catalog(catalog)
-    
+
     return catalog
 
 
@@ -36,34 +35,34 @@ def _validate_catalog(catalog: dict) -> None:
     """Validate catalog structure and required fields."""
     if not isinstance(catalog, dict):
         raise ValueError("Catalog must be a dictionary")
-    
+
     for track_key, track in catalog.items():
         if not isinstance(track, dict):
             raise ValueError(f"Track '{track_key}' must be a dictionary")
-        
+
         # Required track fields
         required_fields = ["name", "aliases", "default_config", "configs"]
         for field in required_fields:
             if field not in track:
                 raise ValueError(f"Track '{track_key}' missing required field: {field}")
-        
+
         # Validate configs
         if not isinstance(track["configs"], dict):
             raise ValueError(f"Track '{track_key}' configs must be a dictionary")
-        
+
         for config_key, config in track["configs"].items():
             if not isinstance(config, dict):
                 raise ValueError(f"Config '{config_key}' in track '{track_key}' must be a dictionary")
-            
+
             # Validate corners
             if "corners" in config:
                 if not isinstance(config["corners"], list):
                     raise ValueError(f"Corners in config '{config_key}' must be a list")
-                
+
                 for corner in config["corners"]:
                     if not isinstance(corner, dict):
                         raise ValueError(f"Corner must be a dictionary in config '{config_key}'")
-                    
+
                     required_corner_fields = ["id", "name", "start", "end"]
                     for field in required_corner_fields:
                         if field not in corner:

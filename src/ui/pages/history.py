@@ -2,12 +2,13 @@
 History Page - View past lap submissions.
 """
 
-import flet as ft
-from typing import Optional, Callable, List
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Callable, List, Optional
 
-from ...utils.helpers import format_lap_time, format_car_name, format_track_name
+import flet as ft
+
+from ...utils.helpers import format_car_name, format_lap_time, format_track_name
 from ..components.mount_safe import safe_update
 
 
@@ -26,25 +27,25 @@ class HistoryPage(ft.Container):
     """
     History page showing past lap submissions.
     """
-    
+
     def __init__(
         self,
         on_back: Optional[Callable] = None,
     ):
         self.on_back = on_back
         self._entries: List[HistoryEntry] = []
-        
+
         self._list_view = ft.ListView(
             expand=True,
             spacing=8,
             padding=0,
         )
-        
+
         super().__init__(
             content=self._build_content(),
             expand=True,
         )
-    
+
     def _build_content(self) -> ft.Control:
         """Build the history page content."""
         # Header with back button
@@ -65,13 +66,13 @@ class HistoryPage(ft.Container):
             ],
             spacing=8,
         )
-        
+
         # Stats summary
         stats = self._build_stats()
-        
+
         # Update list view content
         self._update_list_view()
-        
+
         return ft.Container(
             content=ft.Column(
                 controls=[
@@ -90,19 +91,19 @@ class HistoryPage(ft.Container):
             bgcolor="#0f0f1a",
             expand=True,
         )
-    
+
     def _build_stats(self) -> ft.Container:
         """Build statistics summary."""
         total = len(self._entries)
         submitted = sum(1 for e in self._entries if e.was_submitted)
         valid = sum(1 for e in self._entries if e.was_valid)
-        
+
         # Debug logging
-        from ...utils.structured_logger import log_debug, Component
+        from ...utils.structured_logger import Component, log_debug
         log_debug(Component.HISTORY, "History stats", total=total, submitted=submitted, valid=valid)
         for i, entry in enumerate(self._entries):
             log_debug(Component.HISTORY, f"Entry {i}", submitted=entry.was_submitted, valid=entry.was_valid)
-        
+
         return ft.Container(
             content=ft.Row(
                 controls=[
@@ -119,7 +120,7 @@ class HistoryPage(ft.Container):
             border_radius=12,
             border=ft.Border.all(1, "#3d3d5c"),
         )
-    
+
     def _build_stat(self, label: str, value: str, icon) -> ft.Column:
         """Build a stat display."""
         return ft.Column(
@@ -140,7 +141,7 @@ class HistoryPage(ft.Container):
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=4,
         )
-    
+
     def _build_entry_row(self, entry: HistoryEntry) -> ft.Container:
         """Build a history entry row."""
         # Parse timestamp for display
@@ -152,7 +153,7 @@ class HistoryPage(ft.Container):
             time_str = "--:--"
             date_str = "---"
         except Exception as ex:
-            from ...utils.structured_logger import log_exception, Component
+            from ...utils.structured_logger import Component, log_exception
 
             log_exception(
                 Component.HISTORY,
@@ -162,14 +163,14 @@ class HistoryPage(ft.Container):
             )
             time_str = "--:--"
             date_str = "---"
-        
+
         status_icon = ft.Icons.CHECK_CIRCLE if entry.was_submitted else (
             ft.Icons.CANCEL if not entry.was_valid else ft.Icons.SCHEDULE
         )
         status_color = "#51cf66" if entry.was_submitted else (
             "#888888" if not entry.was_valid else "#ffd43b"
         )
-        
+
         return ft.Container(
             content=ft.Row(
                 controls=[
@@ -218,7 +219,7 @@ class HistoryPage(ft.Container):
             border_radius=8,
             border=ft.Border.all(1, "#2d2d4a"),
         )
-    
+
     def _update_list_view(self):
         """Update the list view with current entries."""
         if not self._entries:
@@ -250,21 +251,21 @@ class HistoryPage(ft.Container):
                 self._build_entry_row(entry)
                 for entry in reversed(self._entries)  # Most recent first
             ]
-    
+
     def add_entry(self, entry: HistoryEntry):
         """Add a new history entry."""
         self._entries.append(entry)
         self._update_list_view()
         self.content = self._build_content()
         safe_update(self)
-    
+
     def set_entries(self, entries: List[HistoryEntry]):
         """Set all history entries."""
         self._entries = list(entries)
         self._update_list_view()
         self.content = self._build_content()
         # Don't call update() here - will be updated when added to page
-    
+
     def clear_entries(self):
         """Clear all history entries."""
         self._entries.clear()

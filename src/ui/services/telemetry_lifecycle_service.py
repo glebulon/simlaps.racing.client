@@ -5,6 +5,7 @@ Owns telemetry capture start/stop transitions and post-capture analysis flow.
 
 from typing import TYPE_CHECKING, Optional
 
+from src.core.telemetry_capture import TelemetryCapture
 from src.utils.structured_logger import (
     Component,
     log_debug,
@@ -12,10 +13,10 @@ from src.utils.structured_logger import (
     log_exception,
     log_info,
 )
+
 from ..components.status_bar import ConnectionStatus
 from ..components.telemetry_status import TelemetryStatus
 from ..pages.home import HomePage
-from src.core.telemetry_capture import TelemetryCapture
 
 if TYPE_CHECKING:
     from src.core.analyzer import TelemetryAnalyzer

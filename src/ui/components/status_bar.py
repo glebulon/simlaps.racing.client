@@ -2,11 +2,13 @@
 Status Bar Component for displaying application status.
 """
 
-import flet as ft
-from typing import Optional
 from enum import Enum
-from ...version import get_version, GAME_NAME
+from typing import Optional
+
+import flet as ft
+
 from ...core.security import is_secret_configured
+from ...version import GAME_NAME, get_version
 from .mount_safe import safe_update
 
 
@@ -22,18 +24,18 @@ class StatusBar(ft.Container):
     """
     A status bar component showing connection status.
     """
-    
+
     def __init__(self):
         self._connection_status = ConnectionStatus.DISCONNECTED
         self._status_message = "Not connected"
-        
+
         super().__init__(
             content=self._build_content(),
             padding=ft.Padding.symmetric(horizontal=16, vertical=12),
             bgcolor="#1a1a2e",
             border=ft.Border.only(top=ft.BorderSide(1, "#2d2d4a")),
         )
-    
+
     def _get_status_color(self) -> str:
         """Get color based on connection status."""
         colors = {
@@ -43,7 +45,7 @@ class StatusBar(ft.Container):
             ConnectionStatus.ERROR: "#ff6b6b",
         }
         return colors.get(self._connection_status, "#888888")
-    
+
     def _get_status_icon(self) -> ft.Control:
         """Get status indicator icon."""
         if self._connection_status == ConnectionStatus.CONNECTING:
@@ -60,7 +62,7 @@ class StatusBar(ft.Container):
                 border_radius=6,
                 bgcolor=self._get_status_color(),
             )
-    
+
     def _build_right_controls(self) -> list:
         """Build right-side controls: offline badge (if applicable) + version."""
         controls = []
@@ -124,7 +126,7 @@ class StatusBar(ft.Container):
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
-    
+
     def set_status(
         self,
         connection_status: Optional[ConnectionStatus] = None,
@@ -141,6 +143,6 @@ class StatusBar(ft.Container):
             self._connection_status = connection_status
         if message is not None:
             self._status_message = message
-        
+
         self.content = self._build_content()
         safe_update(self)

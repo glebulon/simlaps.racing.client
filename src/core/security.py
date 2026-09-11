@@ -5,16 +5,17 @@ Handles payload signing, game process verification, and anti-cheat measures.
 """
 
 import enum
-import hmac
 import hashlib
-import uuid
-import time
+import hmac
 import os
 import sys
+import time
+import uuid
 from typing import Optional
+
 from dotenv import load_dotenv
 
-from ..utils.structured_logger import log_debug, log_info, Component
+from ..utils.structured_logger import Component, log_debug
 
 
 class GameProcessStatus(enum.Enum):
@@ -158,7 +159,7 @@ def is_game_running() -> GameProcessStatus:
     if not PSUTIL_AVAILABLE:
         # If psutil not available, detection is uncertain
         return GameProcessStatus.UNKNOWN
-    
+
     try:
         for proc in psutil.process_iter(['name']):
             try:
@@ -171,7 +172,7 @@ def is_game_running() -> GameProcessStatus:
     except Exception:
         # On any error, detection is uncertain
         return GameProcessStatus.UNKNOWN
-    
+
     return GameProcessStatus.NOT_RUNNING
 
 
@@ -184,7 +185,7 @@ def get_game_process_info() -> Optional[dict]:
     """
     if not PSUTIL_AVAILABLE:
         return None
-    
+
     try:
         for proc in psutil.process_iter(['name', 'pid', 'create_time']):
             try:
@@ -199,7 +200,7 @@ def get_game_process_info() -> Optional[dict]:
                 continue
     except Exception:
         pass
-    
+
     return None
 
 
@@ -240,14 +241,14 @@ def create_signature(
     # Create the signature data string
     # Order matters - must match server verification
     sig_data = f"{timestamp}:{nonce}:{user_id}:{track_id}:{lap_time}"
-    
+
     # Create HMAC-SHA256 signature
     signature = hmac.new(
         get_app_secret(),
         sig_data.encode('utf-8'),
         hashlib.sha256
     ).hexdigest()
-    
+
     return signature
 
 
@@ -265,12 +266,12 @@ def sign_payload(payload: dict) -> dict:
     """
     timestamp = get_timestamp()
     nonce = generate_nonce()
-    
+
     # Extract required fields for signature
     user_id = str(payload.get('userId', ''))
     track_id = str(payload.get('trackId', ''))
     lap_time = int(payload.get('time', 0))
-    
+
     # Create signature
     signature = create_signature(
         timestamp=timestamp,
@@ -279,7 +280,7 @@ def sign_payload(payload: dict) -> dict:
         track_id=track_id,
         lap_time=lap_time,
     )
-    
+
     # Return payload with security fields
     return {
         **payload,
@@ -303,11 +304,11 @@ def verify_signature_locally(signed_payload: dict) -> bool:
         timestamp = signed_payload.get('_timestamp', 0)
         nonce = signed_payload.get('_nonce', '')
         signature = signed_payload.get('_signature', '')
-        
+
         user_id = str(signed_payload.get('userId', ''))
         track_id = str(signed_payload.get('trackId', ''))
         lap_time = int(signed_payload.get('time', 0))
-        
+
         expected = create_signature(
             timestamp=timestamp,
             nonce=nonce,
@@ -315,7 +316,7 @@ def verify_signature_locally(signed_payload: dict) -> bool:
             track_id=track_id,
             lap_time=lap_time,
         )
-        
+
         # Use constant-time comparison
         return hmac.compare_digest(signature, expected)
     except Exception:
@@ -337,28 +338,28 @@ def get_steam_user() -> tuple[Optional[str], Optional[str]]:
     """
     if os.name != 'nt':
         return None, None
-    
+
     try:
         import winreg
-        
+
         # Steam stores active user in HKEY_CURRENT_USER\Software\Valve\Steam
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam\ActiveProcess") as key:
             # ActiveUser contains the Steam3 ID (32-bit account ID)
             active_user, _ = winreg.QueryValueEx(key, "ActiveUser")
-            
+
             if active_user and active_user != 0:
                 # Convert Steam3 ID to Steam64 ID
                 # Steam64 = Steam3 + 76561197960265728
                 steam64_id = str(active_user + 76561197960265728)
-                
+
                 # Try to get the username from loginusers.vdf or registry
                 username = _get_steam_username(steam64_id)
-                
+
                 log_debug(Component.SECURITY, f"Steam user detected from registry: {steam64_id} ({username})")
                 return steam64_id, username
     except (ImportError, OSError, FileNotFoundError, PermissionError):
         pass
-    
+
     log_debug(Component.SECURITY, "No Steam user found in registry")
     return None, None
 
@@ -371,26 +372,26 @@ def _get_steam_username(steam64_id: str) -> Optional[str]:
     """
     try:
         import winreg
-        
+
         # Get Steam install path
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as key:
             steam_path, _ = winreg.QueryValueEx(key, "SteamPath")
-        
+
         # Parse loginusers.vdf for username
         loginusers_path = os.path.join(steam_path, "config", "loginusers.vdf")
-        
+
         if os.path.exists(loginusers_path):
             with open(loginusers_path, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
-                
+
                 # Simple VDF parsing - look for the steam64 ID and then PersonaName
                 # Format is like: "76561198321627695" { "AccountName" "..." "PersonaName" "Glebulon" }
                 import re
-                
+
                 # Find the block for this user
                 pattern = rf'"{steam64_id}"\s*\{{\s*([^}}]+)\}}'
                 match = re.search(pattern, content, re.DOTALL)
-                
+
                 if match:
                     user_block = match.group(1)
                     # Extract PersonaName
@@ -399,7 +400,7 @@ def _get_steam_username(steam64_id: str) -> Optional[str]:
                         return persona_match.group(1)
     except Exception:
         pass
-    
+
     return None
 
 
@@ -416,7 +417,7 @@ def get_security_status() -> dict:
     """
     game_status = is_game_running()
     game_info = get_game_process_info() if game_status == GameProcessStatus.RUNNING else None
-    
+
     return {
         'game_running': game_status.value if isinstance(game_status, GameProcessStatus) else game_status,
         'game_process': game_info,

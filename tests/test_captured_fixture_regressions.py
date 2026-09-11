@@ -11,10 +11,9 @@ import pytest
 
 from src.core.log_parser import LogParser
 from src.core.telemetry_analyzer import TelemetryAnalyzer, build_track, detect_laps
-from src.core.telemetry_capture import FrameData, TelemetryCapture, GameProcessStatus
+from src.core.telemetry_capture import FrameData, GameProcessStatus, TelemetryCapture
 from src.core.telemetry_decoder import decode_graphics, decode_physics, decode_static
 from src.models import SharedSessionManager
-
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

@@ -5,61 +5,41 @@ Analyzes captured telemetry data and generates HTML reports and AI coaching prom
 Based on test_scripts/telemetry/2-analyze.py
 """
 
-import json
-import os
 from collections import defaultdict
-from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from src.core.analyzer.ai_prompt import generate_ai_prompt
-from src.core.analyzer.html_renderer import render_html
-from src.core.telemetry_capture import CaptureMetadata, FrameData
-from src.core.track_catalog import select_track_profile
-from src.models import SharedSessionManager
-from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
-
 # ── Constants used directly in TelemetryAnalyzer.analyze()
-from src.core.analyzer._util import (
-    _PLAUSIBLE_FRAME_THRESHOLD,
-)
 # ── Functions
 from src.core.analyzer._util import (
-    _safe_4, _sanitize_slip, _optional_float, _fraction,
-    _median, _interpolate_value, _median3, _local_average,
-    _confidence_label, _decide_analysis_mode,
+    _PLAUSIBLE_FRAME_THRESHOLD,
+    _confidence_label,
+    _decide_analysis_mode,
+    _fraction,
+    _optional_float,
     _profile_corner_sanity_notes,
-    _corner_measurement_window, _find_frame_index,
-    _trend_direction, _avg,
     _select_track_profile_for_analysis,
-    get_physics, get_graphics,
-    extract_car_state,
-    variation_label, classify_corner_issue,
-    format_car_state, balance_hint,
+    get_physics,
 )
+from src.core.analyzer.ai_prompt import generate_ai_prompt
+from src.core.analyzer.analysis_result import AnalysisResult
+from src.core.analyzer.build_track import build_track
 from src.core.analyzer.canonical import _build_canonical_lap, _canonical_bins_for_profile
 from src.core.analyzer.corner_detection import (
     _detect_profiled_corners_canonical,
-    detect_corners, detect_profiled_corners,
-    match_profiled_corners, match_corners,
     corner_segment_time,
+    detect_corners,
+    detect_profiled_corners,
+    match_corners,
+    match_profiled_corners,
 )
+from src.core.analyzer.html_renderer import render_html
 from src.core.analyzer.lap_detection import (
     _detect_laps_by_timing_state,
-    detect_laps,
 )
-from src.core.analyzer.metrics import (
-    analyze_corner_phases,
-    analyze_grip_utilization,
-    analyze_lap_tyre_state,
-    analyze_tyre_grip_degradation,
-    analyze_electronics_per_lap,
-    analyze_brake_thermals,
-    analyze_suspension,
-)
-from src.core.analyzer.build_track import build_track
-from src.core.analyzer.analysis_result import AnalysisResult
-from src.core.analyzer.session_summary import _session_summary_path, _write_session_summary, _load_previous_summary
-
+from src.core.analyzer.session_summary import _load_previous_summary, _write_session_summary
+from src.core.telemetry_capture import CaptureMetadata, FrameData
+from src.models import SharedSessionManager
+from src.utils.structured_logger import Component, log_debug, log_info, log_warning
 
 _LAP_TIME_ALIGNMENT_TOLERANCE_MS = 2.0
 _LAP_SEGMENT_MIN_TRIM_MS = 2_000.0
@@ -299,7 +279,7 @@ class TelemetryAnalyzer:
 
         # Prioritize definitive lap detection sources over telemetry heuristics.
         # 1st: Game log boundaries (most authoritative)
-        # 2nd: Shared memory timing state (last_laptime_ms updates) 
+        # 2nd: Shared memory timing state (last_laptime_ms updates)
         # 3rd: Telemetry-based detection (position crossing as fallback)
         lap_bounds = None
         lap_times_ms = None
@@ -489,7 +469,7 @@ class TelemetryAnalyzer:
                 # game-reported times (e.g. invalid/aborted laps) are still
                 # included in the analysis rather than silently dropped.
                 lap_time = (e - s) / hz
-            
+
             # Calculate fuel consumption from samples that belong to this lap.
             # Do not use the first point of the next lap or mapping-teardown
             # zeroes as the end sample.
@@ -502,7 +482,7 @@ class TelemetryAnalyzer:
             ]
             if len(fuel_samples) >= 2 and fuel_samples[0] > fuel_samples[-1]:
                 fuel_used = round(fuel_samples[0] - fuel_samples[-1], 3)
-            
+
             laps.append({
                 "lap_num": game_lap_num,
                 "capture_lap_index": i + 1,
@@ -629,8 +609,8 @@ class TelemetryAnalyzer:
                 "Only one coachable valid lap was available; comparative coaching is unavailable."
             )
 
-        log_info(Component.ANALYZER, "Analysis complete", 
-                laps=len(laps), 
+        log_info(Component.ANALYZER, "Analysis complete",
+                laps=len(laps),
                 best_lap_time=(f"{best_lap['lap_time_s']:.1f}s" if best_lap else "none"),
                 coachable_laps=len(coachable_laps))
 

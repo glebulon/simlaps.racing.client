@@ -5,23 +5,24 @@ Handles lap time submissions with signed payloads for anti-cheat.
 No API key required - uses embedded app secret for signing.
 """
 
-import httpx
-from typing import Any, Dict, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any, Dict, Optional
 
-from ..models import SessionData, LapData, SharedSessionManager
-from ..utils.structured_logger import log_debug, log_error, log_info, log_warning, log_exception, Component
+import httpx
+
+from ..models import LapData, SessionData, SharedSessionManager
+from ..utils.structured_logger import Component, log_debug, log_error, log_exception, log_info, log_warning
+from ..version import USER_AGENT, VERSION
 from .security import (
-    sign_payload,
-    is_game_running,
     GameProcessStatus,
-    is_secret_configured,
-    verify_signature_locally,
     get_app_secret,
     get_secret_source,
+    is_game_running,
+    is_secret_configured,
+    sign_payload,
+    verify_signature_locally,
 )
-from ..version import VERSION, USER_AGENT
 
 
 class SubmissionStatus(Enum):
@@ -44,7 +45,7 @@ class SubmissionResult:
     status: SubmissionStatus
     message: str
     lap_id: Optional[str] = None
-    
+
 
 class APIClient:
     """
@@ -527,23 +528,23 @@ class APIClient:
         """
         # Remove common suffixes and prefixes
         track_id = track_name.lower()
-        
+
         # Remove layout suffixes
         for suffix in [" gp", " time attack practice", " practice", " race", " qualify"]:
             if track_id.endswith(suffix):
                 track_id = track_id[:-len(suffix)]
-        
+
         # Remove common prefixes
         for prefix in ["circuit de ", "circuit ", "autodromo ", "autódromo "]:
             if track_id.startswith(prefix):
                 track_id = track_id[len(prefix):]
-        
+
         # Replace spaces with underscores
         track_id = track_id.replace(" ", "_")
-        
+
         # Remove special characters
         track_id = "".join(c for c in track_id if c.isalnum() or c == "_")
-        
+
         return track_id
 
     async def test_connection(self) -> tuple[bool, str]:
@@ -558,19 +559,19 @@ class APIClient:
 
         try:
             client = await self._get_client()
-            
+
             # First, test basic connectivity
             response = await client.get(f"{self.server_url}/api/tracks")
             if response.status_code != 200 and not (300 <= response.status_code < 400):
                 return False, f"Server returned status {response.status_code}"
-            
+
             # Now test the secret
             secret_ok, secret_msg = await self.test_secret()
             if not secret_ok:
                 return False, f"Connected but {secret_msg}"
-            
+
             return True, "Connected and secret verified"
-                
+
         except httpx.NetworkError as e:
             return False, f"Network error: {str(e)}"
         except httpx.TimeoutException:
@@ -590,8 +591,8 @@ class APIClient:
 
         try:
             log_debug(Component.API, "test_secret called")
-            from .security import create_signature, get_timestamp, generate_nonce, get_app_secret
-            
+            from .security import create_signature, generate_nonce, get_app_secret, get_timestamp
+
             # Log only that the secret is present and its length; never log the value
             secret = get_app_secret()
             log_debug(
@@ -601,12 +602,12 @@ class APIClient:
                 secret_len=len(secret),
                 secret_source=get_secret_source(),
             )
-            
+
             # Create a test signature with known test values
             timestamp = get_timestamp()
             nonce = generate_nonce()
             log_debug(Component.API, "timestamp", timestamp=timestamp, nonce=nonce[:8])
-            
+
             # Sign with test payload (must match server expectations)
             signature = create_signature(
                 timestamp=timestamp,
@@ -616,7 +617,7 @@ class APIClient:
                 lap_time=0,
             )
             log_debug(Component.API, "signature", signature=signature[:20])
-            
+
             # Send to test endpoint
             client = await self._get_client()
             response = await client.post(
@@ -627,7 +628,7 @@ class APIClient:
                     '_signature': signature,
                 }
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
                 if data.get('valid'):
@@ -641,7 +642,7 @@ class APIClient:
                 return False, data.get('error', 'Server error')
             else:
                 return False, f"Unexpected status {response.status_code}"
-                
+
         except (RuntimeError, OSError, ConnectionError, ValueError) as e:
             log_error(Component.API, "test_secret error", error=str(e))
             return False, f"Error testing secret: {str(e)}"
@@ -656,17 +657,17 @@ class APIClient:
         try:
             client = await self._get_client()
             response = await client.get(f"{self.server_url}/api/version")
-            
+
             if response.status_code == 200:
                 data = response.json()
                 latest_version = data.get("latestClientVersion")
-                
+
                 if latest_version:
                     # Parse versions
                     try:
                         current_parts = [int(x) for x in VERSION.split(".")]
                         latest_parts = [int(x) for x in latest_version.split(".")]
-                        
+
                         # Compare
                         is_newer = False
                         for i in range(3):
@@ -677,7 +678,7 @@ class APIClient:
                                 break
                             if l < c:
                                 break
-                        
+
                         if is_newer:
                             return {
                                 "available": True,
@@ -686,7 +687,7 @@ class APIClient:
                             }
                     except (ValueError, IndexError):
                         pass
-                        
+
             return {"available": False}
         except httpx.NetworkError as e:
             log_error(Component.API, "Update check failed", error=str(e))

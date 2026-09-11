@@ -10,7 +10,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import build
 from src.core import security
 
-
 TEST_SECRET = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 

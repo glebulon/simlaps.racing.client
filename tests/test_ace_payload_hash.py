@@ -1,14 +1,13 @@
 """Keep the standalone helper free of embedded submission examples."""
 
 import ast
-from pathlib import Path
 import re
 import runpy
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
 
 HELPER = Path(__file__).resolve().parents[1] / "telemetry" / "ace_payload_hash.py"
 

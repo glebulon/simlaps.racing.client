@@ -2,7 +2,7 @@
 
 from unittest.mock import MagicMock, patch
 
-from src.ui.components.status_bar import StatusBar, ConnectionStatus
+from src.ui.components.status_bar import ConnectionStatus, StatusBar
 
 
 def test_init_default_status():

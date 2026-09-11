@@ -1,8 +1,8 @@
 """Tests for shared session data infrastructure."""
 
-from concurrent.futures import ThreadPoolExecutor
 import time
 import tracemalloc
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 from src.models import (
@@ -841,7 +841,6 @@ def test_get_lap_time_uses_source_priority() -> None:
     assert manager.get_lap_time(5) == 120000.0
 
     # Log-sourced time must override graphics.
-    from src.models.shared_session import LapTimingData
     timing = manager._session_data.lap_timing[5]
     timing.completed_lap_time = 130000.0
     timing.completed_lap_time_source = "logs"

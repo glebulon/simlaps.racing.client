@@ -5,7 +5,6 @@ import pytest
 
 from src.core.analyzer.ai_prompt import generate_ai_prompt
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 

@@ -4,31 +4,32 @@ PB Cache Viewer - Shows personal best times loaded from server.
 Displays all track/car combinations with their best lap times.
 """
 
+
 import flet as ft
-from typing import Optional, List, Dict, Any
+
 from ...core.pb_cache import PBCache
-from ...utils.structured_logger import log_debug, Component
+from ...utils.structured_logger import Component, log_debug
 
 
 def show_pb_cache_dialog(page: ft.Page, pb_cache: PBCache):
     """Show a dialog with personal best cache contents."""
     log_debug(Component.UI, "show_pb_cache_dialog called")
-    
+
     def _format_time(time_ms: int) -> str:
         """Format time in minutes:seconds.milliseconds."""
         total_seconds = time_ms / 1000
         minutes = int(total_seconds // 60)
         seconds = total_seconds % 60
         return f"{minutes}:{seconds:06.3f}"
-    
+
     def _close_dialog(e=None):
         """Close the dialog."""
         dialog.open = False
         page.update()
-    
+
     # Get cache data
     cache_data = pb_cache.get_all_pbs()
-    
+
     if not cache_data:
         content = ft.Container(
             content=ft.Column([
@@ -50,7 +51,7 @@ def show_pb_cache_dialog(page: ft.Page, pb_cache: PBCache):
                     trailing=ft.Text(f"{_format_time(pb_time.best_time_ms)}", size=14, weight=ft.FontWeight.BOLD),
                 )
             )
-        
+
         content = ft.Container(
             content=ft.Column([
                 ft.Text("Personal Best Cache", size=18, weight=ft.FontWeight.BOLD),
@@ -69,14 +70,14 @@ def show_pb_cache_dialog(page: ft.Page, pb_cache: PBCache):
             width=500,
             height=400,
         )
-    
+
     # Close button
     close_button = ft.Button(
         "Close",
         on_click=_close_dialog,
         style=ft.ButtonStyle(bgcolor="#7c3aed"),
     )
-    
+
     # Show dialog
     log_debug(Component.UI, "Creating PB cache dialog")
     dialog = ft.AlertDialog(
@@ -85,5 +86,5 @@ def show_pb_cache_dialog(page: ft.Page, pb_cache: PBCache):
         actions=[close_button],
         shape=ft.RoundedRectangleBorder(radius=12),
     )
-    
+
     page.show_dialog(dialog)

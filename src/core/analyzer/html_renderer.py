@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional
 from src.core.analyzer._util import _optional_float
 from src.utils.structured_logger import Component, log_debug
 
-
 _VENDOR_DIR = Path(__file__).with_name("vendor")
 
 

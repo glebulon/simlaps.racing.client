@@ -1,10 +1,10 @@
-import io
-import time
-import enum
-import struct
-import pathlib
 import argparse
+import enum
+import io
+import pathlib
 import re
+import struct
+import time
 
 
 class ArchiveValidationError(ValueError):
@@ -30,14 +30,14 @@ def _validate_non_overlapping_ranges(ranges: list[tuple[int, int]]) -> None:
             raise ArchiveValidationError("archive members have overlapping data ranges")
         previous_end = end
 
-#            twitter.com/@ntpopgetdope     
-#        github.com//ntpopgetdope/ace-kspkg 
+#            twitter.com/@ntpopgetdope
+#        github.com//ntpopgetdope/ace-kspkg
 # ------------------------------------------------
 # All reverse engineering peformed on the 16/01/25
 # against following version of AssettoCorsaEVO.exe
 # ------------------------------------------------
-# Build release 0x312e30, version 250116_022721, 
-# revision 9468f152c075f15ff3c58a38bc724f8e4e6546a4, 
+# Build release 0x312e30, version 250116_022721,
+# revision 9468f152c075f15ff3c58a38bc724f8e4e6546a4,
 # steam appid 3058630, built on Jan 16 2025, 02:28:31
 
 
@@ -123,17 +123,17 @@ class KsPck:
         self.max_total_output_size = max_total_output_size
         self.max_file_count = max_file_count
         return
-    
+
     def __exit__(self):
         self.kspck.close()
         return
-    
+
     @staticmethod
     def xor_8b_cipher(buffer: bytes|bytearray, xork: bytes) -> bytearray:
         # Need a mutable view of buffer.
-        if isinstance(buffer, bytes): 
+        if isinstance(buffer, bytes):
             buffer = bytearray(buffer)
-    
+
         for i, b in enumerate(buffer):
             buffer[i] ^= xork[i % 8]
 
@@ -237,12 +237,12 @@ class KsPck:
         self.xork = self.ftbl[-8:] # Valid if nulls...
         ascii = ''.join(f"{b:02X}" for b in self.xork)
         print(f"File Table XOR Key: {ascii}")
-        print(f"Unciphering KsPkg file table...\n")
+        print("Unciphering KsPkg file table...\n")
 
         # Obtain plaintext file table.
         self.ftbl = bytearray(self.ftbl)
         self.ftbl = self.xor_8b_cipher(self.ftbl, self.xork)
-        
+
         if save_ftbl: # Optionally save plaintext to disk.
             with open(f"{self.kspck.name}.unxor_file_table.bin", "wb") as f:
                 # Good SHA-1: f55c845e896366014e614267ec0936ff8f237c9e
@@ -267,7 +267,7 @@ class KsPck:
             total_size = self._validate_file_metadata(
                 file_entry, self.data_end, ranges, total_size
             )
-            
+
             # Store by hash for later operations/lookup.
             self.files[file_entry.path_fnv1] = file_entry
 
@@ -275,7 +275,7 @@ class KsPck:
         # comparisons for a large untrusted file table.
         _validate_non_overlapping_ranges(ranges)
         # Done.
-        return 
+        return
 
     def extract_internal(self, file: KsPckFile, out_path: str):
         path = self._destination(file.file_path, out_path)
@@ -314,17 +314,17 @@ class KsPck:
     def extract_file(self, file_path: str, out_path: str) -> None:
         lookup = file_path.casefold().replace('/', '\\')
         print(f"Extracting single KsPkg file '{lookup}'...")
-        
+
         fnv1a = FnvHash.fnv1a_64(lookup.encode())
-        file  = self.files.get(fnv1a) 
+        file  = self.files.get(fnv1a)
 
         if not file:
             print(f"File lookup by FNV1A-64 0x{fnv1a:04x} failed")
             return
-        
+
         # Otherwise, extract located single file.
         self.extract_internal(file, out_path)
-    
+
     def extract_all(self, out_path: str) -> None:
         print(f"Extracting {len(self.files)} total KsPkg files...")
         start_time = time.perf_counter()
@@ -341,7 +341,7 @@ class KsPck:
             # handling of sync issues around file seek etc.
             # [TODO] GoLang port of this entire script lol
             self.extract_internal(f, out_path)
-        
+
         # Finished extraction.
         print(
             f"Extracted {len(self.files)} files in "   \
@@ -366,8 +366,8 @@ class KsPck:
             # handle before renaming it....
             if self.kspck: self.kspck.close()
 
-            print(f"Forcing AC:Evo to use unpacked content...")
-            # AC:Evo will run from unpacked resources if the 
+            print("Forcing AC:Evo to use unpacked content...")
+            # AC:Evo will run from unpacked resources if the
             # content.kspkg file cannot be resolved in curdir.
             ace_kspkg = pathlib.Path(self.kspck.name).resolve()
             if ace_kspkg.exists() and ace_kspkg.is_file():
@@ -382,15 +382,15 @@ def init_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Assetto Corsa Evo: Kunos Package (kspkg) Extraction Tool",
         epilog="https://github.com/ntpopgetdope/ace-kspkg"
-    ); 
-    
+    )
+
     parser.add_argument(
         "-l", "--list", action="store_true",
         help="List all files packed within parsed KsPkg"
     )
     parser.add_argument(
-        "-i", "--in", type=str, default="content.kspkg", metavar="PATH", 
-        help=f"Path to KsPkg file (default: content.kspkg)"
+        "-i", "--in", type=str, default="content.kspkg", metavar="PATH",
+        help="Path to KsPkg file (default: content.kspkg)"
     )
 
     ex = parser.add_argument_group("extract")
@@ -407,7 +407,7 @@ def init_argparse() -> argparse.ArgumentParser:
 
     # Non-exclusive extraction options...
     ex.add_argument(
-        "-o", "--out", type=str, default="content", metavar="PATH", 
+        "-o", "--out", type=str, default="content", metavar="PATH",
         help="Path to extract KsPkg to (default: content)"
     )
     ex.add_argument(
@@ -422,13 +422,13 @@ def init_argparse() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     print(
-        f"Assetto Corsa Evo: Kunos Package (kspkg) Extraction Tool\n"
-        f"           github.com//ntpopgetdope/ace-kspkg\n"
-        f"               twitter.com/@ntpopgetdope\n"
+        "Assetto Corsa Evo: Kunos Package (kspkg) Extraction Tool\n"
+        "           github.com//ntpopgetdope/ace-kspkg\n"
+        "               twitter.com/@ntpopgetdope\n"
     )
     parser = init_argparse()
     args = parser.parse_args()
-    
+
     # Require at least one option specified (unpack overrides behaviour)
     if not any([args.list, args.all, args.path, args.run_unpacked]):
         parser.print_help()
@@ -439,7 +439,7 @@ if __name__ == "__main__":
 
     if args.list:
         pck.list_all()
-    
+
     if args.all or args.run_unpacked:
         pck.extract_all(args.out)
     elif args.path: # Single file extraction.

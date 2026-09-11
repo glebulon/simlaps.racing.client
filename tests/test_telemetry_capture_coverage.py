@@ -4,18 +4,15 @@ import asyncio
 import json
 import os
 import tempfile
-from unittest.mock import MagicMock, Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
+from src.core.security import GameProcessStatus
 from src.core.telemetry_capture import (
     FrameData,
-    RegionReader,
     TelemetryCapture,
-    REGIONS,
 )
-from src.models import SharedSessionManager
-from src.core.security import GameProcessStatus
 
 
 class TestShouldNotifyStopCallback:

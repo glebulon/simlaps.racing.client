@@ -5,8 +5,8 @@ A desktop application that monitors ACE game logs and automatically
 submits lap times to the SimLaps server.
 """
 
-import sys
 import os
+import sys
 
 # Ensure proper path setup for PyInstaller
 if getattr(sys, 'frozen', False):

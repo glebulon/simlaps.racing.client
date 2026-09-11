@@ -4,8 +4,6 @@ from typing import Any, Dict, List, Optional
 
 from src.core.analyzer._util import (
     _avg,
-    _find_frame_index,
-    _optional_float,
     _trend_direction,
 )
 

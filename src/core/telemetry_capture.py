@@ -14,17 +14,21 @@ import time
 import traceback
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, List, NamedTuple, Optional, TextIO
 
-from src.core.security import is_game_running, GameProcessStatus
+from src.core.security import GameProcessStatus, is_game_running
 from src.core.telemetry_decoder import (
-    decode_physics, decode_graphics, decode_static,
+    GRAPHICS_SHM_SIZE,
+    PHYSICS_SHM_SIZE,
+    STATIC_SHM_SIZE,
+    decode_graphics,
+    decode_physics,
+    decode_static,
     peek_graphics_validity,
-    PHYSICS_SHM_SIZE, GRAPHICS_SHM_SIZE, STATIC_SHM_SIZE,
 )
 from src.models import SharedSessionManager
-from src.utils.structured_logger import log_debug, log_info, log_warning, log_error, log_exception, Component
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable, NamedTuple, TextIO
+from src.utils.structured_logger import Component, log_debug, log_error, log_exception, log_info, log_warning
 
 # Windows-specific imports for safe shared memory access. Keep the public
 # handle defined on every platform so tests and callers can replace the
@@ -772,7 +776,7 @@ class TelemetryCapture:
 
         log_info(Component.TELEMETRY, "Starting telemetry capture")
         log_info(Component.TELEMETRY, "Waiting for game to start and create shared memory regions")
-        
+
         # Open diagnostic log file (only when debug_logs setting is enabled)
         if self._debug_logs:
             try:
@@ -784,11 +788,11 @@ class TelemetryCapture:
                 log_error(Component.TELEMETRY, "Could not open diagnostic log", error=str(e))
         else:
             self._diag_file = None
-        
+
         # Try to connect to regions, but don't fail if game hasn't started yet
         # The capture loop will continuously retry
         self._readers = self._connect_regions()
-        
+
         if self._readers:
             log_info(Component.TELEMETRY, "Found regions", count=len(self._readers), regions=list(self._readers.keys()))
         else:
@@ -809,7 +813,7 @@ class TelemetryCapture:
 
         # Start the capture loop task
         self._task = asyncio.create_task(self._capture_loop_wrapper())
-        
+
         # Add exception handler to catch task cancellation/crashes
         def task_done_callback(task):
             if task.cancelled():
@@ -821,7 +825,7 @@ class TelemetryCapture:
                 traceback.print_exception(type(e), e, e.__traceback__)
                 self._stop_reason = f"task_exception: {e}"
                 self._running = False
-        
+
         self._task.add_done_callback(task_done_callback)
 
         return True
@@ -835,7 +839,7 @@ class TelemetryCapture:
             self._stop_reason = f"unhandled_exception: {e}"
             self._running = False
             self._close_readers()
-            
+
             # Try to save any frames we captured before the crash. These
             # are debug artefacts only - gated on the same setting as the
             # normal-path dumps so a disabled telemetry-debug-logs toggle
@@ -937,7 +941,7 @@ class TelemetryCapture:
                         self._frames.append(frame)
                     frame_num += 1
                     self._all_disconnected_since = None
-                    
+
                     # Idle timeout is only meaningful once full recording has
                     # started. Validity-only capture must remain available for
                     # the lifetime of ACE, and an armed recorder may sit in the
@@ -970,7 +974,7 @@ class TelemetryCapture:
                             self._idle_since = None
                     else:
                         self._idle_since = None
-                    
+
                     # Debug: log first frame
                     if frame_num == 1:
                         mode_label = "validity-only" if not self._record_frames else "telemetry active"
@@ -996,7 +1000,7 @@ class TelemetryCapture:
         self._running = False
 
         self._close_readers()
-        
+
         # Close diagnostic log
         if self._diag_file:
             try:
@@ -1055,7 +1059,7 @@ class TelemetryCapture:
                 self._task = None
 
         self._close_readers()
-        
+
         # Close diagnostic log
         if self._diag_file:
             try:

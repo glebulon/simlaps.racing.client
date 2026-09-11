@@ -6,7 +6,7 @@ Graphics and static buffers exercise the ACE decoder dispatch paths.
 """
 
 import json
-import pytest
+
 from src.core.telemetry_decoder import (
     decode_graphics,
     decode_physics,
@@ -50,9 +50,9 @@ class TestPhysicsDecoding:
         """Test that decode_physics returns a dictionary."""
         frame = load_sample_frame()
         physics_raw = raw_bytes(frame, 'physics_raw')
-        
+
         result = decode_physics(physics_raw)
-        
+
         assert isinstance(result, dict)
         assert '_decoder' in result
 
@@ -60,9 +60,9 @@ class TestPhysicsDecoding:
         """Test that decoded physics contains speed_kmh."""
         frame = load_sample_frame()
         physics_raw = raw_bytes(frame, 'physics_raw')
-        
+
         result = decode_physics(physics_raw)
-        
+
         # May use fallback decoder, but should have some data
         assert result is not None
         assert len(result) > 0
@@ -71,21 +71,21 @@ class TestPhysicsDecoding:
         """Test that physics_to_dict handles dict input correctly."""
         frame = load_sample_frame()
         physics_raw = raw_bytes(frame, 'physics_raw')
-        
+
         decoded = decode_physics(physics_raw)
         result = physics_to_dict(decoded)
-        
+
         assert isinstance(result, dict)
 
     def test_physics_to_dict_handles_fallback_decoder(self):
         """Test that physics_to_dict works with fallback decoder output."""
         frame = load_sample_frame()
         physics_raw = raw_bytes(frame, 'physics_raw')
-        
+
         decoded = decode_physics(physics_raw)
         # If using fallback, it should still convert to dict
         result = physics_to_dict(decoded)
-        
+
         assert isinstance(result, dict)
 
 
@@ -150,7 +150,7 @@ class TestFrameStructure:
     def test_frame_has_required_fields(self):
         """Test that frame has all required fields."""
         frame = load_sample_frame()
-        
+
         assert 'timestamp' in frame
         assert 'frame_number' in frame
         assert 'physics_raw' in frame
@@ -158,14 +158,14 @@ class TestFrameStructure:
     def test_frame_number_is_integer(self):
         """Test that frame_number is an integer."""
         frame = load_sample_frame()
-        
+
         assert isinstance(frame['frame_number'], int)
         assert frame['frame_number'] >= 0
 
     def test_timestamp_is_string(self):
         """Test that timestamp is a string."""
         frame = load_sample_frame()
-        
+
         assert isinstance(frame['timestamp'], str)
         assert len(frame['timestamp']) > 0
 
@@ -181,7 +181,7 @@ class TestMultipleFrames:
                 if i >= 10:  # Load first 10 frames
                     break
                 frames.append(json.loads(line))
-        
+
         assert len(frames) == 10
 
     def test_frame_numbers_are_sequential(self):
@@ -192,7 +192,7 @@ class TestMultipleFrames:
                 if i >= 5:
                     break
                 frames.append(json.loads(line))
-        
+
         frame_numbers = [f['frame_number'] for f in frames]
         assert frame_numbers == list(range(len(frames)))
 
@@ -204,7 +204,7 @@ class TestMultipleFrames:
                 if i >= 5:
                     break
                 frames.append(json.loads(line))
-        
+
         first_keys = set(frames[0].keys())
         for frame in frames[1:]:
             assert set(frame.keys()) == first_keys

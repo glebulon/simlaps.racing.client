@@ -4,8 +4,8 @@ import asyncio
 from typing import Any, Awaitable, Callable, Optional
 
 from src.utils.structured_logger import Component, log_debug, log_info
-from ..components.status_bar import ConnectionStatus
 
+from ..components.status_bar import ConnectionStatus
 
 StartCaptureCallback = Callable[[], Awaitable[None]]
 StopCaptureCallback = Callable[..., Awaitable[None]]

@@ -6,16 +6,13 @@ and CaptureMetadata. Helper-function tests (_safe_4, _sanitize_slip)
 are consolidated in ``test_telemetry_analyzer_comprehensive.py``.
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
 from src.core.telemetry_analyzer import (
-    _select_track_profile_for_analysis,
-    _read_static_track_config,
-    get_physics,
     AnalysisResult,
+    _read_static_track_config,
+    _select_track_profile_for_analysis,
+    get_physics,
 )
-from src.core.telemetry_capture import FrameData, CaptureMetadata
-from datetime import datetime, timezone
+from src.core.telemetry_capture import CaptureMetadata, FrameData
 
 
 class TestSelectTrackProfile:
@@ -93,7 +90,7 @@ class TestAnalysisResult:
             best_lap_time=83.456,
             track_name="spa_francorchamps"
         )
-        
+
         assert result.html_path == "/path/to/report.html"
         assert result.ai_prompt_path == "/path/to/prompt.txt"
         assert result.laps_detected == 5
@@ -109,7 +106,7 @@ class TestAnalysisResult:
             best_lap_time=90.123,
             track_name=None
         )
-        
+
         assert result.track_name is None
 
 
@@ -123,9 +120,9 @@ class TestFrameDataEdgeCases:
             frame_number=0,
             physics=None
         )
-        
+
         physics = get_physics(frame)
-        
+
         assert physics is None
 
     def test_frame_with_empty_physics(self):
@@ -135,9 +132,9 @@ class TestFrameDataEdgeCases:
             frame_number=0,
             physics={}
         )
-        
+
         physics = get_physics(frame)
-        
+
         assert physics == {}
 
 
@@ -153,7 +150,7 @@ class TestCaptureMetadata:
             region_names={"physics": "acevo_pmf_physics"},
             region_sizes={"physics": 1024}
         )
-        
+
         assert metadata.captured_at == "2024-01-01T00:00:00Z"
         assert metadata.hz == 10.0
         assert metadata.regions_found == ["physics"]

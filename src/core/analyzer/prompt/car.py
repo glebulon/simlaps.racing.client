@@ -5,6 +5,7 @@ from typing import Dict, List
 
 from src.core.analyzer.metrics import analyze_brake_thermals, analyze_suspension
 from src.core.car_tuning_catalog import format_tuning_block
+
 from .context import PromptContext
 
 

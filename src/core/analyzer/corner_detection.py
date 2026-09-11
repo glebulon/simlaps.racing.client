@@ -1,6 +1,6 @@
 """Corner detection functions — extracted from telemetry_analyzer.py."""
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from src.core.analyzer._util import (
     _confidence_label,

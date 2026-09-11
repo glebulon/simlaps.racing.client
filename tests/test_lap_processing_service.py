@@ -3,7 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.models import SessionData, LapData as SessionLapData
+from src.models import LapData as SessionLapData
+from src.models import SessionData
 from src.ui.components.lap_card import LapCardStatus
 from src.ui.services.lap_processing_service import LapProcessingService
 from src.utils.config import AppConfig

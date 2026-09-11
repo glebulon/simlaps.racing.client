@@ -6,17 +6,15 @@ shared-memory decoding, telemetry analysis, and API submission code.
 
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set
 import threading
 import time
 import uuid
+from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional, Set
 
-from .lap import LapData, SessionData
 from .constants import LAP_TIME_RECONCILIATION_TOLERANCE_MS
-
+from .lap import LapData, SessionData
 
 _TERMINAL_SESSION_PHASES = frozenset({
     "ended",
@@ -830,7 +828,7 @@ class SharedSessionManager:
                     and existing.completed_lap_time > 0
                 )
                 if not already_stored:
-                    from ..utils.structured_logger import log_debug, Component
+                    from ..utils.structured_logger import Component, log_debug
                     log_debug(Component.SHARED_SESSION,
                         f"[SHM_STALE] Discarding stale last_laptime_ms={shm_last} ms "
                         f"for lap {current_lap} with completed_laps=0 — "
@@ -982,7 +980,7 @@ class SharedSessionManager:
                 self._session_data.has_ers = old_has_ers
                 self._session_data.has_kers = old_has_kers
                 self._session_data.hybrid_flags_car_uuid = old_hybrid_car_uuid
-            from ..utils.structured_logger import log_debug, Component
+            from ..utils.structured_logger import Component, log_debug
             log_debug(Component.SHARED_SESSION,
                 f"[RESET] Cleared shared session: dropped {old_timing_count} timing entries, "
                 f"{old_validity_count} validity entries. "

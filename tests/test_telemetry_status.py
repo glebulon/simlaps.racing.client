@@ -3,9 +3,9 @@
 from unittest.mock import MagicMock, patch
 
 from src.ui.components.telemetry_status import (
-    TelemetryStatusIndicator,
     TelemetryButton,
     TelemetryStatus,
+    TelemetryStatusIndicator,
 )
 
 

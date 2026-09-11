@@ -4,29 +4,28 @@ Home Page - Dashboard showing game status, recent laps, and submission status.
 No login required - detects user from game logs automatically.
 """
 
-import flet as ft
 import os
 import sys
-from typing import Optional, Callable
 from collections import deque
+from typing import Callable, Optional
 
-from ..components.lap_card import LapCard, LapCardData, LapCardStatus
-from ..components.status_bar import StatusBar, ConnectionStatus
-from ..components.telemetry_status import TelemetryStatusIndicator, TelemetryStatus
-from ..components.feedback import show_snackbar
-from ..components.mount_safe import mounted_page, safe_update
-from ...models import SessionData, LapData
-from ...core.api_client import SubmissionStatus
+import flet as ft
+
+from ...models import LapData, SessionData
 from ...utils.config import AppConfig
 from ...utils.structured_logger import (
     Component,
     log_debug,
+    log_exception,
     log_info,
     log_warning,
-    log_exception,
 )
 from ...version import GAME_DISPLAY_NAME
-
+from ..components.feedback import show_snackbar
+from ..components.lap_card import LapCard, LapCardData, LapCardStatus
+from ..components.mount_safe import mounted_page, safe_update
+from ..components.status_bar import ConnectionStatus, StatusBar
+from ..components.telemetry_status import TelemetryStatus, TelemetryStatusIndicator
 
 UPDATE_DOWNLOAD_URL = "https://www.simlaps.racing"
 
@@ -44,12 +43,12 @@ def get_icon_path() -> Optional[str]:
     else:
         # Running as script - go up from src/ui/pages to project root
         base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-    
+
     # Try assets/icon.png (PNG works better with ft.Image)
     icon_path = os.path.join(base_path, "assets", "icon.png")
     if os.path.exists(icon_path):
         return icon_path
-    
+
     return None
 
 
@@ -59,9 +58,9 @@ class HomePage(ft.Column):
     
     No authentication required - Steam ID is detected from game logs.
     """
-    
+
     MAX_VISIBLE_LAPS = 10
-    
+
     def __init__(
         self,
         config: AppConfig,
@@ -75,17 +74,17 @@ class HomePage(ft.Column):
         self.on_history_click = on_history_click
         self.on_pb_cache_click = on_pb_cache_click
         self.on_retry_lap = on_retry_lap
-        
+
         # Game state
         self._game_running = False
         self._detected_steam_id: Optional[str] = None
         self._detected_player_name: Optional[str] = None
         self._game_version: Optional[str] = None
-        
+
         # Lap cards storage (most recent first)
         self._lap_cards: deque[LapCard] = deque(maxlen=self.MAX_VISIBLE_LAPS)
         self._lap_count = 0
-        
+
         # UI Components - create them first
         self._game_version_text = ft.Text(
             GAME_DISPLAY_NAME,
@@ -105,15 +104,15 @@ class HomePage(ft.Column):
         )
         self._status_bar = StatusBar()
         self._game_status_container = ft.Container()
-        
+
         # Telemetry components
         self._telemetry_status = TelemetryStatusIndicator()
         self._telemetry_button = None  # Will be set by app
-        
+
         # Build initial game status
         self._update_game_status_ui()
         self._update_laps_ui()
-        
+
         # Initialize Column with all controls
         super().__init__(
             controls=self._build_controls(),
@@ -126,7 +125,7 @@ class HomePage(ft.Column):
         super().did_mount()
         # Check for updates once mounted
         self._check_for_updates()
-    
+
     def _update_game_status_ui(self):
         """Update the game status card content."""
         if self._game_running:
@@ -142,7 +141,7 @@ class HomePage(ft.Column):
                 )
             if not user_info_controls:
                 user_info_controls = [ft.Text("Detecting player...", size=14, color="#888888")]
-            
+
             self._game_status_container.content = ft.Row(
                 controls=[
                     ft.Container(
@@ -180,7 +179,7 @@ class HomePage(ft.Column):
                 user_info_controls.append(
                     ft.Text(f"Steam ID: {self._detected_steam_id}", size=12, color="#888888")
                 )
-                
+
                 self._game_status_container.content = ft.Row(
                     controls=[
                         ft.Container(
@@ -240,12 +239,12 @@ class HomePage(ft.Column):
             ]
         else:
             self._laps_column.controls = list(self._lap_cards)
-            
+
         # Update counter text
         if hasattr(self, '_lap_count_text'):
             self._lap_count_text.value = f"({self._lap_count} total)"
             safe_update(self._lap_count_text)
-    
+
     def _build_controls(self) -> list:
         """Build the page controls."""
         # Header with custom icon
@@ -254,7 +253,7 @@ class HomePage(ft.Column):
             header_icon = ft.Image(src=icon_path, width=32, height=32)
         else:
             header_icon = ft.Icon(ft.Icons.TIMER, color="#7c3aed", size=32)
-        
+
         header = ft.Container(
             content=ft.Row([
                 header_icon,
@@ -267,7 +266,7 @@ class HomePage(ft.Column):
             padding=ft.Padding.only(left=20, right=20, top=20, bottom=16),
             bgcolor="#0f0f1a",
         )
-        
+
         # Update notification banner
         self._update_banner = ft.Container(
             content=ft.Row([
@@ -290,7 +289,7 @@ class HomePage(ft.Column):
             margin=ft.Margin.only(left=20, right=20, top=0, bottom=16),
             visible=False,  # Hidden by default
         )
-        
+
         # Status section
         status_section = ft.Container(
             content=ft.Column([
@@ -305,10 +304,10 @@ class HomePage(ft.Column):
             border_radius=8,
             margin=ft.Margin.only(left=20, right=20, top=0, bottom=16),
         )
-        
+
         # Laps header
         self._lap_count_text = ft.Text(f"({self._lap_count} total)", size=12, color="#888888")
-        
+
         laps_header = ft.Container(
             content=ft.Row([
                 ft.Text("Recent Laps", size=16, weight=ft.FontWeight.W_600, color="#ffffff"),
@@ -317,7 +316,7 @@ class HomePage(ft.Column):
             padding=ft.Padding.only(left=20, right=20, bottom=8),
             bgcolor="#0f0f1a",
         )
-        
+
         # Laps list container
         laps_container = ft.Container(
             content=self._laps_column,
@@ -325,7 +324,7 @@ class HomePage(ft.Column):
             padding=ft.Padding.only(left=20, right=20),
             bgcolor="#0f0f1a",
         )
-        
+
         # Buttons
         buttons = ft.Container(
             content=ft.Row([
@@ -357,17 +356,17 @@ class HomePage(ft.Column):
             padding=ft.Padding.only(left=20, right=20, top=16, bottom=16),
             bgcolor="#0f0f1a",
         )
-        
+
         # Telemetry button (added dynamically)
         self._telemetry_button_container = ft.Container()
-        
+
         # Game status container wrapper
         game_status_wrapper = ft.Container(
             content=self._game_status_container,
             padding=ft.Padding.only(left=20, right=20),
             bgcolor="#0f0f1a",
         )
-        
+
         return [
             header,
             game_status_wrapper,
@@ -383,7 +382,6 @@ class HomePage(ft.Column):
 
     def _check_for_updates(self):
         """Check for updates in background."""
-        import asyncio
         async def check():
             from ...core.api_client import APIClient
             try:
@@ -405,7 +403,7 @@ class HomePage(ft.Column):
         page = mounted_page(self)
         if page is not None:
             await page.launch_url(UPDATE_DOWNLOAD_URL)
-    
+
     def _handle_settings_click(self, e):
         """Handle Settings button click."""
         log_debug(Component.HOME, "Settings button clicked", callback_exists=self.on_settings_click is not None)
@@ -413,7 +411,7 @@ class HomePage(ft.Column):
             self.on_settings_click()
         else:
             log_debug(Component.HOME, "No callback registered for Settings")
-    
+
     def _handle_history_click(self, e):
         """Handle Submission History button click."""
         log_debug(Component.HOME, "History button clicked", callback_exists=self.on_history_click is not None)
@@ -421,7 +419,7 @@ class HomePage(ft.Column):
             self.on_history_click()
         else:
             log_debug(Component.HOME, "No callback registered for History")
-    
+
     def _handle_pb_cache_click(self, e):
         """Handle View PB Cache button click."""
         log_debug(Component.HOME, "PB Cache button clicked", callback_exists=self.on_pb_cache_click is not None)
@@ -438,7 +436,7 @@ class HomePage(ft.Column):
                     "PB Cache view is not configured yet",
                     "#7c3aed",
                 )
-    
+
     def _handle_logs_click(self, e):
         """Handle Logs button click."""
         log_info(Component.HOME, "Logs button clicked")
@@ -450,27 +448,27 @@ class HomePage(ft.Column):
             log_info(Component.HOME, "Debug logs dialog shown")
         except Exception as ex:
             log_exception(Component.HOME, "Error showing debug logs", ex)
-    
+
     def update_config(self, config: AppConfig):
         """Update with new config and refresh UI."""
         self.config = config
-    
+
     def set_status(self, message: str):
         """Update the status message."""
         self._status_text.value = message
         safe_update(self._status_text)
-    
+
     def set_connection_status(self, status: ConnectionStatus, message: str):
         """Update the connection status bar."""
         self._status_bar.set_status(status, message)
-    
+
     def set_game_running(self, is_running: bool):
         """Update game running status and refresh UI."""
         if self._game_running != is_running:
             self._game_running = is_running
             self._update_game_status_ui()
             safe_update(self._game_status_container)
-    
+
     def set_detected_user(self, steam_id: Optional[str], player_name: Optional[str] = None):
         """Update detected user information."""
         changed = (self._detected_steam_id != steam_id or self._detected_player_name != player_name)
@@ -479,14 +477,14 @@ class HomePage(ft.Column):
             self._detected_player_name = player_name
             self._update_game_status_ui()
             safe_update(self._game_status_container)
-    
+
     def set_game_version(self, version: str):
         """Update the detected game version."""
         if self._game_version != version:
             self._game_version = version
             self._game_version_text.value = f"{GAME_DISPLAY_NAME} {version}"
             safe_update(self._game_version_text)
-    
+
     def add_lap(
         self,
         session: SessionData,
@@ -495,23 +493,23 @@ class HomePage(ft.Column):
     ) -> LapCard:
         """Add a new lap card to the display."""
         self._lap_count += 1
-        
+
         if session.player_id and not self._detected_steam_id:
             self.set_detected_user(session.player_id, session.player_name)
-        
+
         card_data = LapCardData(
             session=session,
             lap=lap,
             lap_number=self._lap_count,
             status=status,
         )
-        
+
         card = LapCard(data=card_data, on_retry=self._on_retry_lap)
         self._lap_cards.appendleft(card)
-        
+
         self._update_laps_ui()
         safe_update(self._laps_column)
-        
+
         return card
 
     def refresh_lap(self, lap: LapData) -> None:
@@ -520,11 +518,11 @@ class HomePage(ft.Column):
             if card.data is not None and card.data.lap is lap:
                 card.update_status(card.data.status, card.data.error_message)
                 return
-    
+
     def update_lap_status(self, card: LapCard, status: LapCardStatus, error_message: Optional[str] = None):
         """Update a lap card's status."""
         card.update_status(status, error_message)
-    
+
     def _on_retry_lap(self, card: LapCard):
         """Handle retry button click on failed lap."""
         if not card.data.lap.is_valid and not self.config.submit_invalid_laps:
@@ -532,18 +530,18 @@ class HomePage(ft.Column):
 
         if self.on_retry_lap:
             self.on_retry_lap(card)
-    
+
     def clear_laps(self):
         """Clear all lap cards."""
         self._lap_cards.clear()
         self._lap_count = 0
         self._update_laps_ui()
         safe_update(self._laps_column)
-    
+
     def get_status_bar(self) -> StatusBar:
         """Get the status bar component."""
         return self._status_bar
-    
+
     def set_telemetry_status(
         self,
         status: TelemetryStatus,
@@ -552,11 +550,11 @@ class HomePage(ft.Column):
     ):
         """Update the telemetry status indicator."""
         self._telemetry_status.set_status(status, frame_count, result_path)
-    
+
     def set_telemetry_button(self, button, output_path: str):
         """Set the telemetry button and update its path."""
         log_debug(Component.HOME, f"set_telemetry_button called: output_path={output_path}")
-        
+
         self._telemetry_button = button
         if button is None:
             self._telemetry_button_container.content = None

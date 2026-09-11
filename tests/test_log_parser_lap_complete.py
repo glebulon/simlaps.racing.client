@@ -7,7 +7,7 @@ Targets the big uncovered chunk (lines 992-1092).
 import pytest
 
 from src.core.log_parser import LogParser
-from src.models import LapData, SessionData, LapState, SharedSessionManager
+from src.models import LapData, LapState, SessionData, SharedSessionManager
 
 
 class TestHandleLapCompleteBasic:
@@ -21,7 +21,7 @@ class TestHandleLapCompleteBasic:
         )
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
-        
+
         result = parser._handle_lap_complete("Random log line")
         assert result is None
 
@@ -29,7 +29,7 @@ class TestHandleLapCompleteBasic:
         """Test returns None when no current_session."""
         parser = LogParser()
         # No session set
-        
+
         result = parser._handle_lap_complete("New lap carId=123 time=1:30.000")
         assert result is None
 
@@ -41,7 +41,7 @@ class TestHandleLapCompleteBasic:
         )
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"  # Player car
-        
+
         # Lap from different car
         result = parser._handle_lap_complete("New lap carId=other_car time=1:30.000")
         assert result is None
@@ -53,15 +53,15 @@ class TestHandleLapCompleteWithData:
     def setup_parser_with_lap_data(self, parser):
         """Helper to set up parser with complete lap data."""
         parser.current_session = SessionData(
-            track="spa", 
-            car="porsche", 
+            track="spa",
+            car="porsche",
             player_id="76561198321627695",
             session_type="PRACTICE"
         )
         parser.context.player_id = "76561198321627695"
         parser.context.car_uuid = "abc123def4567890"
         parser.context.tyre.set_all("SC")
-        
+
         # Set up in-progress lap data
         parser._ip.physics_lap_num = 5
         parser._ip.splits = {0: 30000, 1: 30000, 2: 38456}  # 1:38.456
@@ -73,10 +73,10 @@ class TestHandleLapCompleteWithData:
         """Test creates LapData with all fields."""
         parser = LogParser()
         self.setup_parser_with_lap_data(parser)
-        
+
         line = "New lap carId=abc123def4567890 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # May or may not return lap depending on internal logic
         # But code path should be exercised
         assert True
@@ -85,14 +85,14 @@ class TestHandleLapCompleteWithData:
         """Test lap completion tracks fuel."""
         parser = LogParser()
         self.setup_parser_with_lap_data(parser)
-        
+
         parser._ip.fuel_used = 3.5
         parser._ip.start_fuel = 45.0
         parser._ip.end_fuel = 41.5
-        
+
         line = "New lap carId=abc123def4567890 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Fuel tracking code path exercised
         assert True
 
@@ -115,12 +115,12 @@ class TestHandleLapCompleteWithData:
         """Test lap completion when marked as outlap."""
         parser = LogParser()
         self.setup_parser_with_lap_data(parser)
-        
+
         parser._ip.is_outlap = True
-        
+
         line = "New lap carId=abc123def4567890 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Should handle outlap case
         assert True
 
@@ -129,13 +129,13 @@ class TestHandleLapCompleteWithData:
         parser = LogParser()
         self.setup_parser_with_lap_data(parser)
         parser.current_session.session_type = "RACE"
-        
+
         # S1 is corrupted - larger than total lap time (race grid start issue)
         parser._ip.splits = {0: 180000, 1: 20000, 2: 18456}  # S1=180s > lap=98s
-        
+
         line = "New lap carId=abc123def4567890 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Should detect and fix S1 corruption
         assert True
 
@@ -606,13 +606,13 @@ class TestHandleLapCompleteWithData:
         """Test handles missing sector data."""
         parser = LogParser()
         self.setup_parser_with_lap_data(parser)
-        
+
         # Only 2 sectors
         parser._ip.splits = {0: 45000, 1: 53456}
-        
+
         line = "New lap carId=abc123def4567890 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Should handle missing S3
         assert True
 
@@ -636,12 +636,12 @@ class TestHandleLapCompleteWithData:
         """Test uses fallback lap number when physics_lap_num not set."""
         parser = LogParser()
         self.setup_parser_with_lap_data(parser)
-        
+
         parser._ip.physics_lap_num = None
-        
+
         line = "New lap carId=abc123def4567890 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Should use len(laps)+1 as fallback
         assert True
 
@@ -658,14 +658,14 @@ class TestHandleLapCompleteSectorConsistency:
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         # Perfect sector match: 30+30+38.456 = 98.456
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000, 1: 30000, 2: 38456}
-        
+
         line = "New lap carId=abc123 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # sectors_consistent should be True
         assert True
 
@@ -678,14 +678,14 @@ class TestHandleLapCompleteSectorConsistency:
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         # Inconsistent: 30+30+30 = 90 != 98.456
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000, 1: 30000, 2: 30000}
-        
+
         line = "New lap carId=abc123 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Should detect inconsistency
         assert True
 
@@ -702,18 +702,18 @@ class TestHandleLapCompleteStint:
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000, 1: 30000, 2: 38456}
         parser._ip.fuel_used = 2.5
         parser._ip.fuel_reliable = True
-        
+
         # Pre-create stint
         parser._ensure_stint("SC")
-        
+
         line = "New lap carId=abc123 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Stint should have lap added
         assert True
 
@@ -726,14 +726,14 @@ class TestHandleLapCompleteStint:
         parser.context.player_id = "123"
         parser.context.car_uuid = "abc123"
         parser.context.tyre.set_all("SC")
-        
+
         parser._ip.physics_lap_num = 1
         parser._ip.splits = {0: 30000, 1: 30000, 2: 38456}
         parser._ip.is_outlap = True  # Mark as outlap
-        
+
         line = "New lap carId=abc123 time=1:38.456"
         result = parser._handle_lap_complete(line)
-        
+
         # Outlaps shouldn't update stint
         assert True
 

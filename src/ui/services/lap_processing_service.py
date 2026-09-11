@@ -16,6 +16,7 @@ from src.utils.structured_logger import (
     log_error,
     log_exception,
 )
+
 from ..components.lap_card import LapCardStatus
 from ..pages.history import HistoryEntry
 from ..pages.home import HomePage

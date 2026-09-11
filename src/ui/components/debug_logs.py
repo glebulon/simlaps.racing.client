@@ -92,14 +92,14 @@ class DebugLogsViewer:
         other_lines = [line for line in all_lines if '[TELEMETRY]' not in line and '[ANALYZER]' not in line]
 
         result = f"{status}\n\n"
-        
+
         if telemetry_lines:
             result += "=== TELEMETRY EVENTS ===\n"
             result += "\n".join(telemetry_lines[-20:]) + "\n\n"  # Show last 20 telemetry events
             result += "=== OTHER LOGS ===\n"
-        
+
         result += "\n".join(other_lines[-30:])  # Show last 30 other logs
-        
+
         return result
 
     def _clear_logs(self, e=None):
@@ -110,54 +110,54 @@ class DebugLogsViewer:
 
     def _export_game_logs(self, e=None):
         """Export game logs to file."""
-        from ...utils.structured_logger import log_info, log_warning, log_error, log_exception, Component
-        
+        from ...utils.structured_logger import Component, log_error, log_exception, log_info, log_warning
+
         log_info(Component.DEBUG_LOGS, "Export game logs requested")
-        
+
         try:
             # Get the app instance from the page
             app_instance = getattr(self.page, '_app_instance', None)
-            
+
             if not app_instance:
                 log_warning(Component.DEBUG_LOGS, "No app instance found")
                 self._show_snackbar("App instance not available", "#ff6b6b")
                 return
-            
+
             if not hasattr(app_instance, '_log_parser'):
                 log_warning(Component.DEBUG_LOGS, "App instance has no log parser")
                 self._show_snackbar("Log parser not available", "#ff6b6b")
                 return
-            
+
             log_parser = app_instance._log_parser
-            
+
             if not log_parser:
                 log_warning(Component.DEBUG_LOGS, "Log parser is None")
                 self._show_snackbar("Log parser not initialized", "#ff6b6b")
                 return
-            
+
             # Check if log buffer has content
             log_lines = log_parser.get_log_buffer()
-            
+
             if not log_lines:
                 log_warning(Component.DEBUG_LOGS, "Log buffer is empty")
                 self._show_snackbar("No logs to export", "#ff6b6b")
                 return
-            
+
             # Create filename with timestamp
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             downloads_path = os.path.join(os.path.expanduser("~"), "Downloads")
             filename = f"game_logs_{timestamp}.txt"
             filepath = os.path.join(downloads_path, filename)
-            
+
             log_info(Component.DEBUG_LOGS, "Exporting game logs", filepath=filepath, lines=len(log_lines))
-            
+
             # Export logs
             success = log_parser.export_logs_to_file(filepath)
-            
+
             if success:
                 log_info(Component.DEBUG_LOGS, "Game logs exported successfully", filename=filename)
                 self._show_snackbar(f"Game logs exported to {filename}", "#51cf66")
-                
+
                 # Open the folder in Windows Explorer
                 try:
                     import subprocess
@@ -167,11 +167,11 @@ class DebugLogsViewer:
             else:
                 log_error(Component.DEBUG_LOGS, "Failed to export game logs")
                 self._show_snackbar("Failed to export game logs", "#ff6b6b")
-                
+
         except Exception as ex:
             log_exception(Component.DEBUG_LOGS, "Error exporting game logs", ex)
             self._show_snackbar(f"Error: {str(ex)}", "#ff6b6b")
-    
+
     def _show_snackbar(self, message: str, bgcolor: str):
         """Helper to show a snackbar message."""
         show_snackbar(self.page, message, bgcolor)

@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.ui.services.settings_service import SettingsService
 from src.ui.components.telemetry_status import TelemetryButton
+from src.ui.services.settings_service import SettingsService
 from src.utils.config import AppConfig
 
 

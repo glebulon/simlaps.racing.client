@@ -10,16 +10,15 @@ Usage:
     python build.py --clean      # Clean build artifacts
 """
 
-import os
-import sys
-import shutil
-import secrets
-import subprocess
 import argparse
+import os
+import secrets
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 from dotenv import dotenv_values
-
 
 REPO_ROOT = Path(__file__).resolve().parent
 
@@ -28,7 +27,7 @@ def get_venv_executable(name: str) -> str:
     """Get the path to an executable in the current venv."""
     # Check if we're in a venv
     venv_path = sys.prefix
-    
+
     # Try Scripts (Windows) or bin (Unix)
     for scripts_dir in ["Scripts", "bin"]:
         exe_path = os.path.join(venv_path, scripts_dir, name)
@@ -38,7 +37,7 @@ def get_venv_executable(name: str) -> str:
         exe_path_win = exe_path + ".exe"
         if os.path.exists(exe_path_win):
             return exe_path_win
-    
+
     # Fallback to just the command name (rely on PATH)
     return name
 
@@ -187,14 +186,14 @@ def clean():
                 print(f"  Removing {item}{'/' if is_directory else ''}")
 
     _clean_cached_files()
-    
+
     print("Clean complete!")
 
 
 def check_dependencies():
     """Check if required build tools are installed."""
     print("Checking build dependencies...")
-    
+
     # Map package names to their import names
     required = {
         "pyinstaller": "PyInstaller",
@@ -202,7 +201,7 @@ def check_dependencies():
         "cython": "Cython",
     }
     missing = []
-    
+
     for package, import_name in required.items():
         try:
             if package == "pyarmor":
@@ -219,12 +218,12 @@ def check_dependencies():
                 __import__(import_name)
         except ImportError:
             missing.append(package)
-    
+
     if missing:
         print(f"Missing packages: {', '.join(missing)}")
         print("Install with: pip install " + " ".join(missing))
         return False
-    
+
     print("  All dependencies found!")
     return True
 
@@ -368,15 +367,15 @@ def obfuscate_source():
 def build_executable():
     """Build the executable with PyInstaller."""
     print("Building executable with PyInstaller...")
-    
+
     pyinstaller_exe = get_venv_executable("pyinstaller")
-    
+
     # Use obfuscated source if available
     src_dir = REPO_ROOT
     entry = ENTRY_POINT
-    
+
     print(f"  Using source: {src_dir}")
-    
+
     # PyInstaller arguments
     cmd = [
         pyinstaller_exe,
@@ -386,13 +385,13 @@ def build_executable():
         "--clean",
         "--noconfirm",
     ]
-    
+
     # Add icon if exists
     if os.path.exists(ICON_PATH):
         cmd.extend(["--icon", str(ICON_PATH)])
         # Include icon.ico as data file for window icon at runtime
         cmd.extend(["--add-data", f"{ICON_PATH};assets"])
-    
+
     # Also include icon.png for ft.Image in the UI
     icon_png_path = REPO_ROOT / "assets" / "icon.png"
     if icon_png_path.exists():
@@ -406,7 +405,7 @@ def build_executable():
             "--add-data",
             f"{analyzer_vendor_path};src/core/analyzer/vendor",
         ])
-    
+
     # Never bundle .env as data. The credential is supplied by the compiled
     # native extension staged by main().
     stage_dir = Path(SECRET_STAGE_DIR)
@@ -416,7 +415,7 @@ def build_executable():
     else:
         print("  WARNING: no embedded secret module - release will run in offline mode")
         hidden_imports_extra = []
-    
+
     # Add hidden imports for Flet and psutil
     hidden_imports = [
         "flet",
@@ -449,10 +448,10 @@ def build_executable():
         "src.ui.components",
         "src.utils",
     ]
-    
+
     for imp in [*hidden_imports, *hidden_imports_extra]:
         cmd.extend(["--hidden-import", imp])
-    
+
     # Add data files for Flet
     # Flet requires its runtime files and desktop app to be included
     cmd.extend([
@@ -471,7 +470,7 @@ def build_executable():
         "--collect-all", "src.ui",
         "--collect-all", "src.utils",
     ])
-    
+
     # Add obfuscated src directory first so it shadows the plain sources.
     if OBFUSCATED_DIR.exists():
         cmd.extend(["--paths", str(OBFUSCATED_DIR)])
@@ -484,18 +483,18 @@ def build_executable():
         "--specpath", str(REPO_ROOT),
         "--paths", str(src_dir),
     ])
-    
+
     # Add entry point
     cmd.append(str(entry))
-    
+
     print(f"  Running: {' '.join(cmd[:10])}...")
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=REPO_ROOT)
-    
+
     if result.returncode != 0:
         print(f"  PyInstaller error: {result.stderr}")
         print(f"  stdout: {result.stdout}")
         return False
-    
+
     # Verify output
     exe_path = DIST_DIR / f"{APP_NAME}.exe"
     if exe_path.exists():
@@ -568,11 +567,11 @@ exe = EXE(
     icon={icon_path},
 )
 '''
-    
+
     spec_path = REPO_ROOT / f"{APP_NAME}.spec"
     with open(spec_path, "w", encoding="utf-8") as f:
         f.write(spec_content)
-    
+
     print(f"Created {spec_path}")
     return spec_path
 
@@ -583,30 +582,30 @@ def main():
     parser.add_argument("--clean", action="store_true", help="Clean build artifacts")
     parser.add_argument("--spec", action="store_true", help="Create spec file only")
     parser.add_argument("--no-obfuscate", action="store_true", help="Build without PyArmor obfuscation (faster, for testing)")
-    
+
     args = parser.parse_args()
-    
+
     print(f"SimLaps Client Build Script v{APP_VERSION}")
     print("=" * 50)
-    
+
     if args.clean:
         clean()
         return 0
-    
+
     if args.spec:
         create_spec_file()
         return 0
-    
+
     # Check dependencies
     if not check_dependencies():
         return 1
-    
+
     # Clean previous build and stage the authorized credential as a compiled
     # extension. The source .env is never copied into the release artifact.
     clean()
     if not stage_embedded_secret():
         return 1
-    
+
     # Obfuscate source unless disabled
     if not args.no_obfuscate:
         if not obfuscate_source():
@@ -619,7 +618,7 @@ def main():
     if not build_executable():
         print("\nBuild FAILED!")
         return 1
-    
+
     print("\n" + "=" * 50)
     print("BUILD SUCCESSFUL!")
     print("=" * 50)
@@ -627,7 +626,7 @@ def main():
     if not args.no_obfuscate:
         print("Source code obfuscated with PyArmor")
     print("APP_SECRET embedded as compiled native module (no plaintext .env in artifact)")
-    
+
     return 0
 
 

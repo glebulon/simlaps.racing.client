@@ -1,7 +1,7 @@
 """Lap detection functions — extracted from telemetry_analyzer.py."""
 from typing import Dict, List, Optional
 
-from src.utils.structured_logger import log_debug, Component
+from src.utils.structured_logger import Component, log_debug
 
 
 def _detect_laps_by_timing_state(track: List[Dict], hz: float = 1.0) -> Optional[List[int]]:

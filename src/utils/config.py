@@ -4,15 +4,14 @@ Configuration Manager for SimLaps Client.
 Handles persistent settings stored in AppData.
 """
 
-import os
 import json
+import os
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
 from typing import Any, Optional
 
-from src.utils.structured_logger import Component, log_warning
 from src.core.security import is_secret_configured
-
+from src.utils.structured_logger import Component, log_warning
 
 # Default configuration values
 DEFAULT_LOG_PATH = str(Path.home() / "Saved Games" / "ACE" / "Logs")
@@ -38,7 +37,7 @@ def get_config_dir() -> Path:
         base = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
     else:  # macOS/Linux
         base = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
-    
+
     config_dir = Path(base) / APP_NAME
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
@@ -58,34 +57,34 @@ def get_config_path() -> Path:
 @dataclass
 class AppConfig:
     """Application configuration settings."""
-    
+
     # Schema version — incremented when fields are added/renamed/removed.
     # Persisted in the JSON file so from_dict() can run migrations.
     config_version: int = CONFIG_VERSION
-    
+
     # Paths
     log_path: str = field(default_factory=lambda: DEFAULT_LOG_PATH)
-    
+
     # Server
     server_url: str = DEFAULT_SERVER_URL
-    
+
     # Behavior
     auto_submit: bool = True
     submit_invalid_laps: bool = False
     minimize_to_tray: bool = True
     start_minimized: bool = False
     start_with_windows: bool = False
-    
+
     # UI
     theme: str = "dark"
     window_width: int = 500
     window_height: int = 700
     window_x: Optional[int] = None
     window_y: Optional[int] = None
-    
+
     # History
     max_history_items: int = 100
-    
+
     # Discord Integration
     discord_webhook_url: Optional[str] = None
     discord_enabled: bool = False
@@ -100,11 +99,11 @@ class AppConfig:
     # outputs are unaffected. Toggle this on only when reverse-engineering
     # SHM layouts or chasing a capture-loop bug.
     telemetry_debug_logs: bool = False
-    
+
     def to_dict(self) -> dict:
         """Convert config to dictionary."""
         return asdict(self)
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> "AppConfig":
         """Create config from dictionary.
@@ -114,7 +113,7 @@ class AppConfig:
         in a future config version.
         """
         data = dict(data)  # shallow copy so we don't mutate the caller's dict
-        
+
         # --- Step 1: Apply legacy field renames ---
         for old_key, new_key in _LEGACY_FIELD_MAP.items():
             if old_key in data and new_key not in data:
@@ -125,7 +124,7 @@ class AppConfig:
                     new=new_key,
                 )
                 data[new_key] = data.pop(old_key)
-        
+
         # --- Step 2: Collect unknown / legacy fields for warning ---
         valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
         legacy_fields = [k for k in data if k not in valid_fields]
@@ -135,15 +134,15 @@ class AppConfig:
                 "Ignoring unknown config field(s) — consider cleaning up old config file",
                 fields=legacy_fields,
             )
-        
+
         # --- Step 3: Filter to only valid fields ---
         filtered = {k: v for k, v in data.items() if k in valid_fields}
-        
+
         # --- Step 4: Stamp current version so the next load is clean ---
         filtered["config_version"] = CONFIG_VERSION
-        
+
         return cls(**filtered)
-    
+
 
 class ConfigManager:
     """
@@ -151,7 +150,7 @@ class ConfigManager:
     
     Handles loading, saving, and updating configuration values.
     """
-    
+
     def __init__(self, config_path: Optional[Path] = None):
         """
         Initialize configuration manager.
@@ -162,7 +161,7 @@ class ConfigManager:
         self.config_path = config_path or get_config_path()
         self._config: Optional[AppConfig] = None
         self._loaded = False
-    
+
     def load(self) -> AppConfig:
         """
         Load configuration from file.
@@ -175,7 +174,7 @@ class ConfigManager:
         """
         if self._loaded and self._config:
             return self._config
-        
+
         if self.config_path.exists():
             try:
                 with open(self.config_path, "r", encoding="utf-8") as f:
@@ -186,16 +185,16 @@ class ConfigManager:
                 self._config = AppConfig()
         else:
             self._config = AppConfig()
-        
+
         # Migrate old ACE log path (log.txt → Logs directory)
         old_log_path = str(Path.home() / "Saved Games" / "ACE" / "log.txt")
         if self._config.log_path == old_log_path:
             self._config.log_path = DEFAULT_LOG_PATH
             self.save()
-        
+
         self._loaded = True
         return self._config
-    
+
     def save(self) -> bool:
         """
         Save current configuration to file.
@@ -205,11 +204,11 @@ class ConfigManager:
         """
         if not self._config:
             return False
-        
+
         try:
             # Ensure directory exists
             self.config_path.parent.mkdir(parents=True, exist_ok=True)
-            
+
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self._config.to_dict(), f, indent=2)
             return True
@@ -229,7 +228,7 @@ class ConfigManager:
         self._config = previous_config
         self._loaded = previous_loaded
         return False
-    
+
     def get(self) -> AppConfig:
         """
         Get current configuration.
@@ -240,7 +239,7 @@ class ConfigManager:
         if not self._loaded:
             return self.load()
         return self._config or AppConfig()
-    
+
     def update(self, **kwargs) -> AppConfig:
         """
         Update configuration values.
@@ -252,14 +251,14 @@ class ConfigManager:
             Updated configuration
         """
         config = self.get()
-        
+
         for key, value in kwargs.items():
             if hasattr(config, key):
                 setattr(config, key, value)
-        
+
         self.save()
         return config
-    
+
     def reset(self) -> AppConfig:
         """
         Reset configuration to defaults.
@@ -270,7 +269,7 @@ class ConfigManager:
         self._config = AppConfig()
         self.save()
         return self._config
-    
+
     def set_discord_config(
         self,
         webhook_url: Optional[str] = None,
@@ -296,6 +295,6 @@ class ConfigManager:
             updates["discord_pb_only"] = pb_only
         if post_invalid is not None:
             updates["submit_invalid_laps"] = post_invalid
-        
+
         if updates:
             self.update(**updates)

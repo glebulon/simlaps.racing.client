@@ -19,11 +19,11 @@ def format_lap_time(time_ms: int) -> str:
     """
     if time_ms <= 0:
         return "--:--.---"
-    
+
     total_seconds = time_ms / 1000
     minutes = int(total_seconds // 60)
     seconds = total_seconds % 60
-    
+
     if minutes > 0:
         return f"{minutes}:{seconds:06.3f}"
     else:
@@ -42,7 +42,7 @@ def format_sector_time(time_ms: Optional[int]) -> str:
     """
     if time_ms is None or time_ms <= 0:
         return "-"
-    
+
     seconds = time_ms / 1000
     return f"{seconds:.3f}"
 
@@ -99,7 +99,7 @@ def format_track_name(track_id: str) -> str:
     _, profile = find_track_by_name(track_id)
     if profile is not None:
         return profile["track_name"]
-    
+
     # Fallback: clean up the track ID for unknown tracks
     return track_id.replace("_", " ").title()
 
@@ -120,10 +120,10 @@ def format_car_name(car_id: str) -> str:
         if name.lower().startswith(prefix):
             name = name[len(prefix):]
             break
-    
+
     # Replace underscores and capitalize
     name = name.replace("_", " ")
-    
+
     # Capitalize properly
     words = []
     for word in name.split():
@@ -132,5 +132,5 @@ def format_car_name(car_id: str) -> str:
             words.append(word.upper())
         else:
             words.append(word.capitalize())
-    
+
     return " ".join(words)

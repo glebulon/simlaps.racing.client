@@ -1,6 +1,5 @@
 """Validate the track catalog for data quality issues."""
 import json
-import sys
 from pathlib import Path
 
 CATALOG_PATH = Path(__file__).parent.parent / "data" / "track_catalog.json"

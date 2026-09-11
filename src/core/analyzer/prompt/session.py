@@ -2,10 +2,11 @@
 
 from typing import Dict, List
 
-from src.core.car_tuning_catalog import format_tuning_block
+from src.core.analyzer._util import _trend_direction
 from src.core.analyzer.corner_detection import corner_segment_time
 from src.core.analyzer.metrics import analyze_electronics_per_lap
-from src.core.analyzer._util import _trend_direction
+from src.core.car_tuning_catalog import format_tuning_block
+
 from .context import PromptContext
 
 

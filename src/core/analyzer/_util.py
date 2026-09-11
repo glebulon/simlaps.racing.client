@@ -4,8 +4,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.core.telemetry_capture import FrameData
 from src.core.track_catalog import select_track_profile
-from src.utils.structured_logger import log_debug, Component
-
 
 # ── Constants ──────────────────────────────────────────────────────────────
 

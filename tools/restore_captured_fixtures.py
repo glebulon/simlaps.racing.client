@@ -7,14 +7,13 @@ signals from the implementation under test.
 
 from __future__ import annotations
 
-import hashlib
 import argparse
+import hashlib
 import json
 import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"

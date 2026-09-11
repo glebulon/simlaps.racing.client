@@ -10,8 +10,6 @@ session/car was ever bound.
 """
 
 from src.core.log_parser import LogParser
-from src.models import LapState
-
 
 STEAM_ID = "76561198321627695"
 # "Set new car" uses fully-dashed UUID; runtime lap/split lines use the

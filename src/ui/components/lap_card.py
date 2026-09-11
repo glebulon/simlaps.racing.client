@@ -2,15 +2,15 @@
 Lap Card Component for displaying individual lap times.
 """
 
-import flet as ft
-from typing import Callable, Optional
 from dataclasses import dataclass
 from enum import Enum
+from typing import Callable, Optional
+
+import flet as ft
 
 from ...models import LapData, SessionData
-from ...core.api_client import SubmissionStatus
-from ...utils.helpers import format_lap_time, format_sector_time, format_car_name, format_track_name
-from ...utils.structured_logger import log_error, Component
+from ...utils.helpers import format_car_name, format_lap_time, format_sector_time, format_track_name
+from ...utils.structured_logger import Component, log_error
 from .mount_safe import safe_update
 
 
@@ -39,7 +39,7 @@ class LapCard(ft.Container):
     
     Shows track, car, lap time, sectors, and submission status.
     """
-    
+
     def __init__(
         self,
         data: LapCardData,
@@ -47,7 +47,7 @@ class LapCard(ft.Container):
     ):
         self.data = data
         self.on_retry = on_retry
-        
+
         super().__init__(
             content=self._build_content(),
             padding=16,
@@ -58,7 +58,7 @@ class LapCard(ft.Container):
             animate=ft.Animation(200, ft.AnimationCurve.EASE_OUT),
             data=data,
         )
-    
+
     def _get_bgcolor(self) -> str:
         """Get background color based on status."""
         if self.data.status == LapCardStatus.INVALID:
@@ -69,7 +69,7 @@ class LapCard(ft.Container):
             return "#1f2d1f"
         else:
             return "#1e1e2e"
-    
+
     def _get_border_color(self) -> str:
         """Get border color based on status."""
         if self.data.status == LapCardStatus.INVALID:
@@ -82,7 +82,7 @@ class LapCard(ft.Container):
             return "#ffd43b"
         else:
             return "#3d3d5c"
-    
+
     def _get_status_icon(self) -> ft.Control:
         """Get status icon."""
         if self.data.status == LapCardStatus.INVALID:
@@ -95,12 +95,12 @@ class LapCard(ft.Container):
             return ft.Icon(ft.Icons.SCHEDULE, color="#ffd43b", size=20)
         else:
             return ft.Icon(ft.Icons.SCHEDULE, color="#888888", size=20)
-    
+
     def _build_content(self) -> ft.Control:
         """Build the card content."""
         lap = self.data.lap
         session = self.data.session
-        
+
         # Header row with track, car, and status
         header = ft.Row(
             controls=[
@@ -125,7 +125,7 @@ class LapCard(ft.Container):
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
-        
+
         # Lap time (large, prominent)
         lap_time_display = ft.Container(
             content=ft.Text(
@@ -137,7 +137,7 @@ class LapCard(ft.Container):
             ),
             margin=ft.Margin.symmetric(vertical=12),
         )
-        
+
         # Sector times
         sectors = ft.Row(
             controls=[
@@ -149,26 +149,26 @@ class LapCard(ft.Container):
             ],
             alignment=ft.MainAxisAlignment.SPACE_AROUND,
         )
-        
+
         # Footer with metadata
         footer_items = [
             ft.Text(f"Lap #{self.data.lap_number}", size=11, color="#666666"),
             ft.Text(f"Tires: {lap.tyre_compound}", size=11, color="#666666"),
         ]
-        
+
         if not lap.is_valid:
             footer_items.append(
                 ft.Text("INVALID", size=11, color="#ff6b6b", weight=ft.FontWeight.W_600)
             )
-        
+
         footer = ft.Row(
             controls=footer_items,
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
-        
+
         # Error message if failed
         content_controls = [header, lap_time_display, sectors, footer]
-        
+
         if self.data.status == LapCardStatus.FAILED and self.data.error_message:
             error_row = ft.Row(
                 controls=[
@@ -187,12 +187,12 @@ class LapCard(ft.Container):
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             )
             content_controls.append(error_row)
-        
+
         return ft.Column(
             controls=content_controls,
             spacing=8,
         )
-    
+
     def _build_sector(self, label: str, time_ms: Optional[int]) -> ft.Control:
         """Build a sector time display."""
         return ft.Column(
@@ -209,7 +209,7 @@ class LapCard(ft.Container):
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=2,
         )
-    
+
     def update_status(self, status: LapCardStatus, error_message: Optional[str] = None):
         """Update the card status and refresh display."""
         if self.data is None:

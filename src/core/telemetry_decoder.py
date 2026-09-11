@@ -895,14 +895,14 @@ def decode_graphics_evo(data: bytes) -> Optional[Dict[str, Any]]:
         total_drivers = struct.unpack_from("<I", data, _GE_TOTAL_DRIVERS)[0]
         last_laptime_ms = struct.unpack_from("<i", data, _GE_LAST_LAPTIME_MS)[0]
         best_laptime_ms = struct.unpack_from("<i", data, _GE_BEST_LAPTIME_MS)[0]
-        
+
         # ── Session State (definitive lap counting)
         session_phase_name = struct.unpack_from("<33s", data, _GE_SESSION_PHASE_NAME)[0].decode('utf-8', 'ignore').rstrip('\x00')
         session_time_left_ms = struct.unpack_from("<i", data, _GE_SESSION_TIME_LEFT_MS)[0]
         session_total_lap = struct.unpack_from("<i", data, _GE_SESSION_TOTAL_LAP)[0]
         session_current_lap = struct.unpack_from("<i", data, _GE_SESSION_CURRENT_LAP)[0]
         session_lap_length_km = struct.unpack_from("<f", data, _GE_SESSION_LAP_LENGTH_KM)[0]
-        
+
         # ── Timing State (definitive timing data)
         timing_current_laptime = struct.unpack_from("<15s", data, _GE_TIMING_CURRENT_LAPTIME)[0].decode('utf-8', 'ignore').rstrip('\x00')
         timing_delta_current = struct.unpack_from("<15s", data, _GE_TIMING_DELTA_CURRENT)[0].decode('utf-8', 'ignore').rstrip('\x00')

@@ -14,9 +14,9 @@ import httpx
 from src.utils.structured_logger import (
     Component,
     log_debug,
+    log_error,
     log_info,
     log_warning,
-    log_error,
 )
 
 
@@ -45,7 +45,7 @@ class PBCache:
     Key: (track_id, car_id) tuple
     Value: PersonalBest with fastest lap time
     """
-    
+
     def __init__(self, server_url: str, timeout: float = 10.0):
         """
         Initialize PB cache.
@@ -59,7 +59,7 @@ class PBCache:
         self._cache: Dict[Tuple[str, str], PersonalBest] = {}
         self._steam_id: Optional[str] = None
         self._loaded = False
-    
+
     def _normalize_key(self, track_id: str, car_id: str) -> Tuple[str, str]:
         """
         Normalize track and car IDs for consistent key generation.
@@ -73,7 +73,7 @@ class PBCache:
         """
         # Convert to lowercase and strip whitespace for consistency
         return (track_id.lower().strip(), car_id.lower().strip())
-    
+
     async def preload_from_api(self, steam_id: str) -> bool:
         """
         Preload personal bests from API endpoint.
@@ -90,7 +90,7 @@ class PBCache:
                 "steamId": steam_id,
                 "includeAll": "false"  # Only valid laps for PB comparison
             }
-            
+
             log_debug(Component.PB_CACHE, "Fetching PBs from API", url=url, params=params)
 
             async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
@@ -139,7 +139,7 @@ class PBCache:
 
                 log_info(Component.PB_CACHE, "Preloaded personal bests", count=len(self._cache), steam_id=steam_id)
                 return True
-                
+
         except httpx.TimeoutException:
             log_warning(Component.PB_CACHE, "PB preload request timed out")
             return False
@@ -149,7 +149,7 @@ class PBCache:
         except Exception as e:
             log_error(Component.PB_CACHE, "Unexpected error during PB preload", error=str(e))
             return False
-    
+
     def check_and_update_pb(self, track_id: str, car_id: str, lap_time_ms: int) -> bool:
         """
         Check if a lap time is a new personal best and update cache if so.
@@ -163,10 +163,10 @@ class PBCache:
             True if this is a new personal best, False otherwise
         """
         log_debug(Component.PB_CACHE, "Checking PB", track=track_id, car=car_id, time_ms=lap_time_ms)
-        
+
         key = self._normalize_key(track_id, car_id)
         current = self._cache.get(key)
-        
+
         # If no existing PB or new time is faster, update and return True
         if current is None or lap_time_ms < current.best_time_ms:
             new_pb = PersonalBest(
@@ -176,10 +176,10 @@ class PBCache:
             self._cache[key] = new_pb
             log_info(Component.PB_CACHE, "New personal best!", track=track_id, car=car_id, time_ms=lap_time_ms)
             return True
-        
+
         log_debug(Component.PB_CACHE, "Not a PB", current_ms=current.best_time_ms, new_ms=lap_time_ms)
         return False
-    
+
     def get_personal_best(self, track_id: str, car_id: str) -> Optional[PersonalBest]:
         """
         Get current personal best for a track+car combination.
@@ -193,10 +193,10 @@ class PBCache:
         """
         if not self._loaded:
             return None
-        
+
         key = self._normalize_key(track_id, car_id)
         return self._cache.get(key)
-    
+
     def get_cache_stats(self) -> Dict[str, Any]:
         """
         Get cache statistics.
@@ -217,13 +217,13 @@ class PBCache:
                 default=None
             )
         }
-    
+
     def clear(self) -> None:
         """Clear the cache."""
         self._cache.clear()
         self._steam_id = None
         self._loaded = False
-    
+
     def is_loaded(self) -> bool:
         """Check if cache has been loaded."""
         return self._loaded
@@ -231,7 +231,7 @@ class PBCache:
     def get_steam_id(self) -> Optional[str]:
         """Get the Steam ID associated with this cache."""
         return self._steam_id
-    
+
     def get_all_pbs(self) -> Dict[Tuple[str, str], PersonalBest]:
         """
         Get all personal bests from cache.

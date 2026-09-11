@@ -1,22 +1,22 @@
 """Driving-analysis prompt section builders."""
 
-from collections import defaultdict
 from typing import Dict, List
 
+from src.core.analyzer._util import (
+    balance_hint,
+    classify_corner_issue,
+    format_car_state,
+    variation_label,
+)
 from src.core.analyzer.corner_detection import corner_segment_time
 from src.core.analyzer.metrics import (
     analyze_corner_phases,
     analyze_grip_utilization,
-    analyze_tyre_grip_degradation,
     analyze_steering_smoothness,
     analyze_throttle_exit,
+    analyze_tyre_grip_degradation,
 )
-from src.core.analyzer._util import (
-    variation_label,
-    classify_corner_issue,
-    format_car_state,
-    balance_hint,
-)
+
 from .context import PromptContext
 
 

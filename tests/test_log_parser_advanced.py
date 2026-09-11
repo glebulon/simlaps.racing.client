@@ -6,10 +6,10 @@ Helper/data-model tests (``LapState``, ``SessionData``, ``LapData``) are
 covered in other test modules — this file focuses on parser behaviour.
 """
 
+
 import pytest
-from pathlib import Path
+
 from src.core.log_parser import LogParser
-from src.models import SessionData
 
 
 class TestPatternMatching:

@@ -4,12 +4,11 @@ ACE Log Parser Models
 Data models for lap, session, stint, and tyre tracking.
 """
 
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Optional
-import uuid
-
 
 # ─── LapState enum ────────────────────────────────────────────────────────────
 
