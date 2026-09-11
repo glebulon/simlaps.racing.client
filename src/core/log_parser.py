@@ -179,6 +179,15 @@ class LogParser:
         # Track last seen car ID for compound detection
         self._last_car_uuid: Optional[str] = None
         self._last_setup_car_uuid: Optional[str] = None
+        # normalized car_uuid -> car model, captured from "Set new car" lines so
+        # the authoritative "Creating Car" binding can recover the car model in
+        # offline single-player sessions that lack a network `connect` line.
+        self._pending_set_car_model: dict[str, str] = {}
+        # True once the log uses explicit session markers (`Game Started!` or a
+        # network `connect` line).  When set, the offline single-player fallback
+        # session creator is disabled: a failed/aborted marker there is
+        # intentional and stray laps must NOT resurrect a session.
+        self._seen_explicit_session_marker: bool = False
         self._pending_compound_ts: Optional[str] = None
         self._pending_compound_source_car_uuid: Optional[str] = None
         self._pending_compound_updates: dict[int, str] = {}
@@ -232,6 +241,22 @@ class LogParser:
             ),
             "connecting_gamecar": re.compile(
                 r"connecting gamecar ([a-f0-9\-]+) \((.+)\)"
+            ),
+
+            # Offline single-player car selection. No network `connect` line is
+            # emitted in these sessions, so this is how the player's car/model
+            # is learned:
+            #   onSetPlayerCurrentCarCommand: Set new car <uuid> content\cars\<model>\...
+            "set_player_car": re.compile(
+                r"onSetPlayerCurrentCarCommand: Set new car ([a-f0-9\-]+)"
+                r" content\\cars\\([^\\]+)"
+            ),
+            # Authoritative player-car binding. Carries car uuid, driver name
+            # and the player's Steam ID, e.g.:
+            #   [ServerVehicleSystem][<uuid>] Creating Car (Glebulon  \t76561198…)
+            "creating_car": re.compile(
+                r"\[ServerVehicleSystem\]\[([a-f0-9\-]+)\] Creating Car "
+                r"\((.*?)\s+(\d{17})\)"
             ),
 
             # Full pipe-delimited Game Started line
@@ -746,6 +771,8 @@ class LogParser:
             return
 
         pid, car, car_uuid = m.group(1), m.group(2), m.group(3)
+        # Explicit online session marker — disables the offline fallback.
+        self._seen_explicit_session_marker = True
         already_has_steam = self._is_steam_id(self.context.player_id or "")
 
         if self._is_steam_id(pid) or not already_has_steam:
@@ -810,6 +837,103 @@ class LogParser:
             "player_name": player_name,
             "player_id": player_id,
         }
+
+    def _handle_player_car_binding(self, line: str) -> None:
+        """Identify the player's car in offline single-player sessions.
+
+        These sessions emit no network ``connect`` line, so ``_handle_connect``
+        never binds the player car. Instead the player car is learned from:
+
+          onSetPlayerCurrentCarCommand: Set new car <uuid> content\\cars\\<model>
+          [ServerVehicleSystem][<uuid>] Creating Car (<name>  \t<steamid>)
+
+        The ``Set new car`` line carries the car model; the ``Creating Car``
+        line is authoritative (it carries the player's Steam ID). We bind on
+        the latter and recover the model from the former.
+        """
+        if "onSetPlayerCurrentCarCommand: Set new car " in line:
+            m = self._pats["set_player_car"].search(line)
+            if m:
+                self._pending_set_car_model[
+                    self._normalize_car_uuid(m.group(1))
+                ] = m.group(2)
+            return
+
+        if "Creating Car (" not in line or "ServerVehicleSystem" not in line:
+            return
+        m = self._pats["creating_car"].search(line)
+        if not m:
+            return
+        car_uuid, player_name, pid = m.group(1), m.group(2).strip(), m.group(3)
+        if not self._is_steam_id(pid):
+            return
+        # Only bind the player's own car. If a Steam identity is already known,
+        # ignore Creating Car lines for other Steam IDs (e.g. AI/opponents).
+        if self._is_steam_id(self.context.player_id or "") and pid != self.context.player_id:
+            return
+
+        self.context.player_id = pid
+        if player_name:
+            self.context.player_name = player_name
+        self.context.car_uuid = car_uuid
+        self.context.player_car_uuids.add(car_uuid)
+        model = self._pending_set_car_model.get(self._normalize_car_uuid(car_uuid))
+        if model:
+            self.context.current_car = model
+        self._session_manager.update_player_identification_from_logs(
+            {
+                "steam_id": pid,
+                "car_uuid": car_uuid,
+                "car_model": model or self.context.current_car,
+            }
+        )
+        ers, kers = self._get_shm_hybrid_flags()
+        self.context.car_is_hybrid = is_hybrid_car(
+            has_ers_from_shm=ers, has_kers_from_shm=kers
+        )
+
+        if self.current_session:
+            self.current_session.car_uuid = car_uuid
+            if model:
+                self.current_session.car = model
+            self.current_session.player_id = pid
+            self.current_session.player_name = self.context.player_name
+            self.current_session.fuel_reliable = not self.context.car_is_hybrid
+
+        log_debug(
+            Component.LOG_PARSER,
+            f"[CAR_BIND] player car via Creating Car: uuid={car_uuid} "
+            f"model={model} steam={pid}",
+        )
+
+    def _maybe_start_fallback_session(self, line: str) -> None:
+        """Create a session when driving begins without a session-start marker.
+
+        Offline single-player sessions (e.g. Special Event / hotlap / practice)
+        may emit neither ``Game Started!`` nor a network ``connect`` line, so no
+        session is ever created and player laps are dropped. Once the player car
+        is bound, the first in-session driving signal (a player-only practice
+        split, a physics lap, or a player ``New lap``) creates a fallback
+        PRACTICE session so subsequent sectors and laps are captured.
+        """
+        if self._seen_explicit_session_marker or not self.context.car_uuid:
+            return
+        is_practice_split = (
+            "On Split start" in line and self._pats["practice_split"].search(line)
+        )
+        is_physics_lap = "Lap test evOnLapCompleted" in line
+        is_player_lap = (
+            "New lap carId" in line
+            and (m := self._pats["lap_finish"].search(line)) is not None
+            and self._is_player_car(m.group(2))
+        )
+        if is_practice_split or is_physics_lap or is_player_lap:
+            self._start_new_session("PRACTICE", line)
+            log_debug(
+                Component.LOG_PARSER,
+                "[SESSION] Fallback PRACTICE session created for offline "
+                "single-player driving (no Game Started / connect line)",
+            )
 
     def _handle_car_teleport(self, line: str) -> None:
         """Handle CarTeleportCompleted lines to track last seen car ID."""
@@ -970,6 +1094,10 @@ class LogParser:
         """
         if "Game Started!" not in line:
             return False
+        # This log uses explicit session markers, so disable the offline
+        # single-player fallback session creator even if this particular marker
+        # fails to parse (a stray lap after a failed marker must be dropped).
+        self._seen_explicit_session_marker = True
         # The line contains "Game Started!" but may have an unrecognised format
         # (e.g. the game version changed the field names).  Still reset the
         # shared session so stale data doesn't leak in.
@@ -2122,6 +2250,8 @@ class LogParser:
             return None
         self._process_setup(line)
         if not self.current_session:
+            self._maybe_start_fallback_session(line)
+        if not self.current_session:
             return None
         self._process_session_events(line)
         return self._process_lap_completion(line)
@@ -2146,6 +2276,7 @@ class LogParser:
         self._handle_version(line)
         self._handle_track_name(line)
         self._handle_connect(line)
+        self._handle_player_car_binding(line)
         self._handle_driver(line)
         self._handle_gamecar_meta(line)
         self._handle_car_teleport(line)
