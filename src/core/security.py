@@ -118,6 +118,21 @@ def get_app_secret() -> bytes:
     return APP_SECRET.encode('utf-8')
 
 
+def get_secret_source() -> str:
+    """Return where the effective APP_SECRET came from.
+
+    ``"env"`` covers both the process environment and any dotenv/sidecar
+    ``.env`` loaded by :func:`_load_runtime_dotenv`, because both win over the
+    embedded secret.  ``"embedded"`` means only the compiled native module
+    supplied the secret.  ``"none"`` means no usable secret is provisioned.
+    """
+    if _is_usable_secret(os.environ.get("APP_SECRET")):
+        return "env"
+    if _is_usable_secret(_load_embedded_secret()):
+        return "embedded"
+    return "none"
+
+
 # =============================================================================
 # GAME PROCESS DETECTION
 # =============================================================================

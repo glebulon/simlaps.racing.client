@@ -12,7 +12,15 @@ from enum import Enum
 
 from ..models import SessionData, LapData, SharedSessionManager
 from ..utils.structured_logger import log_debug, log_error, log_info, log_warning, log_exception, Component
-from .security import sign_payload, is_game_running, GameProcessStatus, is_secret_configured
+from .security import (
+    sign_payload,
+    is_game_running,
+    GameProcessStatus,
+    is_secret_configured,
+    verify_signature_locally,
+    get_app_secret,
+    get_secret_source,
+)
 from ..version import VERSION, USER_AGENT
 
 
@@ -165,6 +173,19 @@ class APIClient:
         assert payload is not None
 
         signed_payload = sign_payload(payload)
+        local_sig_valid = verify_signature_locally(signed_payload)
+        log_debug(
+            Component.API,
+            "Signature computed",
+            local_verifies=local_sig_valid,
+            secret_source=get_secret_source(),
+            secret_len=len(get_app_secret()),
+            sig_data=(
+                f"{signed_payload['_timestamp']}:{signed_payload['_nonce']}:"
+                f"{payload.get('userId')}:{payload.get('trackId')}:{payload.get('time')}"
+            ),
+            signature_prefix=signed_payload["_signature"][:12],
+        )
         log_debug(
             Component.API,
             "Sending submission",
@@ -397,10 +418,23 @@ class APIClient:
                 lap_id=data.get("id"),
             )
         if response.status_code == 401:
-            error_data = response.json() if response.content else {}
+            try:
+                error_data = response.json() if response.content else {}
+            except (ValueError, KeyError, TypeError):
+                error_data = {}
             log_warning(
                 Component.API,
                 "401 signature error",
+                server_code=(
+                    error_data.get("code")
+                    if isinstance(error_data, dict)
+                    else None
+                ),
+                server_error=(
+                    error_data.get("error")
+                    if isinstance(error_data, dict)
+                    else None
+                ),
                 error_data=error_data,
             )
             return SubmissionResult(
@@ -560,7 +594,13 @@ class APIClient:
             
             # Log only that the secret is present and its length; never log the value
             secret = get_app_secret()
-            log_debug(Component.API, "get_app_secret result", secret_configured=bool(secret), secret_len=len(secret))
+            log_debug(
+                Component.API,
+                "get_app_secret result",
+                secret_configured=bool(secret),
+                secret_len=len(secret),
+                secret_source=get_secret_source(),
+            )
             
             # Create a test signature with known test values
             timestamp = get_timestamp()
