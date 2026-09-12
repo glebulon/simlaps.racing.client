@@ -258,6 +258,7 @@ class SimLapsApp:
             )
             # Set up auto-stop callback to trigger analysis
             self._telemetry_capture.set_on_stop_callback(self._on_telemetry_auto_stop)
+            self._telemetry_capture.set_on_origin_status_callback(self._on_telemetry_origin_status)
 
             if self._config.telemetry_enabled:
                 self._telemetry_analyzer = TelemetryAnalyzer(
@@ -637,6 +638,14 @@ class SimLapsApp:
             current_track_name=self._current_track_name,
         )
 
+    async def _on_telemetry_origin_status(self, event):
+        """Forward capture-origin transitions to the telemetry lifecycle/UI."""
+        await self._telemetry_lifecycle_service.handle_origin_status(
+            event=event,
+            telemetry_capture=self._telemetry_capture,
+            home_page=self._home_page,
+        )
+
     async def _stop_telemetry_capture(self, reason: str = "session_end", discard: bool = False):
         """Stop telemetry capture and generate analysis when game session ends.
 
@@ -654,6 +663,10 @@ class SimLapsApp:
             home_page=self._home_page,
             current_track_name=self._current_track_name,
         )
+
+    async def _cancel_pending_session_stop(self):
+        """Finish invalidating the parser's delayed stop before app close."""
+        await self._session_lifecycle_service.cancel_pending_game_stop()
 
     async def _on_user_detected(self, steam_id: str, player_name: Optional[str]):
         """Handle user detection from log parser."""

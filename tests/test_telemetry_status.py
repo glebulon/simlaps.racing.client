@@ -50,6 +50,21 @@ def test_set_status_capturing():
         assert indicator.visible is True
 
 
+def test_set_status_warning_uses_exact_synchronizing_message_and_amber_color():
+    with patch("src.ui.components.telemetry_status.ft") as mock_ft:
+        mock_ft.Row.return_value = MagicMock()
+        mock_ft.Icon.return_value = MagicMock()
+        mock_ft.Text.return_value = MagicMock()
+        indicator = TelemetryStatusIndicator()
+
+        with patch.object(indicator, "update"):
+            indicator.set_status(TelemetryStatus.WARNING)
+
+    assert indicator._status_text == "Telemetry sources are synchronizing; samples are being skipped."
+    assert indicator._status_color == "#f59e0b"
+    assert indicator.visible is True
+
+
 def test_set_status_analyzing():
     with patch("src.ui.components.telemetry_status.ft") as mock_ft:
         mock_ft.Row.return_value = MagicMock()

@@ -52,6 +52,12 @@ class AppLifecycleService:
             "monitor shutdown",
             app.stop_monitoring,
         )
+        cancel_session_stop = getattr(app, "_cancel_pending_session_stop", None)
+        if cancel_session_stop:
+            await self._run_step(
+                "pending session-stop grace",
+                cancel_session_stop,
+            )
         telemetry_stop = getattr(app, "_stop_telemetry_capture", None)
         if telemetry_stop:
             await self._run_step(

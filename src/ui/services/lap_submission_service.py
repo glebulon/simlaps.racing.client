@@ -94,6 +94,7 @@ class LapSubmissionService:
             SubmissionStatus.RATE_LIMITED,
             SubmissionStatus.PLAUSIBILITY_FAILED,
             SubmissionStatus.NO_SECRET,
+            SubmissionStatus.NETWORK_ERROR,
         }:
             log_warning(
                 Component.APP,

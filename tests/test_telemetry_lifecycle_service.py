@@ -3,8 +3,43 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.core.telemetry_capture import CaptureOriginStatus
 from src.ui.components.telemetry_status import TelemetryStatus
 from src.ui.services.telemetry_lifecycle_service import TelemetryLifecycleService
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("record_frames, recovered", [(True, TelemetryStatus.CAPTURING), (False, TelemetryStatus.IDLE)])
+async def test_origin_status_updates_only_current_capture(record_frames, recovered):
+    service = TelemetryLifecycleService()
+    capture = MagicMock()
+    capture.get_capture_identity.return_value = "current"
+    capture.get_capture_generation.return_value = 7
+    capture.record_frames = record_frames
+    home_page = MagicMock()
+
+    await service.handle_origin_status(
+        event=CaptureOriginStatus("stale", 6, "warning", 10, 10),
+        telemetry_capture=capture,
+        home_page=home_page,
+    )
+    home_page.set_telemetry_status.assert_not_called()
+
+    await service.handle_origin_status(
+        event=CaptureOriginStatus("current", 7, "warning", 10, 10),
+        telemetry_capture=capture,
+        home_page=home_page,
+    )
+    await service.handle_origin_status(
+        event=CaptureOriginStatus("current", 7, "recovered", 10, 0),
+        telemetry_capture=capture,
+        home_page=home_page,
+    )
+
+    assert home_page.set_telemetry_status.call_args_list == [
+        ((TelemetryStatus.WARNING,), {}),
+        ((recovered,), {}),
+    ]
 
 
 @pytest.mark.asyncio
