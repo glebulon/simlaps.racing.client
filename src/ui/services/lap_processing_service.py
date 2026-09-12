@@ -75,16 +75,19 @@ class LapProcessingService:
                 lap_number=lap.lap_number,
             )
 
-        # OUTLAP is a structural timing boundary, not a result. Telemetry
-        # needs the boundary above to exclude the pit-exit circuit, but it must
-        # not become a card, history entry, PB, or submission.
+        # OUTLAP is a structural classification, not a validity verdict. The
+        # boundary above lets telemetry exclude the pit-exit circuit, and the
+        # lap itself is still presented — as invalid (is_valid is always False
+        # for OUTLAP), so it is visible instead of silently dropped. It never
+        # reaches PB or auto-submission unless the user opted into invalid
+        # laps, and a later authoritative/SHM verdict can still have upgraded
+        # it to a real timed lap (tourist layouts time the first circuit).
         if (getattr(lap, "lap_type", None) or "").upper() == "OUTLAP":
             log_debug(
                 Component.APP,
-                "Outlap boundary recorded; suppressing result presentation",
+                "Outlap presented as invalid lap",
                 lap_number=lap.lap_number,
             )
-            return updated_track
 
         # Determine if we should submit this lap. The log parser's verdict
         # is authoritative for completed laps: it uses the game's own

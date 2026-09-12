@@ -392,8 +392,8 @@ async def test_laguna_live_log_flow_records_outlap_boundary_without_card(tmp_pat
     ACE crosses the timing line while the car is still in pit lane, rejects
     that short prefix, and then reports the following full circuit as a normal
     ``New lap``. It is nevertheless the structural outlap: telemetry needs its
-    end boundary, while the UI/history/submission paths must not treat it as a
-    result.
+    end boundary, and the UI/history paths present it as an invalid lap so it
+    is never silently dropped — but it must not be submitted.
     """
     car_id = "45dee0b268b7dc7c-9bb207d2d0ce68ad"
     log_file = tmp_path / "laguna-outlap.log"
@@ -487,10 +487,12 @@ async def test_laguna_live_log_flow_records_outlap_boundary_without_card(tmp_pat
         LapState.VALID,
     ]
     assert [call.args[1].lap_time_ms for call in home.add_lap.call_args_list] == [
+        115494,
         153507,
         117060,
     ]
-    assert len(history) == 2
+    assert len(history) == 3
+    assert history[0].was_valid is False
     submissions.assert_called_once()
     assert [call.args for call in telemetry.record_lap_boundary.call_args_list] == [
         (115494, 1, "OUTLAP"),

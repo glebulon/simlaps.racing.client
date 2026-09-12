@@ -314,10 +314,14 @@ async def test_handle_lap_complete_records_structural_outlap_boundary():
     )
 
     deps["telemetry_capture"].record_lap_boundary.assert_called_once_with(120000, 1, "OUTLAP")
-    deps["home_page"].add_lap.assert_not_called()
+    # The outlap is presented as an invalid lap so it is never silently
+    # dropped, but it must not reach PB or submission.
+    deps["home_page"].add_lap.assert_called_once()
+    assert deps["home_page"].add_lap.call_args.args[2] == LapCardStatus.INVALID
     deps["pb_cache"].check_and_update_pb.assert_not_called()
     deps["schedule_submission"].assert_not_called()
-    assert deps["history_entries"] == []
+    assert len(deps["history_entries"]) == 1
+    assert deps["history_entries"][0].was_valid is False
 
 
 @pytest.mark.asyncio
