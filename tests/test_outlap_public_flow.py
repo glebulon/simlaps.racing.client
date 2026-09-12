@@ -90,7 +90,17 @@ async def test_valid_timed_lap_after_rejected_pit_prefix_is_not_suppressed(tmp_p
         (27111, 18177, 32613),
     ]
 
+    session = SessionData(
+        track="Red Bull Ring GP",
+        car="ks_mazda_mx5_nd_cup",
+        player_id="76561197986609341",
+        session_type="PRACTICE",
+        car_uuid=car_id,
+    )
     manager = SharedSessionManager()
+    manager.begin_session(
+        session.session_id, car_model=session.car, car_uuid=session.car_uuid
+    )
     for lap_number, (lap_time_ms, is_valid) in enumerate(
         zip(lap_times, lap_validity, strict=False),
         start=1,
@@ -161,13 +171,8 @@ async def test_valid_timed_lap_after_rejected_pit_prefix_is_not_suppressed(tmp_p
         log_path=str(log_file),
         session_manager=manager,
     )
-    parser.current_session = SessionData(
-        track="Red Bull Ring GP",
-        car="ks_mazda_mx5_nd_cup",
-        player_id="76561197986609341",
-        session_type="PRACTICE",
-        car_uuid=car_id,
-    )
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
     parser.context.player_id = "76561197986609341"
     parser.context.car_uuid = car_id
     parser.context.tyre.set_all("S")
@@ -226,7 +231,17 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
     car_id = "45dee0b268b7dc7c-9bb207d2d0ce68ad"
     lap_times = [61_854, 62_400]
     sectors = [(25_000, 18_000, 18_854), (25_200, 18_100, 19_100)]
+    session = SessionData(
+        track="Red Bull Ring GP",
+        car="ks_mazda_mx5_nd_cup",
+        player_id="76561197986609341",
+        session_type="PRACTICE",
+        car_uuid=car_id,
+    )
     manager = SharedSessionManager()
+    manager.begin_session(
+        session.session_id, car_model=session.car, car_uuid=session.car_uuid
+    )
     for lap_number, lap_time_ms in enumerate(lap_times, start=1):
         _publish_shm_completion(
             manager,
@@ -294,13 +309,8 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
         log_path=str(log_file),
         session_manager=manager,
     )
-    parser.current_session = SessionData(
-        track="Red Bull Ring GP",
-        car="ks_mazda_mx5_nd_cup",
-        player_id="76561197986609341",
-        session_type="PRACTICE",
-        car_uuid=car_id,
-    )
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
     parser.context.player_id = "76561197986609341"
     parser.context.car_uuid = car_id
     parser.context.tyre.set_all("S")
@@ -386,14 +396,22 @@ async def test_invalid_timed_lap_after_rejected_pit_prefix_reaches_diagnostics(
 
 
 @pytest.mark.asyncio
-async def test_laguna_live_log_flow_records_outlap_boundary_without_card(tmp_path):
+@pytest.mark.parametrize(
+    ("submit_invalid_laps", "expected_submission_times"),
+    (
+        (False, [117060]),
+        (True, [115494, 153507, 117060]),
+    ),
+)
+async def test_rejected_pit_prefix_keeps_next_full_circuit_as_timed_lap(
+    tmp_path, submit_invalid_laps, expected_submission_times
+):
     """Replay the signal order observed in the 2026-08-18 live session.
 
     ACE crosses the timing line while the car is still in pit lane, rejects
     that short prefix, and then reports the following full circuit as a normal
-    ``New lap``. It is nevertheless the structural outlap: telemetry needs its
-    end boundary, while the UI/history/submission paths must not treat it as a
-    result.
+    ``New lap``. The rejected prefix is the outlap boundary; the full circuit
+    remains a diagnostic timed lap even when the game marks it invalid.
     """
     car_id = "45dee0b268b7dc7c-9bb207d2d0ce68ad"
     log_file = tmp_path / "laguna-outlap.log"
@@ -403,19 +421,26 @@ async def test_laguna_live_log_flow_records_outlap_boundary_without_card(tmp_pat
                 "[2026-08-18 11:31:25.052] [gameplay] [info] Outplap split",
                 "[2026-08-18 11:31:41.838] [gameplay] [error] "
                 "Couldn't create lap from opensplits (carId player): Splitcollection 1/3",
-                "[2026-08-18 11:32:26.244] [gameplay] [info] On Split start false end false id 0 splittime 44403",
-                "[2026-08-18 11:32:53.895] [gameplay] [info] On Split start false end false id 1 splittime 27651",
-                "[2026-08-18 11:33:36.971] [physics] [info] Lap test evOnLapCompleted 2 completed",
-                "[2026-08-18 11:33:37.333] [gameplay] [info] On Split start true end true id 2 splittime 43440",
-                f"[2026-08-18 11:33:37.333] [gameplay] [info] New lap carId {car_id}: 01:55.494",
-                "[2026-08-18 11:33:37.420] [network] [info] "
-                "Relevant onSplit for Combo 6@2: laptime 115494, valid false, "
-                "flags 1, lap 1 (prev 0)",
-                "[2026-08-18 11:34:54.441] [gameplay] [info] On Split start false end false id 0 splittime 77109",
-                "[2026-08-18 11:35:20.690] [gameplay] [info] On Split start false end false id 1 splittime 26247",
-                "[2026-08-18 11:36:10.472] [physics] [info] Lap test evOnLapCompleted 3 completed",
-                "[2026-08-18 11:36:10.840] [gameplay] [info] On Split start true end true id 2 splittime 50151",
-                f"[2026-08-18 11:36:10.840] [gameplay] [info] New lap carId {car_id}: 02:33.507",
+                "[2026-08-18 11:32:26.244] [gameplay] [info] "
+                "On Split start false end false id 0 splittime 44403",
+                "[2026-08-18 11:32:53.895] [gameplay] [info] "
+                "On Split start false end false id 1 splittime 27651",
+                "[2026-08-18 11:33:36.971] [physics] [info] "
+                "Lap test evOnLapCompleted 2 completed",
+                "[2026-08-18 11:33:37.333] [gameplay] [info] "
+                "On Split start true end true id 2 splittime 43440",
+                f"[2026-08-18 11:33:37.333] [gameplay] [info] "
+                f"New lap carId {car_id}: 01:55.494",
+                "[2026-08-18 11:34:54.441] [gameplay] [info] "
+                "On Split start false end false id 0 splittime 77109",
+                "[2026-08-18 11:35:20.690] [gameplay] [info] "
+                "On Split start false end false id 1 splittime 26247",
+                "[2026-08-18 11:36:10.472] [physics] [info] "
+                "Lap test evOnLapCompleted 3 completed",
+                "[2026-08-18 11:36:10.840] [gameplay] [info] "
+                "On Split start true end true id 2 splittime 50151",
+                f"[2026-08-18 11:36:10.840] [gameplay] [info] "
+                f"New lap carId {car_id}: 02:33.507",
                 "[2026-08-18 11:36:10.865] [network] [info] "
                 "Relevant onSplit for Combo 6@2: laptime 153507, valid false, "
                 "flags 1, lap 2 (prev 1)",
@@ -454,7 +479,11 @@ async def test_laguna_live_log_flow_records_outlap_boundary_without_card(tmp_pat
             lap=lap,
             home_page=home,
             telemetry_capture=telemetry,
-            config=AppConfig(auto_submit=True, telemetry_enabled=True),
+            config=AppConfig(
+                auto_submit=True,
+                telemetry_enabled=True,
+                submit_invalid_laps=submit_invalid_laps,
+            ),
             session_manager=manager,
             pb_cache=MagicMock(),
             history_entries=history,
@@ -477,23 +506,35 @@ async def test_laguna_live_log_flow_records_outlap_boundary_without_card(tmp_pat
     parser.context.player_id = "76561197986609341"
     parser.context.car_uuid = car_id
     parser.context.tyre.set_all("S")
+    # The first full circuit has no log validity broadcast in the observed
+    # order. Seed its authoritative graphics verdict after parser creation so
+    # the parser must reconcile physical lap 2 with logical lap 1 through SHM.
+    _publish_shm_completion(
+        manager,
+        completed_laps=2,
+        lap_time_ms=115494,
+        is_valid=False,
+    )
 
     sessions = await parser.parse_file()
 
     assert len(sessions) == 1
     assert [lap.lap_state for lap in sessions[0].laps] == [
-        LapState.OUTLAP,
+        LapState.INVALID_GAME,
         LapState.INVALID_GAME,
         LapState.VALID,
     ]
+    assert (sessions[0].laps[0].lap_number, sessions[0].laps[0].physics_lap_number) == (1, 2)
+    assert sessions[0].laps[0].validity_source == "shm_graphics"
     assert [call.args[1].lap_time_ms for call in home.add_lap.call_args_list] == [
+        115494,
         153507,
         117060,
     ]
-    assert len(history) == 2
-    submissions.assert_called_once()
+    assert len(history) == 3
+    assert [call.args[2].lap_time_ms for call in submissions.call_args_list] == expected_submission_times
     assert [call.args for call in telemetry.record_lap_boundary.call_args_list] == [
-        (115494, 1, "OUTLAP"),
+        (115494, 1, "INVALID_GAME"),
         (153507, 2, "INVALID_GAME"),
         (117060, 3, "VALID"),
     ]

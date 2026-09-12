@@ -731,8 +731,8 @@ async def test_delayed_log_enrichment_rounding_keeps_one_invalid_lap_card(delta)
     seconds, milliseconds = divmod(remainder, 1000)
     assert (
         parser._handle_lap_complete(
-            f"[2026-08-26 12:00:00.000] [gameplay] [info] New lap carId abc123: "
-            f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+        f"[2026-08-26 12:00:00.000] [gameplay] [info] New lap carId abc123: "
+        f"{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
         )
         is None
     )
@@ -786,6 +786,12 @@ def test_unmatched_validity_broadcast_preserves_pending_lap() -> None:
 def test_equal_time_completions_keep_their_lap_associations() -> None:
     """A delayed first log line cannot consume the second SHM completion."""
     manager = SharedSessionManager()
+    session = SessionData(
+        track="spa", car="porsche", session_type="PRACTICE", car_uuid="abc123"
+    )
+    manager.begin_session(
+        session.session_id, car_model=session.car, car_uuid=session.car_uuid
+    )
     for completed_laps, lap_time_ms in ((1, 100_000), (2, 100_001)):
         manager.update_from_graphics_shm(
             {
@@ -807,8 +813,9 @@ def test_equal_time_completions_keep_their_lap_associations() -> None:
     parser = LogParser(session_manager=manager)
     parser.PENDING_VALIDITY_GRACE_SECONDS = 0
     parser._last_shm_completion_observed_at = 0
-    parser.current_session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
-    parser.context.car_uuid = "abc123"
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
+    parser.context.car_uuid = session.car_uuid
 
     assert (
         parser._handle_lap_complete("[2026-08-26 12:00:00.000] [gameplay] [info] New lap carId abc123: 01:40.000")
@@ -849,9 +856,9 @@ def test_equal_time_validity_prefers_game_lap_number_over_pending_tie() -> None:
 
     assert (
         parser._handle_lap_validity(
-            "[2026-08-26 12:00:00.000] [network] [info] "
-            "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
-            "flags 1, lap 1 (prev 0)"
+        "[2026-08-26 12:00:00.000] [network] [info] "
+        "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
+        "flags 1, lap 1 (prev 0)"
         )
         is None
     )
@@ -866,9 +873,9 @@ def test_equal_time_validity_prefers_game_lap_number_over_pending_tie() -> None:
     # its first verdict has changed the provenance from SHM to logs.
     assert (
         parser._handle_lap_validity(
-            "[2026-08-26 12:00:00.001] [network] [info] "
-            "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
-            "flags 1, lap 1 (prev 0)"
+        "[2026-08-26 12:00:00.001] [network] [info] "
+        "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
+        "flags 1, lap 1 (prev 0)"
         )
         is None
     )
@@ -905,9 +912,9 @@ def test_validity_uses_pending_time_before_stale_same_number_lap() -> None:
 
     assert (
         parser._handle_lap_validity(
-            "[2026-08-26 12:00:00.000] [network] [info] "
-            "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
-            "flags 1, lap 1 (prev 0)"
+        "[2026-08-26 12:00:00.000] [network] [info] "
+        "Relevant onSplit for Combo 1@1: laptime 100000, valid false, "
+        "flags 1, lap 1 (prev 0)"
         )
         is pending
     )
@@ -994,7 +1001,11 @@ def test_shm_completion_waits_for_log_session_identity() -> None:
     from src.models import SharedSessionManager
 
     manager = SharedSessionManager()
-    manager.update_from_graphics_shm({"total_lap_count": 0, "current_lap_time_ms": 100_000})
+    session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
+    manager.begin_session(session.session_id, car_model=session.car)
+    manager.update_from_graphics_shm(
+        {"total_lap_count": 0, "current_lap_time_ms": 100_000}
+    )
     manager.update_from_graphics_shm(
         {
             "total_lap_count": 1,
@@ -1009,7 +1020,8 @@ def test_shm_completion_waits_for_log_session_identity() -> None:
     assert parser._take_ready_shm_lap() is None
     assert manager.get_lap_completions_after(0)
 
-    parser.current_session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
+    parser.current_session = session
+    parser._sessions_by_id[session.session_id] = session
     lap = parser._take_ready_shm_lap()
     assert lap is not None
     assert lap.lap_time_ms == 100_000

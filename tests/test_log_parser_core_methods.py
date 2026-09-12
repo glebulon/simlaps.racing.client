@@ -225,7 +225,7 @@ class TestHandleOutlap:
         assert result is None
 
     def test_handle_outlap_signals_failed(self):
-        """Rejected practice pit prefix preserves the full-circuit outlap."""
+        """Rejected practice pit prefix closes the structural outlap."""
         parser = LogParser()
         parser.current_session = SessionData(track="spa", car="porsche", session_type="PRACTICE")
         parser._ip.is_outlap = True
@@ -235,7 +235,7 @@ class TestHandleOutlap:
         result = parser._handle_outlap_signals(line)
 
         assert result is None
-        assert parser._ip.is_outlap is True
+        assert parser._ip.is_outlap is False
         assert parser._ip.splits == {}
 
     def test_outplap_split_ignored_in_race(self):
