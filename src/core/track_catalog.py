@@ -52,6 +52,17 @@ def _validate_catalog(catalog: dict) -> None:
             if not isinstance(config, dict):
                 raise ValueError(f"Config '{config_key}' in track '{track_key}' must be a dictionary")
 
+            calibration = config.get("_calibration")
+            if calibration is not None:
+                if not isinstance(calibration, dict):
+                    raise ValueError(
+                        f"Calibration in config '{config_key}' in track '{track_key}' must be a dictionary"
+                    )
+                if any(not isinstance(key, str) or not isinstance(value, str) for key, value in calibration.items()):
+                    raise ValueError(
+                        f"Calibration fields in config '{config_key}' in track '{track_key}' must be strings"
+                    )
+
             # Validate corners
             if "corners" in config:
                 if not isinstance(config["corners"], list):
@@ -69,6 +80,48 @@ def _validate_catalog(catalog: dict) -> None:
 
 # Load catalog on module import
 TRACK_CATALOG = _load_catalog()
+
+
+def _normalize_label(value: object) -> str:
+    """Normalize ACE labels while retaining their token order."""
+    if not isinstance(value, str):
+        return ""
+    return "".join(char for char in value.casefold() if char.isalnum())
+
+
+def _track_labels(track_key: str, track: dict) -> list[str]:
+    return [track_key, track.get("name", ""), *track.get("aliases", [])]
+
+
+def _config_labels(config_key: str, config: dict) -> list[str]:
+    return [config_key, config.get("name", ""), *config.get("aliases", [])]
+
+
+def _matches(value: object, labels: list[str]) -> bool:
+    normalized = _normalize_label(value)
+    return bool(normalized) and normalized in {
+        _normalize_label(label) for label in labels if _normalize_label(label)
+    }
+
+
+def _matching_track_keys(track_name: str, config_name: Optional[str]) -> list[str]:
+    """Find exact track identities, including split track/config catalog rows."""
+    matches: list[str] = []
+    normalized_track = _normalize_label(track_name)
+    normalized_config = _normalize_label(config_name)
+    for track_key, track in TRACK_CATALOG.items():
+        labels = _track_labels(track_key, track)
+        exact_track = _matches(track_name, labels)
+        combined_track = bool(
+            normalized_config
+            and any(
+                normalized_track + normalized_config == _normalize_label(label)
+                for label in labels
+            )
+        )
+        if exact_track or combined_track:
+            matches.append(track_key)
+    return matches
 
 
 def _corner_confidence(corner: dict) -> str:
@@ -111,53 +164,48 @@ def select_track_profile(
         tuple: (track_key, track_profile) or (None, None) if not found
     """
     if track_name:
-        # Collect every catalog entry whose key or aliases match the name.
-        # A single track name can map to several entries (e.g. "Nurburgring"
-        # matches both the Nordschleife and GP catalogs), so we cannot stop
-        # at the first hit when a specific config is requested.
-        matching_keys: list[str] = []
-        if track_name in TRACK_CATALOG:
-            matching_keys.append(track_name)
-        tn_lower = track_name.lower()
-        for track_key, track in TRACK_CATALOG.items():
-            if track_key == track_name:
-                continue
-            labels = [track_key, *track.get("aliases", [])]
-            if tn_lower in [label.lower() for label in labels]:
-                matching_keys.append(track_key)
-
-        # Prefer a config whose key/aliases match config_name across ALL
-        # matching tracks before falling back to any default.
+        matching_keys = _matching_track_keys(track_name, config_name)
         if config_name:
-            cfg_lower = config_name.lower()
+            # An explicit layout is a constraint.  Do not silently use a
+            # default layout when it is unknown or conflicts with the track.
             for track_key in matching_keys:
                 track = TRACK_CATALOG[track_key]
                 for config_key, config in track["configs"].items():
-                    config_labels = [config_key, *config.get("aliases", [])]
-                    if cfg_lower in [label.lower() for label in config_labels]:
+                    if _matches(config_name, _config_labels(config_key, config)):
                         return track_key, build_track_profile(track_key, config_key)
+            return None, None
 
-        # Fall back to the default config of the first matching track.
         if matching_keys:
             track_key = matching_keys[0]
-            return track_key, build_track_profile(track_key, TRACK_CATALOG[track_key]["default_config"])
-
+            return track_key, build_track_profile(
+                track_key, TRACK_CATALOG[track_key]["default_config"]
+            )
         return None, None
 
     if path:
-        path_l = os.path.normpath(path).lower()
+        path_l = _normalize_label(os.path.normpath(path))
+        path_matches = []
         for track_key, track in TRACK_CATALOG.items():
-            if any(alias in path_l for alias in track.get("aliases", [])):
-                if config_name:
-                    cfg_lower = config_name.lower()
-                    for config_key, config in track["configs"].items():
-                        config_labels = [config_key, *config.get("aliases", [])]
-                        if cfg_lower in [label.lower() for label in config_labels]:
-                            return track_key, build_track_profile(track_key, config_key)
+            labels = [_normalize_label(label) for label in _track_labels(track_key, track)]
+            matched_labels = [label for label in labels if label and label in path_l]
+            if matched_labels:
+                # Rank only labels that actually matched the path.  Ranking
+                # every alias lets an unrelated long alias hide a specific
+                # layout such as ``suzuka_east`` or ``nurburgring_gp``.
+                path_matches.append((max(map(len, matched_labels)), track_key, track))
+        for _, track_key, track in sorted(path_matches, reverse=True):
+            if config_name:
                 for config_key, config in track["configs"].items():
-                    if any(alias in path_l for alias in config.get("aliases", [])):
+                    if _matches(config_name, _config_labels(config_key, config)):
                         return track_key, build_track_profile(track_key, config_key)
-                return track_key, build_track_profile(track_key, track["default_config"])
+                continue
+            for config_key, config in track["configs"].items():
+                config_labels = [_normalize_label(label) for label in _config_labels(config_key, config)]
+                if any(label and label in path_l for label in config_labels):
+                    return track_key, build_track_profile(track_key, config_key)
+            return track_key, build_track_profile(track_key, track["default_config"])
+        if config_name:
+            return None, None
 
     return None, None
 
@@ -167,16 +215,21 @@ def find_track_by_name(track_name: str) -> tuple:
     if not track_name:
         return None, None
 
-    # Direct key match
-    if track_name in TRACK_CATALOG:
-        return track_name, build_track_profile(track_name, TRACK_CATALOG[track_name]["default_config"])
+    track_key, profile = select_track_profile(track_name=track_name)
+    if profile:
+        return track_key, profile
 
-    # Search in aliases (case-insensitive)
-    track_name_lower = track_name.lower().replace("_", "-").replace(" ", "-")
-    for track_key, track in TRACK_CATALOG.items():
-        for alias in track.get("aliases", []):
-            alias_normalized = alias.lower().replace("_", "-").replace(" ", "-")
-            if track_name_lower == alias_normalized or track_name_lower.startswith(alias_normalized):
-                return track_key, build_track_profile(track_key, track["default_config"])
+    # Preserve the legacy prefix helper for path-like callers, choosing the
+    # most specific alias so ``suzuka_east`` cannot be claimed by ``suzuka``.
+    normalized_name = _normalize_label(track_name)
+    prefix_matches = []
+    for key, track in TRACK_CATALOG.items():
+        for label in _track_labels(key, track):
+            normalized_label = _normalize_label(label)
+            if normalized_label and normalized_name.startswith(normalized_label):
+                prefix_matches.append((len(normalized_label), key))
+    if prefix_matches:
+        _, key = max(prefix_matches)
+        return key, build_track_profile(key, TRACK_CATALOG[key]["default_config"])
 
     return None, None
