@@ -1328,3 +1328,73 @@ async def test_follow_keeps_equal_near_equal_delayed_laps_and_ignores_stale_broa
     assert [lap.is_valid for _, lap in completed] == [False, True]
     assert len({id(lap) for _, lap in completed}) == 2
     assert {id(lap) for lap in updates} <= {id(lap) for _, lap in completed}
+
+
+@pytest.mark.asyncio
+async def test_partial_trailing_line_does_not_block_shm_completion_or_duplicate(tmp_path):
+    """SHM/grace maintenance continues while ACE is buffering a log line."""
+    log_file = tmp_path / "partial.log"
+    car_id = "4d27cc23-ee6ce0de-9c3810448288bcbb"
+    log_file.write_text(
+        "[2026-09-07 10:00:00.000] [network] [info] "
+        "76561198321627695 connected on car ks_bmw_m3, with new carId "
+        f"{car_id}\n"
+        "[2026-09-07 10:00:01.000] [gameplay] [info] Game Started! "
+        "GameModeType_PRACTICE | Monza | ks_bmw_m3 | "
+        "GameModeSelectionWeatherType_Clear\n"
+    )
+    manager = SharedSessionManager()
+    live = asyncio.Event()
+    lap_seen = asyncio.Event()
+    emitted = []
+
+    async def on_status(status):
+        if "Monitoring for new laps" in status:
+            live.set()
+
+    async def on_lap(session, lap):
+        emitted.append((session, lap))
+        lap_seen.set()
+
+    parser = LogParser(
+        log_path=str(log_file),
+        session_manager=manager,
+        on_status_change=on_status,
+        on_lap_complete=on_lap,
+    )
+    parser.PENDING_VALIDITY_GRACE_SECONDS = 0.03
+    follow_task = asyncio.create_task(parser.follow(poll_interval=0.005))
+    try:
+        await asyncio.wait_for(live.wait(), timeout=1.0)
+        manager.update_from_graphics_shm(
+            {
+                "total_lap_count": 0,
+                "current_lap_time_ms": 80_000,
+                "last_laptime_ms": 0,
+                "is_valid_lap": True,
+            }
+        )
+        manager.update_from_graphics_shm(
+            {
+                "total_lap_count": 1,
+                "current_lap_time_ms": 50,
+                "last_laptime_ms": 79_900,
+                "is_valid_lap": True,
+            }
+        )
+        with open(log_file, "a", encoding="utf-8") as handle:
+            handle.write("[2026-09-07 10:01:00.000] [gameplay] partial")
+            handle.flush()
+        await asyncio.wait_for(lap_seen.wait(), timeout=1.0)
+        assert len(emitted) == 1
+
+        with open(log_file, "a", encoding="utf-8") as handle:
+            handle.write("\n")
+        await asyncio.sleep(0.08)
+    finally:
+        parser.stop()
+        await asyncio.wait_for(follow_task, timeout=1.0)
+
+    assert len(emitted) == 1
+    assert emitted[0][0].car == "ks_bmw_m3"
+    assert emitted[0][1].lap_time_ms == 79_900

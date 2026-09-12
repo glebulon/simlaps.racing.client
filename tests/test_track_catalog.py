@@ -46,6 +46,27 @@ class TestSelectTrackProfile:
         assert track_key is not None
         assert profile is not None
 
+    @pytest.mark.parametrize("track_name", ["Suzuka East", "suzuka_east", "suzuka-east"])
+    def test_suzuka_east_exact_alias_selects_east_layout(self, track_name):
+        track_key, profile = select_track_profile(track_name=track_name)
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_parent_track_and_layout_select_split_catalog_entry(self):
+        track_key, profile = select_track_profile(
+            track_name="Suzuka", config_name="East"
+        )
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_unknown_explicit_layout_does_not_fall_back_to_default(self):
+        assert select_track_profile(track_name="Suzuka", config_name="Unknown") == (None, None)
+
+    def test_conflicting_explicit_layout_does_not_fall_back_to_default(self):
+        assert select_track_profile(track_name="Suzuka East", config_name="Full") == (None, None)
+
     def test_select_by_track_name_not_found(self):
         """Test selecting non-existent track."""
         track_key, profile = select_track_profile(track_name="nonexistent_track")
@@ -66,6 +87,18 @@ class TestSelectTrackProfile:
 
         assert track_key is None
         assert profile is None
+
+    def test_select_by_path_prefers_matching_specific_layout_alias(self):
+        track_key, profile = select_track_profile(path=r"C:\game\tracks\suzuka_east")
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_select_by_path_prefers_matching_gp_layout_alias(self):
+        track_key, profile = select_track_profile(path=r"C:\game\tracks\nurburgring_gp")
+
+        assert track_key == "nurburgring_gp"
+        assert profile["config_key"] == "gp"
 
     def test_select_none_inputs(self):
         """Test select with None inputs."""

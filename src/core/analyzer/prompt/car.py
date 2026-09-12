@@ -13,8 +13,7 @@ def build_aero_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
-    list(ctx.ref_corners)
+    laps = list(ctx.trusted_valid_laps)
     lines: List[str] = []
     # ── DRS/Aerodynamics analysis — gate on data presence
     _any_drs_available = any(any(pt.get("drs_available", False) for pt in lap.get("track", [])) for lap in laps)
@@ -176,7 +175,7 @@ def build_gearing_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
+    laps = list(ctx.trusted_valid_laps)
     ref_corners = list(ctx.ref_corners)
     lines: List[str] = []
     # ── Gear optimization analysis (if data available)
@@ -246,7 +245,7 @@ def build_brake_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
+    laps = list(ctx.trusted_valid_laps)
     ref_corners = list(ctx.ref_corners)
     lines: List[str] = []
     # ── Brake bias analysis (if data available)
@@ -288,7 +287,7 @@ def build_brake_sections(
                         bias_hint = " <- front-heavy, risk of front lock"
                     elif bias < 0.45:
                         bias_hint = " <- rear-heavy, risk of rear lock"
-                    lines.append(f"    Lap {ln}: {bias:.2f} ({bias * 100:.0f}% front){bias_hint}")
+                    lines.append(f"    Lap {ln}: {bias:.2f} ({bias*100:.0f}% front){bias_hint}")
                 lines.append("")
 
     # ── Brake thermal analysis (front/rear imbalance, fade, extremes)
@@ -363,8 +362,7 @@ def build_suspension_sections(
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
     data = ctx.data
-    laps = list(ctx.valid_laps)
-    list(ctx.ref_corners)
+    laps = list(ctx.trusted_valid_laps)
     lines: List[str] = []
     # ── Suspension / alignment analysis
     profile_corners = data.get("profile_corners", [])

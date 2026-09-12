@@ -17,6 +17,7 @@ class TelemetryStatus(Enum):
 
     IDLE = "idle"
     CAPTURING = "capturing"
+    WARNING = "warning"
     ANALYZING = "analyzing"
     COMPLETE = "complete"
     ERROR = "error"
@@ -78,6 +79,11 @@ class TelemetryStatusIndicator(ft.Container):
             # "0 frames" label even while frames are retained in memory.
             self._status_text = "Recording Telemetry"
             self.bgcolor = "#2d1f1f"
+        elif status == TelemetryStatus.WARNING:
+            self._status_icon = ft.Icons.WARNING_AMBER
+            self._status_color = "#f59e0b"
+            self._status_text = "Telemetry sources are synchronizing; samples are being skipped."
+            self.bgcolor = "#3d321f"
         elif status == TelemetryStatus.ANALYZING:
             self._status_icon = ft.Icons.AUTO_GRAPH
             self._status_color = "#f59e0b"

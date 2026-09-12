@@ -3,11 +3,18 @@
 from typing import Dict, List
 
 from src.core.analyzer._util import _trend_direction
-from src.core.analyzer.corner_detection import corner_segment_time
+from src.core.analyzer.corner_detection import corner_segment_time, match_corners
 from src.core.analyzer.metrics import analyze_electronics_per_lap
 from src.core.car_tuning_catalog import format_tuning_block
 
 from .context import PromptContext
+
+
+def _format_metric(value, decimals: int = 1) -> str:
+    """Format an optional derived metric without inventing a value."""
+    if not isinstance(value, (int, float)):
+        return "N/A"
+    return f"{value:.{decimals}f}"
 
 
 def build_diagnostic_sections(ctx: PromptContext) -> List[str]:
@@ -31,6 +38,18 @@ def build_diagnostic_sections(ctx: PromptContext) -> List[str]:
     if ctx.analysis_notes:
         lines.extend(["", "Reasons:"])
         lines.extend(f"- {note}" for note in ctx.analysis_notes)
+    suppressed_laps = [
+        lap["lap_num"]
+        for lap in ctx.all_laps
+        if not lap.get("derived_metrics_trustworthy", True)
+    ]
+    if suppressed_laps:
+        lines.extend([
+            "",
+            "Derived metrics: N/A for lap(s) "
+            + ", ".join(str(lap_num) for lap_num in suppressed_laps)
+            + " because their timer epoch could not be verified.",
+        ])
     lines.append("")
     if ctx.no_valid_laps:
         lines.append("Use this session only for invalid-lap diagnostics; record at least one valid lap for coaching.")
@@ -42,6 +61,9 @@ def build_diagnostic_sections(ctx: PromptContext) -> List[str]:
 def build_single_lap_sections(ctx: PromptContext) -> List[str]:
     best_lap = ctx.best_lap
     assert best_lap is not None  # noqa: S101
+    top_speed = _format_metric(
+        best_lap.get("max_speed") if best_lap.get("derived_metrics_trustworthy", True) else None
+    )
     lines: List[str] = [
         "COMPARATIVE COACHING UNAVAILABLE",
         "",
@@ -57,9 +79,9 @@ def build_single_lap_sections(ctx: PromptContext) -> List[str]:
         ),
         "",
         f"- Best lap:   #{best_lap['lap_num']}  {best_lap['lap_time_str']}",
-        f"- Top speed:  {best_lap['max_speed']:.1f} km/h",
+        f"- Top speed:  {top_speed} km/h",
     ]
-    if best_lap.get("fuel_used") is not None:
+    if best_lap.get("derived_metrics_trustworthy", True) and best_lap.get("fuel_used") is not None:
         lines.append(f"- Fuel used:  {best_lap['fuel_used']:.3f}L")
     if ctx.invalid_laps:
         lines.extend(["", "INVALID LAPS (diagnostic only; excluded from coaching):"])
@@ -72,7 +94,7 @@ def build_single_lap_sections(ctx: PromptContext) -> List[str]:
 
 def build_session_context_sections(ctx: PromptContext) -> List[str]:
     data = ctx.data
-    laps = list(ctx.valid_laps)
+    laps = list(ctx.trusted_valid_laps)
     track_label = ctx.track_label
     analysis_mode = ctx.analysis_mode
     analysis_confidence = ctx.analysis_confidence
@@ -144,9 +166,9 @@ def build_session_context_sections(ctx: PromptContext) -> List[str]:
             if isinstance(at, (int, float)) and at > 0:
                 _all_air_temps.append(float(at))
     if _all_road_temps:
-        lines.append(f"- Track temp:     {sum(_all_road_temps) / len(_all_road_temps):.0f}°C")
+        lines.append(f"- Track temp:     {sum(_all_road_temps)/len(_all_road_temps):.0f}°C")
     if _all_air_temps:
-        lines.append(f"- Air temp:       {sum(_all_air_temps) / len(_all_air_temps):.0f}°C")
+        lines.append(f"- Air temp:       {sum(_all_air_temps)/len(_all_air_temps):.0f}°C")
     if analysis_notes:
         lines.append("")
         lines.append("ANALYSIS NOTES:")
@@ -165,7 +187,8 @@ def build_session_context_sections(ctx: PromptContext) -> List[str]:
 def build_fuel_sections(ctx: PromptContext) -> List[str]:
     all_laps = list(ctx.all_laps)
     invalid_laps = list(ctx.invalid_laps)
-    laps = list(ctx.valid_laps)
+    official_laps = list(ctx.valid_laps)
+    laps = list(ctx.trusted_valid_laps)
     best_lap = ctx.best_lap
     worst_lap = ctx.worst_lap
     assert best_lap is not None and worst_lap is not None  # noqa: S101
@@ -175,16 +198,19 @@ def build_fuel_sections(ctx: PromptContext) -> List[str]:
     lines: List[str] = []
     # ── Session overview
     lines.append("SESSION OVERVIEW:")
-    lines.append(f"- Valid laps analysed: {len(laps)} of {len(all_laps)} detected")
+    lines.append(f"- Valid laps analysed: {len(official_laps)} of {len(all_laps)} detected")
     lines.append(f"- Best lap:   #{best_lap['lap_num']}  {best_lap['lap_time_str']}")
     lines.append(f"- Worst lap:  #{worst_lap['lap_num']}  {worst_lap['lap_time_str']}")
     lines.append(f"- Delta best/worst: {time_diff:.2f}s")
-    lines.append(f"- Top speed: {max(l['max_speed'] for l in laps):.1f} km/h")  # noqa: E741
+    speeds = [lap.get("max_speed") for lap in laps if isinstance(lap.get("max_speed"), (int, float))]
+    lines.append(
+        f"- Top speed: {_format_metric(max(speeds) if speeds else None)} km/h"
+    )
     lines.append(f"- Authoritative progress coverage: {authoritative_progress_ratio:.0%}")
     lines.append(f"- Plausible physics coverage:      {plausible_frame_ratio:.0%}")
 
     # ── Lap time progression trend
-    _lap_times = [lap["lap_time_s"] for lap in laps if lap.get("lap_time_s")]
+    _lap_times = [lap["lap_time_s"] for lap in official_laps if lap.get("lap_time_s")]
     if len(_lap_times) >= 3:
         _trend_raw = _trend_direction(_lap_times, threshold=0.15)
         # Only strictly monotonic changes are called improving/degrading.
@@ -207,13 +233,19 @@ def build_fuel_sections(ctx: PromptContext) -> List[str]:
         lines.append(f"- Fuel per lap (avg): {avg_fuel:.3f}L")
         lines.append(f"- Total fuel used: {total_fuel:.3f}L ({len(laps_with_fuel)} laps)")
         # ── Estimate laps remaining from current fuel level
-        _last_lap = laps[-1]
-        _last_track = _last_lap.get("track", [])
-        if _last_track:
-            _last_fuel = _last_track[-1].get("fuel")
-            if isinstance(_last_fuel, (int, float)) and _last_fuel > 0 and avg_fuel > 0:
-                _laps_remaining = int(_last_fuel / avg_fuel)
-                lines.append(f"- Est. laps remaining: ~{_laps_remaining} (current fuel {_last_fuel:.1f}L)")
+        last_trusted_is_latest = bool(
+            laps
+            and official_laps
+            and laps[-1] is official_laps[-1]
+        )
+        if last_trusted_is_latest:
+            _last_lap = laps[-1]
+            _last_track = _last_lap.get("track", [])
+            if _last_track:
+                _last_fuel = _last_track[-1].get("fuel")
+                if isinstance(_last_fuel, (int, float)) and _last_fuel > 0 and avg_fuel > 0:
+                    _laps_remaining = int(_last_fuel / avg_fuel)
+                    lines.append(f"- Est. laps remaining: ~{_laps_remaining} (current fuel {_last_fuel:.1f}L)")
 
     lines.append("")
 
@@ -225,14 +257,16 @@ def build_fuel_sections(ctx: PromptContext) -> List[str]:
 
     # ── Outlier detection
     outliers: List[tuple] = []
-    if len(laps) >= 2 and laps[0]["lap_num"] == 1:
-        lap1_time = laps[0]["lap_time_s"]
-        lap2_time = laps[1]["lap_time_s"]
+    if len(official_laps) >= 2 and official_laps[0]["lap_num"] == 1:
+        lap1_time = official_laps[0]["lap_time_s"]
+        lap2_time = official_laps[1]["lap_time_s"]
         if lap1_time > lap2_time * 1.03:
             outliers.append((1, "First lap - likely cold tires or traffic"))
 
-    for lap in laps:
+    for lap in official_laps:
         if lap["lap_num"] == best_lap["lap_num"]:
+            continue
+        if not lap.get("derived_metrics_trustworthy", True) or not best_lap.get("derived_metrics_trustworthy", True):
             continue
         delta_pct = (lap["lap_time_s"] - best_lap["lap_time_s"]) / best_lap["lap_time_s"]
         if delta_pct > 0.05:
@@ -249,7 +283,8 @@ def build_fuel_sections(ctx: PromptContext) -> List[str]:
 
 
 def build_lap_sections(ctx: PromptContext) -> List[str]:
-    laps = list(ctx.valid_laps)
+    official_laps = list(ctx.valid_laps)
+    laps = list(ctx.trusted_valid_laps)
     best_lap = ctx.best_lap
     worst_lap = ctx.worst_lap
     assert best_lap is not None and worst_lap is not None  # noqa: S101
@@ -257,20 +292,21 @@ def build_lap_sections(ctx: PromptContext) -> List[str]:
     lines: List[str] = []
     # ── Lap-by-lap summary
     lines.append("LAP-BY-LAP SUMMARY:")
-    for lap in laps:
-        marker = (
-            " <- BEST"
-            if lap["lap_num"] == best_lap["lap_num"]
-            else " <- WORST"
-            if lap["lap_num"] == worst_lap["lap_num"]
+    for lap in official_laps:
+        trusted = lap in ctx.trusted_valid_laps
+        marker = " <- BEST" if lap["lap_num"] == best_lap["lap_num"] else \
+                 " <- WORST" if lap["lap_num"] == worst_lap["lap_num"] else ""
+        valid_str = "" if lap.get("is_valid", True) else " [INVALID]"
+        fuel_str = (
+            f"  fuel {lap['fuel_used']:.3f}L"
+            if trusted and lap.get("fuel_used") is not None
             else ""
         )
-        valid_str = "" if lap.get("is_valid", True) else " [INVALID]"
-        fuel_str = f"  fuel {lap['fuel_used']:.3f}L" if lap.get("fuel_used") is not None else ""
         lines.append(
             f"  Lap {lap['lap_num']}: {lap['lap_time_str']}  "
-            f"max {lap['max_speed']:.1f} km/h  "
-            f"avg {lap['avg_speed']:.1f} km/h{fuel_str}{valid_str}{marker}"
+            f"max {_format_metric(lap.get('max_speed') if trusted else None)} km/h  "
+            f"avg {_format_metric(lap.get('avg_speed') if trusted else None)} km/h"
+            f"{fuel_str}{valid_str}{marker}"
         )
     lines.append("")
 
@@ -299,7 +335,7 @@ def build_lap_sections(ctx: PromptContext) -> List[str]:
 
 
 def build_electronics_sections(ctx: PromptContext) -> List[str]:
-    laps = list(ctx.valid_laps)
+    laps = list(ctx.trusted_valid_laps)
     lines: List[str] = []
     # ── Electronics / aids summary
     elec_per_lap = analyze_electronics_per_lap(laps)
@@ -467,7 +503,28 @@ def build_session_sections(
     lines.extend(build_fuel_sections(ctx))
     lines.extend(build_lap_sections(ctx))
     lines.extend(build_electronics_sections(ctx))
-    lap_corner_map: Dict[int, Dict[int, Dict]] = {
-        lap["lap_num"]: {corner["id"]: corner for corner in lap["corners"]} for lap in ctx.valid_laps
-    }
+    can_match_inferred = (
+        not ctx.data.get("profile_corners")
+        and all(
+            "lap_pos" in corner
+            for lap in ctx.trusted_valid_laps
+            for corner in lap.get("corners", [])
+        )
+        and all("lap_pos" in corner for corner in ctx.ref_corners)
+    )
+    if not can_match_inferred:
+        lap_corner_map: Dict[int, Dict[int, Dict]] = {
+            lap["lap_num"]: {corner["id"]: corner for corner in lap["corners"]}
+            for lap in ctx.trusted_valid_laps
+        }
+    else:
+        lap_corner_map = {}
+        reference_corners = list(ctx.ref_corners)
+        for lap in ctx.trusted_valid_laps:
+            matched = match_corners(reference_corners, lap["corners"])
+            lap_corner_map[lap["lap_num"]] = {
+                corner_id: corner
+                for corner_id, corner in matched.items()
+                if corner is not None
+            }
     return lines, lap_corner_map

@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.models import SharedSessionManager
 from src.ui.app import SimLapsApp
 from src.ui.components.status_bar import ConnectionStatus
 from src.ui.services.session_lifecycle_service import SessionLifecycleService
@@ -79,6 +80,47 @@ async def test_game_running_resets_session_updates_ui_and_starts_capture():
 
 
 @pytest.mark.asyncio
+async def test_repeated_game_started_rolls_capture_for_new_manager_epoch():
+    """A second true status cannot leave one buffer spanning two sessions."""
+    home = MagicMock()
+    manager = SharedSessionManager()
+    manager.begin_session("first-session", car_model="ks_bmw_m2_coupe")
+
+    class Capture:
+        def __init__(self):
+            self.capturing = False
+
+        def is_capturing(self):
+            return self.capturing
+
+    capture = Capture()
+    events = []
+
+    async def start():
+        events.append("start")
+        capture.capturing = True
+
+    async def stop(reason, **_kwargs):
+        events.append(reason)
+        capture.capturing = False
+
+    service = SessionLifecycleService(
+        home_page=home,
+        session_manager=manager,
+        telemetry_capture=capture,
+        start_capture=start,
+        stop_capture=stop,
+    )
+
+    await service.handle_game_status_change(True)
+    manager.begin_session("second-session", car_model="ks_alfa_romeo_giulia_gtam")
+    await service.handle_game_status_change(True)
+
+    assert events == ["start", "session_rollover", "start"]
+    assert capture.capturing is True
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("capturing", [False, True])
 async def test_game_stopped_preserves_delay_and_stop_reason(capturing):
     service, home, manager, _, start, stop = _make_service(capturing=capturing)
@@ -88,6 +130,10 @@ async def test_game_stopped_preserves_delay_and_stop_reason(capturing):
         new_callable=AsyncMock,
     ) as sleep:
         await service.handle_game_status_change(False)
+        if capturing:
+            # The parser callback returns immediately; shutdown runs in the
+            # managed grace task and is awaited here only to inspect it.
+            await service._pending_game_stop_task
 
     home.set_game_running.assert_called_once_with(False)
     home.set_connection_status.assert_called_once_with(
@@ -129,6 +175,83 @@ async def test_delayed_game_stop_cannot_stop_capture_started_by_new_game_status(
     stop.assert_not_awaited()
     start.assert_awaited_once_with()
     assert capture.is_capturing()
+
+
+@pytest.mark.asyncio
+async def test_rapid_game_status_sequence_replaces_cancelled_grace_worker():
+    service, _, _, capture, _, stop = _make_service(capturing=True)
+    release_delay = asyncio.Event()
+
+    async def blocked_sleep(seconds):
+        assert seconds == 2.0
+        await release_delay.wait()
+
+    with patch(
+        "src.ui.services.session_lifecycle_service.asyncio.sleep",
+        side_effect=blocked_sleep,
+    ):
+        await service.handle_game_status_change(False)
+        await service.handle_game_status_change(True)
+        await service.handle_game_status_change(False)
+        pending = service._pending_game_stop_task
+        assert pending is not None
+        release_delay.set()
+        await pending
+
+    stop.assert_awaited_once_with("session_end")
+
+
+@pytest.mark.asyncio
+async def test_restart_waits_for_started_game_stop_finalization_before_starting():
+    home = MagicMock()
+    manager = MagicMock()
+    manager.get_active_session_id.return_value = None
+
+    class Capture:
+        def __init__(self):
+            self.capturing = True
+
+        def is_capturing(self):
+            return self.capturing
+
+    capture = Capture()
+    stop_started = asyncio.Event()
+    release_stop = asyncio.Event()
+    events = []
+
+    async def start():
+        events.append("start")
+        capture.capturing = True
+
+    async def stop(reason, **_kwargs):
+        events.append(reason)
+        stop_started.set()
+        await release_stop.wait()
+        capture.capturing = False
+
+    service = SessionLifecycleService(
+        home_page=home,
+        session_manager=manager,
+        telemetry_capture=capture,
+        start_capture=start,
+        stop_capture=stop,
+    )
+    generation = service._lifecycle_generation
+    delayed = asyncio.create_task(service._finish_delayed_game_stop(generation, capture))
+
+    with patch(
+        "src.ui.services.session_lifecycle_service.asyncio.sleep",
+        new_callable=AsyncMock,
+    ):
+        await stop_started.wait()
+        restart = asyncio.create_task(service.handle_session_restart())
+        await asyncio.get_running_loop().run_in_executor(None, lambda: None)
+        assert not restart.done()
+        release_stop.set()
+        await restart
+    await delayed
+
+    assert events == ["session_end", "start"]
 
 
 @pytest.mark.asyncio

@@ -292,6 +292,14 @@ def _select_track_profile_for_analysis(
     track_key, track_profile = select_track_profile(track_name=track_name, config_name=config_name)
     if track_profile:
         return track_key, track_profile
+    if config_name:
+        # Plain names are identity inputs, not paths.  If the explicit layout
+        # did not resolve, do not let a substring fallback select a generic
+        # default (for example Suzuka East + Full -> Suzuka Full).  Path-like
+        # callers still reach the legacy path resolver below.
+        _, direct_profile = select_track_profile(track_name=track_name)
+        if direct_profile:
+            return None, None
     return select_track_profile(path=track_name, config_name=config_name)
 
 
@@ -391,8 +399,8 @@ def classify_corner_issue(entry_delta: float, apex_delta: float, exit_delta: flo
     classification when multiple phases are significantly off.  If all deltas
     are below 1 km/h the corner is marked MINOR.
     """
-    _MIN_DELTA = 2.0  # km/h — below this, don't single out a phase
-    _TRIVIAL = 1.0  # km/h — all below this = MINOR
+    _MIN_DELTA = 2.0   # km/h — below this, don't single out a phase
+    _TRIVIAL = 1.0     # km/h — all below this = MINOR
 
     abs_entry = abs(entry_delta)
     abs_apex = abs(apex_delta)

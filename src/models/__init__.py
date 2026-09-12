@@ -18,15 +18,21 @@ from .constants import (
 from .context import LogContext
 from .lap import InProgressLap, LapData, LapState, SessionData, StintData
 from .shared_session import (
+    AnalysisSnapshot,
     FuelData,
     LapCompletionData,
     LapTimingData,
     LapValidityData,
+    OriginRelation,
+    OriginSnapshotResult,
     PlayerIdentificationData,
     SectorSplitData,
     SessionMetadataData,
+    SessionOriginSnapshot,
     SharedSessionData,
     SharedSessionManager,
+    SubmissionSnapshot,
+    car_models_match,
 )
 from .tyre_state import TyreState
 
@@ -56,6 +62,12 @@ __all__ = [
     "PlayerIdentificationData",
     "SectorSplitData",
     "SessionMetadataData",
+    "SessionOriginSnapshot",
+    "AnalysisSnapshot",
+    "OriginRelation",
+    "OriginSnapshotResult",
+    "SubmissionSnapshot",
+    "car_models_match",
     "SharedSessionData",
     "SharedSessionManager",
 ]

@@ -57,6 +57,17 @@ async def test_cleanup_is_idempotent_for_repeated_events():
 
 
 @pytest.mark.asyncio
+async def test_cleanup_waits_for_pending_session_stop_before_telemetry_finalization():
+    order = []
+    app = _make_app(order)
+    app._cancel_pending_session_stop = AsyncMock(side_effect=lambda: order.append("cancel"))
+
+    await AppLifecycleService().cleanup(app=app)
+
+    assert order == ["monitor", "cancel", "telemetry", "api", "destroy"]
+
+
+@pytest.mark.asyncio
 async def test_cleanup_logs_failure_and_continues_remaining_steps():
     order = []
     app = _make_app(order)

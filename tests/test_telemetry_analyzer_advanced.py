@@ -60,6 +60,9 @@ class TestSelectTrackProfile:
         assert track_key == "nurburgring_gp"
         assert profile["config_key"] == "gp"
 
+    def test_explicit_conflicting_layout_stays_unresolved(self):
+        assert _select_track_profile_for_analysis("Suzuka East", "Full") == (None, None)
+
     def test_read_static_track_config_extracts_names(self):
         """Static frames yield authoritative track/config names."""
         frames = [

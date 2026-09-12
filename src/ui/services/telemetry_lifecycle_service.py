@@ -5,7 +5,7 @@ Owns telemetry capture start/stop transitions and post-capture analysis flow.
 
 from typing import TYPE_CHECKING, Optional
 
-from src.core.telemetry_capture import TelemetryCapture
+from src.core.telemetry_capture import CaptureOriginStatus, TelemetryCapture
 from src.utils.structured_logger import (
     Component,
     log_debug,
@@ -84,6 +84,30 @@ class TelemetryLifecycleService:
             if home_page and telemetry_enabled:
                 home_page.set_telemetry_status(TelemetryStatus.ERROR)
 
+    async def handle_origin_status(
+        self,
+        *,
+        event: CaptureOriginStatus,
+        telemetry_capture: TelemetryCapture | None,
+        home_page: HomePage | None,
+    ) -> None:
+        """Apply a capture-origin transition only to its owning run."""
+        if telemetry_capture is None or home_page is None:
+            return
+        get_identity = getattr(telemetry_capture, "get_capture_identity", None)
+        get_generation = getattr(telemetry_capture, "get_capture_generation", None)
+        if not get_identity or not get_generation:
+            return
+        if event.capture_id != get_identity() or event.generation != get_generation():
+            log_debug(Component.APP, "Ignoring stale telemetry origin status")
+            return
+
+        if event.status == "warning":
+            home_page.set_telemetry_status(TelemetryStatus.WARNING)
+        elif event.status == "recovered":
+            status = TelemetryStatus.CAPTURING if telemetry_capture.record_frames else TelemetryStatus.IDLE
+            home_page.set_telemetry_status(status)
+
     async def handle_auto_stop(
         self,
         *,
@@ -133,6 +157,8 @@ class TelemetryLifecycleService:
                         track_name=current_track_name,
                         output_prefix=telemetry_capture.get_output_prefix(),
                         game_lap_boundaries=lap_boundaries,
+                        capture_origin=telemetry_capture.get_capture_origin(),
+                        capture_track_name=telemetry_capture.get_capture_track_name(),
                     )
 
                     log_info(
@@ -223,6 +249,8 @@ class TelemetryLifecycleService:
                     track_name=current_track_name,
                     output_prefix=output_prefix,
                     game_lap_boundaries=lap_boundaries,
+                    capture_origin=telemetry_capture.get_capture_origin(),
+                    capture_track_name=telemetry_capture.get_capture_track_name(),
                 )
 
                 log_info(
