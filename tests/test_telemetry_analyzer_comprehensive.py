@@ -5,6 +5,7 @@ Tests lap detection, corner detection, and track building with various scenarios
 """
 
 import json
+import re
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 
@@ -18,6 +19,7 @@ from src.core.telemetry_analyzer import (
     detect_laps,
     detect_profiled_corners,
     get_physics,
+    match_corners,
 )
 from src.core.telemetry_capture import FrameData
 from src.models import SharedSessionManager
@@ -248,6 +250,81 @@ class TestDetectLaps:
 
 class TestCornerDetection:
     """Test corner detection algorithms."""
+
+    @staticmethod
+    def _heading_track(rates, *, frame_numbers=None, yaw_rates=None):
+        frames = []
+        heading = 0.0
+        frame_numbers = frame_numbers or list(range(len(rates)))
+        for index, (frame, rate) in enumerate(zip(frame_numbers, rates, strict=False)):
+            if index:
+                heading += rate / 10.0
+            frames.append({
+                "frame": frame,
+                "heading": heading,
+                "speed": 90.0 + (index % 5) * 4.0,
+                "x": float(index),
+                "z": float(index % 3),
+                "yaw_rate": (yaw_rates[index] if yaw_rates is not None else 0.0),
+            })
+        return frames
+
+    def test_auto_detection_accepts_sustained_turns_in_both_directions(self):
+        rates = ([0.0] * 12) + ([0.35] * 14) + ([0.0] * 8) + ([-0.50] * 14) + ([0.0] * 8)
+
+        corners = detect_corners(self._heading_track(rates), 0, len(rates), hz=10.0)
+
+        assert len(corners) == 2
+        assert [corner["confidence_label"] for corner in corners] == ["low", "low"]
+        assert all(corner["segment_time_s"] >= 0.8 for corner in corners)
+
+    def test_auto_detection_does_not_bridge_missing_heading_evidence(self):
+        rates = ([0.45] * 6) + ([0.0] * 2) + ([0.45] * 6)
+        track = self._heading_track(rates)
+        track[7]["heading"] = None
+
+        corners = detect_corners(track, 0, len(track), hz=10.0)
+
+        assert corners == []
+
+    def test_auto_detection_uses_authoritative_progress_for_matching(self):
+        def make_track(sample_count, turn_start, turn_end):
+            rates = [0.0] * sample_count
+            for index in range(turn_start, turn_end):
+                rates[index] = 0.40
+            track = self._heading_track(rates)
+            for index, point in enumerate(track):
+                point["norm_pos"] = index / (sample_count - 1)
+                point["speed"] = 60.0 + (index % 13) * 7.0
+            return track
+
+        first = detect_corners(make_track(100, 30, 49), 0, 100, hz=10.0)
+        second = detect_corners(make_track(80, 24, 39), 0, 80, hz=10.0)
+
+        assert len(first) == len(second) == 1
+        assert abs(first[0]["lap_pos"] - second[0]["lap_pos"]) < 0.03
+        assert match_corners(first, second, tol=0.05)[first[0]["id"]] is second[0]
+
+    def test_auto_detection_rejects_alternating_heading_noise(self):
+        # Large alternating deltas have no sustained turn direction.
+        rates = [0.5 if index % 2 else -0.5 for index in range(50)]
+
+        corners = detect_corners(self._heading_track(rates), 0, len(rates), hz=10.0)
+
+        assert corners == []
+
+    def test_auto_detection_does_not_bridge_a_sampling_gap(self):
+        rates = ([0.45] * 5) + ([0.0] * 3) + ([0.45] * 5)
+        frame_numbers = list(range(5)) + list(range(20, 28))
+
+        corners = detect_corners(
+            self._heading_track(rates, frame_numbers=frame_numbers),
+            0,
+            28,
+            hz=10.0,
+        )
+
+        assert corners == []
 
     def test_detect_corners_with_track_profile(self):
         """Test corner detection using track profile."""
@@ -586,6 +663,30 @@ class TestCornerMatching:
         assert matched[2] is not None
         assert matched[3] is not None
 
+    def test_match_corners_is_one_to_one_when_a_turn_is_missing(self):
+        ref_corners = [
+            {"id": 1, "lap_pos": 0.202},
+            {"id": 2, "lap_pos": 0.606},
+        ]
+        lap_corners = [{"id": 9, "lap_pos": 0.606}]
+
+        matched = match_corners(ref_corners, lap_corners, tol=0.15)
+
+        assert matched[1] is None
+        assert matched[2] is lap_corners[0]
+
+    def test_match_corners_skips_early_candidate_for_exact_later_turn(self):
+        ref_corners = [
+            {"id": 1, "lap_pos": 0.20},
+            {"id": 2, "lap_pos": 0.30},
+        ]
+        lap_corners = [{"id": 9, "lap_pos": 0.30}]
+
+        matched = match_corners(ref_corners, lap_corners, tol=0.15)
+
+        assert matched[1] is None
+        assert matched[2] is lap_corners[0]
+
 
 class TestCornerAnalysis:
     """Test corner analysis utilities."""
@@ -809,14 +910,14 @@ class TestAnalyzeCornerPhases:
         for i in range(100):
             track.append(
                 {
-                    "frame": i,
-                    "speed": 150 - i if i < 50 else 100,
-                    "brake": 0.5 if 30 <= i < 50 else 0.0,
-                    "steer": 0.1 if i >= 50 else 0.0,
-                    "gas": 0.0 if i < 70 else 0.5,
-                    "acc_g_z": -0.8 if 30 <= i < 50 else 0.0,
-                    "x": i * 10,
-                    "z": 0,
+                "frame": i,
+                "speed": 150 - i if i < 50 else 100,
+                "brake": 0.5 if 30 <= i < 50 else 0.0,
+                "steer": 0.1 if i >= 50 else 0.0,
+                "gas": 0.0 if i < 70 else 0.5,
+                "acc_g_z": -0.8 if 30 <= i < 50 else 0.0,
+                "x": i * 10,
+                "z": 0,
                 }
             )
 
@@ -859,10 +960,10 @@ class TestAnalyzeGripUtilization:
         for i in range(50):
             track.append(
                 {
-                    "frame": i,
-                    "acc_g_x": 0.8 if 10 <= i < 30 else 0.1,
-                    "acc_g_z": -0.5 if 10 <= i < 20 else 0.0,
-                    "brake": 0.5 if 10 <= i < 20 else 0.0,
+                "frame": i,
+                "acc_g_x": 0.8 if 10 <= i < 30 else 0.1,
+                "acc_g_z": -0.5 if 10 <= i < 20 else 0.0,
+                "brake": 0.5 if 10 <= i < 20 else 0.0,
                 }
             )
 
@@ -1124,6 +1225,53 @@ class TestTelemetryAnalyzer:
         assert result is not None
 
     @pytest.mark.asyncio
+    async def test_analyze_auto_corners_reaches_coaching_outputs(self, tmp_path):
+        """A profiled-unknown track can still produce useful coaching data."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+
+        frames = []
+        for frame_number in range(300):
+            lap_frame = frame_number % 100
+            heading = sum(
+                0.40 / 10.0
+                for previous in range(1, lap_frame + 1)
+                if 25 <= previous < 42
+            )
+            frames.append(
+                FrameData(
+                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    frame_number=frame_number,
+                    physics={
+                        "speed_kmh": 110.0 - (lap_frame % 9) * 2.0,
+                        "gear": 3,
+                        "rpm": 5000,
+                        "heading": heading,
+                    },
+                    graphics={
+                        "normalized_car_position": lap_frame / 99.0,
+                        "has_authoritative_progress": True,
+                    },
+                )
+            )
+
+        result = await TelemetryAnalyzer(output_dir=str(tmp_path)).analyze(
+            frames,
+            hz=10.0,
+            track_name="road_atlanta",
+            game_lap_boundaries=[100, 200, 300],
+            output_prefix="auto_corners",
+        )
+
+        assert result.laps_detected == 2
+        assert result.html_path is not None
+        assert result.ai_prompt_path is not None
+        report = (tmp_path / "telemetry_auto_corners.html").read_text(encoding="utf-8")
+        prompt = (tmp_path / "telemetry_auto_corners_ai_prompt.txt").read_text(encoding="utf-8")
+        payload = json.loads(re.search(r"const DATA = (.*);\nconst LAP_COLORS", report).group(1))
+        assert all(lap["corners"] for lap in payload["laps"])
+        assert "CORNER-BY-CORNER ANALYSIS:" in prompt
+
+    @pytest.mark.asyncio
     async def test_analyze_with_game_lap_boundaries(self):
         """Test TelemetryAnalyzer.analyze with game-reported lap boundaries."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
@@ -1229,26 +1377,31 @@ class TestTelemetryAnalyzer:
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         lap_times = [70000, 60000, 65000, 75000]
+        lap_sample_counts = [700, 600, 650, 750]
         frames = []
-        last_lap_time = 0
-        for frame_num in range(300):
-            if frame_num in (60, 120, 180, 240):
-                last_lap_time = lap_times[(frame_num // 60) - 1]
-            frames.append(
-                create_mock_frame(
+        lap_markers = []
+        frame_num = 0
+        for lap_index, (lap_time, sample_count) in enumerate(
+            zip(lap_times, lap_sample_counts, strict=False)
+        ):
+            for lap_frame in range(sample_count):
+                frame = create_mock_frame(
                     frame_num,
-                    speed=(333.0 if 60 <= frame_num < 120 else 100.0),
-                    position=(frame_num % 60) / 60,
-                    last_lap_time_ms=last_lap_time,
+                    speed=(333.0 if lap_index == 1 else 100.0),
+                    position=lap_frame / sample_count,
+                    last_lap_time_ms=None,
                 )
-            )
+                frame.graphics["current_time_ms"] = lap_frame * 100
+                frames.append(frame)
+                frame_num += 1
+            lap_markers.append((frame_num, lap_time, lap_index + 1, "VALID"))
 
         analyzer = TelemetryAnalyzer(output_dir=str(tmp_path))
         markers = [
-            (60, 70000, 1, "VALID"),
-            (120, 60000, 2, "INVALID_GAME"),
-            (180, 65000, 3, "VALID"),
-            (240, 75000, 4, "INVALID_GAME"),
+            (lap_markers[0][0], lap_times[0], 1, "VALID"),
+            (lap_markers[1][0], lap_times[1], 2, "INVALID_GAME"),
+            (lap_markers[2][0], lap_times[2], 3, "VALID"),
+            (lap_markers[3][0], lap_times[3], 4, "INVALID_GAME"),
         ]
 
         with (
@@ -1269,6 +1422,12 @@ class TestTelemetryAnalyzer:
         assert data["reference_lap_num"] in valid_lap_numbers
         assert data["comparison_lap_num"] in valid_lap_numbers
         assert result.best_lap_time == pytest.approx(65.0)
+        assert [lap["derived_metrics_trustworthy"] for lap in data["laps"]] == [
+            True,
+            True,
+            True,
+            True,
+        ]
 
         summary = json.loads((tmp_path / "session_history.jsonl").read_text().strip())
         assert summary["best_lap_time_s"] == pytest.approx(65.0)
@@ -1392,7 +1551,12 @@ class TestTelemetryAnalyzer:
         """Analyzer should use shared-session lap timing/validity when available."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
-        frames = [create_mock_frame(i, speed=90.0 + (i % 40), position=i * 0.01) for i in range(220)]
+        frames = [
+            create_mock_frame(i, speed=90.0 + (i % 40), position=(i % 155) / 155)
+            for i in range(620)
+        ]
+        for frame in frames:
+            frame.graphics["current_time_ms"] = (frame.frame_number % 155) * 1000
         manager = SharedSessionManager()
         # Lap times must come from logs (graphics SHM is not authoritative).
         from src.models.shared_session import LapTimingData
@@ -1405,16 +1569,16 @@ class TestTelemetryAnalyzer:
 
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=manager)
         game_markers = [
-            (50, 153396),
-            (100, 153309),
-            (150, 152460),
-            (200, 152001),
+            (155, 153396),
+            (310, 153309),
+            (465, 152460),
+            (620, 152001),
         ]
 
         with patch.object(manager, "update_from_telemetry", wraps=manager.update_from_telemetry) as update_spy:
             result = await analyzer.analyze(
                 frames,
-                hz=10.0,
+                hz=1.0,
                 game_lap_boundaries=game_markers,
                 output_prefix="test_shared_session_laps",
             )
@@ -1422,9 +1586,9 @@ class TestTelemetryAnalyzer:
         assert result is not None
         assert result.laps_detected == 4
         assert abs(result.best_lap_time - 170.0) < 0.001
-        update_spy.assert_called_once()
-        telemetry_summary = update_spy.call_args.args[0]
-        assert telemetry_summary["max_speed"] >= 90.0
+        # The official times intentionally exceed the retained timer epochs;
+        # derived metrics must stay out of the persisted session summary.
+        update_spy.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_analyze_uses_explicit_game_lap_numbers_for_mid_session_capture(self):
@@ -1522,11 +1686,11 @@ class TestFixedMeasurementWindow:
         for i in range(200):
             track.append(
                 {
-                    "frame": i,
-                    "norm_pos": i / 200.0,
-                    "speed": 80.0 if 0.20 <= (i / 200.0) < 0.30 else 100.0,
-                    "x": float(i),
-                    "z": 0.0,
+                "frame": i,
+                "norm_pos": i / 200.0,
+                "speed": 80.0 if 0.20 <= (i / 200.0) < 0.30 else 100.0,
+                "x": float(i),
+                "z": 0.0,
                 }
             )
 
@@ -1578,10 +1742,10 @@ class TestFixedMeasurementWindow:
         for i in range(200):
             track.append(
                 {
-                    "frame": i,
-                    "speed": 80.0 if 40 <= i < 60 else 100.0,
-                    "x": float(i),
-                    "z": 0.0,
+                "frame": i,
+                "speed": 80.0 if 40 <= i < 60 else 100.0,
+                "x": float(i),
+                "z": 0.0,
                 }
             )
 
@@ -1608,15 +1772,15 @@ class TestFixedMeasurementWindow:
         for i in range(100):
             samples.append(
                 {
-                    "frame": i,
-                    "lap_progress": i / 100.0,
-                    "time_s": i / 10.0,
-                    "speed": 70.0 if 0.20 <= (i / 100.0) < 0.30 else 120.0,
-                    "brake": 0.5 if 0.22 <= (i / 100.0) < 0.26 else 0.0,
-                    "gas": 0.0,
-                    "steer": 0.0,
-                    "x": float(i),
-                    "z": 0.0,
+                "frame": i,
+                "lap_progress": i / 100.0,
+                "time_s": i / 10.0,
+                "speed": 70.0 if 0.20 <= (i / 100.0) < 0.30 else 120.0,
+                "brake": 0.5 if 0.22 <= (i / 100.0) < 0.26 else 0.0,
+                "gas": 0.0,
+                "steer": 0.0,
+                "x": float(i),
+                "z": 0.0,
                 }
             )
 
@@ -2597,14 +2761,14 @@ class TestFixedMeasurementWindow:
         for i in range(100):
             track.append(
                 {
-                    "frame": i,
-                    "speed": 80.0,
-                    "gas": 0.0 if 18 <= i <= 22 else 0.5,
-                    "gas_percent": 0.0 if 18 <= i <= 22 else 0.5,
-                    "brake": 0.0,
-                    "steer": 0.0,
-                    "acc_g_x": 0.0,
-                    "acc_g_z": 0.0,
+                "frame": i,
+                "speed": 80.0,
+                "gas": 0.0 if 18 <= i <= 22 else 0.5,
+                "gas_percent": 0.0 if 18 <= i <= 22 else 0.5,
+                "brake": 0.0,
+                "steer": 0.0,
+                "acc_g_x": 0.0,
+                "acc_g_z": 0.0,
                 }
             )
         lap = {

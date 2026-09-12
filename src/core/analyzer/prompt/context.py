@@ -11,8 +11,10 @@ class PromptContext:
     data: Mapping[str, Any]
     all_laps: Tuple[dict, ...]
     valid_laps: Tuple[dict, ...]
+    trusted_valid_laps: Tuple[dict, ...]
     invalid_laps: Tuple[dict, ...]
     best_lap: Optional[dict]
+    coaching_reference_lap: Optional[dict]
     worst_lap: Optional[dict]
     no_valid_laps: bool
     time_diff: float
@@ -35,6 +37,11 @@ class PromptContext:
         all_laps = tuple(data.get("laps", []))
         hz = data.get("hz", 10.0)
         valid_laps = tuple(lap for lap in all_laps if lap.get("is_valid", True))
+        trusted_valid_laps = tuple(
+            lap
+            for lap in valid_laps
+            if lap.get("derived_metrics_trustworthy", True)
+        )
         invalid_laps = tuple(lap for lap in all_laps if not lap.get("is_valid", True))
         requested_best_lap_num = data.get("best_lap_num")
         best_lap = next(
@@ -51,7 +58,28 @@ class PromptContext:
             worst_lap["lap_time_s"] - best_lap["lap_time_s"] if best_lap is not None and worst_lap is not None else 0.0
         )
         analysis_mode = data.get("analysis_mode", "diagnostic")
-        ref_corners = tuple(data.get("ref_corners", []))
+        requested_reference_num = data.get("reference_lap_num")
+        supplied_ref_corners = tuple(data.get("ref_corners", []))
+        coaching_reference_lap = next(
+            (
+                lap
+                for lap in trusted_valid_laps
+                if lap.get("lap_num") == requested_reference_num
+            ),
+            None,
+        )
+        if coaching_reference_lap is None and trusted_valid_laps:
+            with_corners = tuple(lap for lap in trusted_valid_laps if lap.get("corners"))
+            coaching_reference_lap = min(
+                with_corners or trusted_valid_laps,
+                key=lambda lap: lap["lap_time_s"],
+            )
+        if coaching_reference_lap is None:
+            ref_corners = ()
+        elif coaching_reference_lap.get("lap_num") == requested_reference_num and supplied_ref_corners:
+            ref_corners = supplied_ref_corners
+        else:
+            ref_corners = tuple(coaching_reference_lap.get("corners", []))
         analysis_notes = list(data.get("analysis_notes", []))
         if no_valid_laps and all_laps:
             analysis_mode = "diagnostic"
@@ -59,8 +87,23 @@ class PromptContext:
             note = "No valid completed laps were available; invalid laps are shown for diagnostics only."
             if note not in analysis_notes:
                 analysis_notes.append(note)
-        reference_lap_num = data.get("reference_lap_num")
+        reference_lap_num = (
+            coaching_reference_lap.get("lap_num")
+            if coaching_reference_lap is not None
+            else None
+        )
         comparison_lap_num = data.get("comparison_lap_num")
+        if comparison_lap_num not in {lap.get("lap_num") for lap in trusted_valid_laps}:
+            comparison_lap_num = None
+        trusted_nums = {lap.get("lap_num") for lap in trusted_valid_laps}
+        corner_speeds = {
+            corner_id: {
+                lap_num: speed
+                for lap_num, speed in speeds.items()
+                if lap_num in trusted_nums
+            }
+            for corner_id, speeds in data.get("corner_speeds", {}).items()
+        }
         comparison_available = bool(
             data.get("comparison_available", comparison_lap_num is not None)
             and comparison_lap_num is not None
@@ -70,8 +113,10 @@ class PromptContext:
             data=data,
             all_laps=all_laps,
             valid_laps=valid_laps,
+            trusted_valid_laps=trusted_valid_laps,
             invalid_laps=invalid_laps,
             best_lap=best_lap,
+            coaching_reference_lap=coaching_reference_lap,
             worst_lap=worst_lap,
             no_valid_laps=no_valid_laps,
             time_diff=time_diff,
@@ -79,7 +124,7 @@ class PromptContext:
             track_label=data.get("track_label") or data.get("track_name") or "Unknown Track",
             car_model=data.get("car") or "Unknown Car",
             ref_corners=ref_corners,
-            corner_speeds=data.get("corner_speeds", {}),
+            corner_speeds=corner_speeds,
             analysis_mode=analysis_mode,
             analysis_confidence=data.get("analysis_confidence", "low"),
             analysis_notes=tuple(analysis_notes),

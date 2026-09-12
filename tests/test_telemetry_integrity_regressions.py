@@ -12,7 +12,12 @@ from src.core.analyzer._util import _trend_direction
 from src.core.analyzer.build_track import build_track
 from src.core.analyzer.html_renderer import build_html_template, render_html
 from src.core.analyzer.metrics import analyze_suspension
-from src.core.telemetry_analyzer import TelemetryAnalyzer
+from src.core.analyzer.prompt.context import PromptContext
+from src.core.analyzer.prompt.session import build_session_sections
+from src.core.telemetry_analyzer import (
+    TelemetryAnalyzer,
+    _clean_completed_lap_track,
+)
 from src.core.telemetry_capture import FrameData
 from src.models import LapData, SessionData
 from src.ui.app import SimLapsApp
@@ -145,8 +150,8 @@ def _prompt_data(laps: list[dict], *, comparison_lap_num: int | None) -> dict:
 def test_build_track_uses_contact_centroid_and_preserves_fuel():
     track = build_track(
         [
-            _frame(0, fuel=5.0, x=-306.0, z=-206.0),
-            _frame(1, fuel=4.9, x=-300.0, z=-200.0),
+        _frame(0, fuel=5.0, x=-306.0, z=-206.0),
+        _frame(1, fuel=4.9, x=-300.0, z=-200.0),
         ],
         hz=10.0,
     )
@@ -178,13 +183,13 @@ def test_opposite_sign_equal_magnitude_camber_is_not_a_mismatch():
         "corners": [corner],
         "track": [
             {
-                "frame": 10,
-                "sus_fl": 0.05,
-                "sus_fr": 0.05,
-                "sus_rl": 0.05,
-                "sus_rr": 0.05,
-                "camber_fl": -0.02943,
-                "camber_fr": 0.03020,
+            "frame": 10,
+            "sus_fl": 0.05,
+            "sus_fr": 0.05,
+            "sus_rl": 0.05,
+            "sus_rr": 0.05,
+            "camber_fl": -0.02943,
+            "camber_fr": 0.03020,
             }
         ],
     }
@@ -366,6 +371,91 @@ async def test_html_report_escapes_hostile_data_and_renders_it_as_text(tmp_path)
     assert recovered["ref_corners"][0]["name"] == hostile
 
 
+@pytest.mark.asyncio
+async def test_html_corner_annotations_follow_rendered_track_positions(tmp_path):
+    lap = _lap(1, valid=True, lap_time=61.0, max_speed=123.0)
+    lap["corners"][0]["start_frame"] = 300
+    lap["corners"][0]["end_frame"] = 700
+    lap["corners"][0]["apex_frame"] = 450
+    lap["canonical_track"] = [
+        {
+            "frame": frame,
+            "x": 0.0,
+            "z": 0.0,
+            "speed": 100.0,
+            "brake": 0.0,
+            "gas": 0.0,
+            "gear": 3,
+            "steer": 0.0,
+            "yaw_rate": 0.0,
+            "acc_g_x": 0.0,
+            "acc_g_z": 0.0,
+        }
+        for frame in (100, 200, 300, 500, 700, 900, 1100)
+    ]
+    data = {
+        "meta": {},
+        "hz": 10.0,
+        "track_key": "road_atlanta",
+        "track_name": "Road Atlanta",
+        "config_key": "gp",
+        "config_name": "Full",
+        "track_label": "Road Atlanta (Full)",
+        "laps": [lap],
+        "best_lap_num": 1,
+        "reference_lap_num": 1,
+        "comparison_lap_num": None,
+        "comparison_available": False,
+        "valid_lap_nums": [1],
+        "ref_corners": lap["corners"],
+        "corner_data": {},
+        "corner_speeds": {},
+        "analysis_mode": "full",
+        "analysis_confidence": "high",
+        "analysis_notes": [],
+    }
+
+    await render_html(data, str(tmp_path), "canonical")
+    html = (tmp_path / "telemetry_canonical.html").read_text(encoding="utf-8")
+    payload = json.loads(re.search(r"const DATA = (.*);\nconst LAP_COLORS", html).group(1))
+    rendered_corner = payload["laps"][0]["corners"][0]
+    annotation_block = html.split("const annotations = {};")[1].split("speedChart =", 1)[0]
+
+    assert rendered_corner["start_pos"] == pytest.approx(2 / 6, abs=0.0001)
+    assert rendered_corner["end_pos"] == pytest.approx(4 / 6, abs=0.0001)
+    assert rendered_corner["apex_pos"] == pytest.approx(2.75 / 6, abs=0.0001)
+    assert "const bounds = cornerAxisBounds(bestLap, c);" in annotation_block
+    assert "xMin: s, xMax: e" in annotation_block
+    assert "const s = c.start_pos * 100;" not in annotation_block
+    assert "const e = c.end_pos * 100;" not in annotation_block
+    assert "i / Math.max(lap.track.length - 1, 1) * 100" not in html
+    assert "const apexIndex = Math.round(c.apex_pos * Math.max(pts.length - 1, 1));" in html
+
+
+@pytest.mark.parametrize(
+    "reference_positions, candidate_pos",
+    [((0.202, 0.606), 0.606), ((0.20, 0.30), 0.30)],
+)
+def test_inferred_prompt_corners_match_by_progress_without_reusing_candidates(
+    reference_positions, candidate_pos
+):
+    reference = _lap(1, valid=True, lap_time=61.0, max_speed=123.0)
+    reference["corners"] = [
+        {**_corner(), "id": 1, "lap_pos": reference_positions[0]},
+        {**_corner(), "id": 2, "lap_pos": reference_positions[1]},
+    ]
+    comparison = _lap(2, valid=True, lap_time=62.0, max_speed=123.0)
+    comparison["corners"] = [{**_corner(), "id": 9, "lap_pos": candidate_pos}]
+    data = _prompt_data([reference, comparison], comparison_lap_num=2)
+    data["profile_corners"] = []
+    data["ref_corners"] = reference["corners"]
+
+    _, corner_map = build_session_sections(PromptContext.from_data(data))
+
+    assert corner_map[2].get(1) is None
+    assert corner_map[2][2] is comparison["corners"][0]
+
+
 def test_html_template_substitutes_trusted_scripts_before_report_data():
     html = build_html_template(
         '{"value":"__CHART_JS__"}',
@@ -457,6 +547,360 @@ async def test_analyzer_trims_mid_session_pit_prefix_to_completed_lap_duration(
     assert not any(point["is_in_pit_lane"] for point in pit_lap["track"])
     assert pit_lap["avg_speed"] == pytest.approx(100.0)
     assert any("authoritative lap duration" in note for note in data["analysis_notes"])
+
+
+@pytest.mark.asyncio
+async def test_analyzer_selects_single_timer_epoch_after_outlap_reset_and_preserves_pb(
+    tmp_path,
+):
+    """A reset-separated timed lap gets metrics only from its timed suffix."""
+    frames = []
+    for frame_number in range(1182):
+        if frame_number < 600:
+            current = frame_number * 100
+            position = frame_number / 600
+        else:
+            current = (frame_number - 600) * 100
+            position = (frame_number - 600) / 582
+        frames.append(
+            _analysis_frame(
+                frame_number,
+                speed=100.0,
+                position=position,
+                current_lap_time_ms=current,
+                last_lap_time_ms=0,
+            )
+        )
+    # Static SHM may expose only the parent track while the session-owned log
+    # identity carries the concrete layout.
+    frames[0].static = {"track": "Suzuka", "track_configuration": None}
+
+    analyzer = TelemetryAnalyzer(str(tmp_path))
+    with (
+        patch.object(analyzer, "_generate_html", new=AsyncMock(return_value="report.html")) as html_spy,
+        patch.object(analyzer, "_generate_ai_prompt", new=AsyncMock(return_value="prompt.txt")),
+    ):
+        result = await analyzer.analyze(
+            frames,
+            hz=10.0,
+            track_name="Suzuka East",
+            game_lap_boundaries=[(1182, 58_281, 1, "VALID")],
+            output_prefix="reset_suffix",
+        )
+
+    data = html_spy.await_args.args[0]
+    lap = data["laps"][0]
+    assert result.best_lap_time == pytest.approx(58.281)
+    assert lap["start_frame"] == 600
+    assert len(lap["track"]) == 582
+    assert lap["derived_metrics_trustworthy"] is True
+    assert lap["avg_speed"] == pytest.approx(100.0)
+    assert data["track_key"] == "suzuka_east"
+    assert data["config_key"] == "east"
+    summary = json.loads((tmp_path / "session_history.jsonl").read_text().strip())
+    assert summary["best_lap_time_s"] == pytest.approx(58.281)
+    assert summary["top_speed"] == pytest.approx(100.0)
+
+
+def test_cleaner_accepts_reset_epoch_with_paused_samples():
+    points = []
+    for frame_number in range(1202):
+        active_index = frame_number - 600
+        if frame_number < 600:
+            timer = frame_number * 100
+        elif frame_number < 920:
+            timer = active_index * 100
+        elif frame_number < 940:
+            timer = 31_900
+        else:
+            timer = (active_index - 20) * 100
+        points.append(
+            {
+                "frame": frame_number,
+                "lap_time_ms": timer,
+                "status_name": "AC_PAUSE" if 920 <= frame_number < 940 else "AC_LIVE",
+            }
+        )
+
+    cleaned, prefix_removed, pause_removed, trustworthy = _clean_completed_lap_track(
+        points,
+        58_281,
+        hz=10.0,
+    )
+
+    assert trustworthy is True
+    assert prefix_removed == 600
+    assert pause_removed == 20
+    assert len(cleaned) == 582
+
+
+@pytest.mark.asyncio
+async def test_analyzer_preserves_static_profileless_identity_for_history(tmp_path):
+    frames = [
+        _analysis_frame(
+            frame_number,
+            speed=100.0,
+            position=frame_number / 100,
+            current_lap_time_ms=frame_number * 650,
+            last_lap_time_ms=0,
+        )
+        for frame_number in range(100)
+    ]
+    frames[0].static = {"track": "Road Atlanta", "track_configuration": "GP"}
+
+    analyzer = TelemetryAnalyzer(str(tmp_path))
+    with (
+        patch.object(analyzer, "_generate_html", new=AsyncMock(return_value="report.html")) as html_spy,
+        patch.object(analyzer, "_generate_ai_prompt", new=AsyncMock(return_value="prompt.txt")),
+    ):
+        await analyzer.analyze(
+            frames,
+            hz=10.0,
+            track_name="road_atlanta gp",
+            game_lap_boundaries=[(100, 65_000, 1, "VALID")],
+            output_prefix="road_atlanta_identity",
+        )
+
+    data = html_spy.await_args.args[0]
+    assert data["track_label"] == "Road Atlanta"
+    summary = json.loads((tmp_path / "session_history.jsonl").read_text().strip())
+    assert summary["track"] == "Road Atlanta"
+
+
+@pytest.mark.asyncio
+async def test_analyzer_keeps_ambiguous_reset_capture_diagnostic_without_bad_history_metrics(
+    tmp_path,
+):
+    """An unresolved timer epoch retains the authoritative lap but suppresses metrics."""
+    frames = []
+    for frame_number in range(1000):
+        if frame_number < 500:
+            current = frame_number * 100
+        elif frame_number < 800:
+            current = (frame_number - 500) * 100
+        elif frame_number == 800:
+            current = 0
+        else:
+            current = (frame_number - 800) * 100
+        frames.append(
+            _analysis_frame(
+                frame_number,
+                speed=100.0,
+                position=(frame_number % 500) / 500,
+                current_lap_time_ms=current,
+                last_lap_time_ms=0,
+            )
+        )
+
+    analyzer = TelemetryAnalyzer(str(tmp_path))
+    result = await analyzer.analyze(
+        frames,
+        hz=10.0,
+        track_name="Suzuka East",
+        game_lap_boundaries=[(1000, 49_800, 1, "VALID")],
+        output_prefix="ambiguous_reset",
+    )
+
+    report = (tmp_path / "telemetry_ambiguous_reset.html").read_text(encoding="utf-8")
+    data = json.loads(re.search(r"const DATA = (.*);\nconst LAP_COLORS", report).group(1))
+    lap = data["laps"][0]
+    assert result.best_lap_time == pytest.approx(49.8)
+    assert lap["derived_metrics_trustworthy"] is False
+    assert lap["max_speed"] is None
+    assert lap["avg_speed"] is None
+    assert lap["fuel_used"] is None
+    assert lap["corners"] == []
+    assert data["analysis_mode"] == "diagnostic"
+    assert '"max_speed": null' in report
+    prompt = (tmp_path / "telemetry_ambiguous_reset_ai_prompt.txt").read_text(encoding="utf-8")
+    assert "Derived metrics: N/A for lap(s) 1" in prompt
+    summary = json.loads((tmp_path / "session_history.jsonl").read_text().strip())
+    assert summary["best_lap_time_s"] == pytest.approx(49.8)
+    assert summary["top_speed"] is None
+    assert summary["avg_fuel_per_lap"] is None
+
+
+@pytest.mark.asyncio
+async def test_analyzer_mixed_trusted_and_ambiguous_laps_render_safely(tmp_path):
+    frames = []
+    for frame_number in range(1000):
+        if frame_number < 500:
+            current = frame_number * 100
+        elif frame_number < 800:
+            current = (frame_number - 500) * 100
+        elif frame_number == 800:
+            current = 0
+        else:
+            current = (frame_number - 800) * 100
+        frames.append(
+            _analysis_frame(
+                frame_number,
+                speed=100.0,
+                position=(frame_number % 500) / 500,
+                current_lap_time_ms=current,
+                last_lap_time_ms=0,
+            )
+        )
+
+    result = await TelemetryAnalyzer(str(tmp_path)).analyze(
+        frames,
+        hz=10.0,
+        track_name="Suzuka East",
+        game_lap_boundaries=[
+            (500, 49_800, 1, "VALID"),
+            (1000, 49_800, 2, "VALID"),
+        ],
+        output_prefix="mixed_reset",
+    )
+
+    assert result.laps_detected == 2
+    report = (tmp_path / "telemetry_mixed_reset.html").read_text(encoding="utf-8")
+    data = json.loads(re.search(r"const DATA = (.*);\nconst LAP_COLORS", report).group(1))
+    assert [lap["derived_metrics_trustworthy"] for lap in data["laps"]] == [True, False]
+    prompt = (tmp_path / "telemetry_mixed_reset_ai_prompt.txt").read_text(encoding="utf-8")
+    assert "Suppressed derived metrics for 1 valid lap segment(s)" in prompt
+    assert (tmp_path / "session_history.jsonl").exists()
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_invalid_lap_does_not_disable_valid_coaching_output(tmp_path):
+    frames = []
+    for frame_number in range(2000):
+        if frame_number < 1000:
+            timer = (frame_number % 500) * 100
+        elif frame_number < 1500:
+            timer = (frame_number - 1000) * 100
+        elif frame_number < 1800:
+            timer = (frame_number - 1500) * 100
+        elif frame_number == 1800:
+            timer = 0
+        else:
+            timer = (frame_number - 1800) * 100
+        frames.append(
+            _analysis_frame(
+                frame_number,
+                speed=100.0,
+                position=(frame_number % 500) / 500,
+                current_lap_time_ms=timer,
+                last_lap_time_ms=0,
+            )
+        )
+
+    result = await TelemetryAnalyzer(str(tmp_path)).analyze(
+        frames,
+        hz=10.0,
+        track_name="Suzuka East",
+        game_lap_boundaries=[
+            (500, 49_800, 1, "VALID"),
+            (1000, 49_800, 2, "VALID"),
+            (2000, 49_800, 3, "INVALID_GAME"),
+        ],
+        output_prefix="invalid_untrusted",
+    )
+
+    report = (tmp_path / "telemetry_invalid_untrusted.html").read_text(encoding="utf-8")
+    data = json.loads(re.search(r"const DATA = (.*);\nconst LAP_COLORS", report).group(1))
+    prompt = (tmp_path / "telemetry_invalid_untrusted_ai_prompt.txt").read_text(encoding="utf-8")
+    assert result.laps_detected == 3
+    assert data["analysis_mode"] == "full"
+    assert data["comparison_available"] is True
+    assert data["valid_lap_nums"] == [1, 2]
+    assert [lap["derived_metrics_trustworthy"] for lap in data["laps"]] == [True, True, False]
+    assert "Telemetry coaching is running in DIAGNOSTIC mode." not in prompt
+    assert "LAP-BY-LAP SUMMARY:" in prompt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("timer_mode", ["positive_underspan", "zero_timer"])
+async def test_partial_monotonic_timer_suppresses_derived_metrics_and_history(
+    tmp_path, timer_mode
+):
+    frames = [
+        FrameData(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            frame_number=frame_number,
+            physics={
+                "speed_kmh": 250.0,
+                "gear": 5,
+                "fuel": 5.0 - frame_number / 1000,
+            },
+            graphics={
+                "normalized_car_position": frame_number / 199,
+                "has_authoritative_progress": True,
+                "current_time_ms": (
+                    frame_number * 100 if timer_mode == "positive_underspan" else 0
+                ),
+                "last_time_ms": 0,
+                "completed_laps": 0,
+                "is_valid_lap": True,
+                "status_name": "AC_LIVE",
+                "session_phase": "Session",
+                "is_in_pit_lane": False,
+            },
+        )
+        for frame_number in range(200)
+    ]
+
+    result = await TelemetryAnalyzer(str(tmp_path)).analyze(
+        frames,
+        hz=10.0,
+        track_name="Suzuka East",
+        game_lap_boundaries=[(200, 90_000, 1, "VALID")],
+        output_prefix=f"partial_duration_{timer_mode}",
+    )
+
+    report = (tmp_path / f"telemetry_partial_duration_{timer_mode}.html").read_text(
+        encoding="utf-8"
+    )
+    data = json.loads(re.search(r"const DATA = (.*);\nconst LAP_COLORS", report).group(1))
+    lap = data["laps"][0]
+    history = json.loads((tmp_path / "session_history.jsonl").read_text(encoding="utf-8"))
+    assert result.best_lap_time == pytest.approx(90.0)
+    assert lap["derived_metrics_trustworthy"] is False
+    assert lap["max_speed"] is None
+    assert lap["avg_speed"] is None
+    assert lap["fuel_used"] is None
+    assert history["top_speed"] is None
+
+
+@pytest.mark.asyncio
+async def test_conflicting_static_layout_does_not_write_history(tmp_path):
+    frames = [
+        FrameData(
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            frame_number=frame_number,
+            physics={"speed_kmh": 100.0, "gear": 3, "fuel": 5.0},
+            graphics={
+                "normalized_car_position": frame_number / 649,
+                "has_authoritative_progress": True,
+                "current_time_ms": frame_number * 100,
+                "last_time_ms": 0,
+                "completed_laps": 0,
+                "is_valid_lap": True,
+                "status_name": "AC_LIVE",
+                "session_phase": "Session",
+                "is_in_pit_lane": False,
+            },
+            static=(
+                {"track": "Suzuka East", "track_configuration": "Full"}
+                if frame_number == 0
+                else {}
+            ),
+        )
+        for frame_number in range(650)
+    ]
+
+    result = await TelemetryAnalyzer(str(tmp_path)).analyze(
+        frames,
+        hz=10.0,
+        track_name="Suzuka East Full",
+        capture_track_name="Suzuka East Full",
+        game_lap_boundaries=[(650, 65_000, 1, "VALID")],
+        output_prefix="conflicting_layout",
+    )
+
+    assert result.best_lap_time == pytest.approx(65.0)
+    assert not (tmp_path / "session_history.jsonl").exists()
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,7 @@ def _write_session_summary(
     track: str,
     car: str,
     best_lap_time_s: float,
-    top_speed: float,
+    top_speed: Optional[float],
     lap_count: int,
     avg_fuel_per_lap: Optional[float],
 ) -> None:

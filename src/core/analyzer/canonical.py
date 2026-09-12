@@ -33,13 +33,57 @@ def _build_canonical_lap(
     bins: int = _DEFAULT_BINS,
 ) -> Optional[Dict[str, Any]]:
     """Resample a lap onto a common progress grid."""
+    # ACE can expose one or more samples immediately after a timer start with
+    # the spline coordinate still just before the finish line. Prove that this
+    # is the initial boundary before changing any coordinate. The proof uses
+    # the original sequence so a missing/unauthoritative sample cannot be
+    # skipped to manufacture a prefix.
+    wrap_tolerance_ms = max(500.0, 2000.0 / hz)
+    leading_progress_override: Dict[int, float] = {}
+    prefix_end = 0
+    while prefix_end < len(lap_track):
+        point = lap_track[prefix_end]
+        progress = _optional_float(point.get("norm_pos"))
+        if (
+            not point.get("has_authoritative_progress")
+            or progress is None
+            or progress < 0.98
+            or progress > 1.0
+        ):
+            break
+        prefix_end += 1
+    if prefix_end > 0 and prefix_end < len(lap_track):
+        following = lap_track[prefix_end]
+        following_progress = _optional_float(following.get("norm_pos"))
+        proof_points = lap_track[: prefix_end + 1]
+        timers = [_optional_float(point.get("lap_time_ms")) for point in proof_points]
+        frames = [_optional_float(point.get("frame")) for point in proof_points]
+        timer_ok = (
+            following.get("has_authoritative_progress")
+            and following_progress is not None
+            and following_progress >= 0.0
+            and following_progress <= 0.02
+            and all(timer is not None and timer >= 0.0 for timer in timers)
+            and all(curr >= prev for prev, curr in zip(timers, timers[1:], strict=False))
+            and max(timers, default=0.0) <= wrap_tolerance_ms
+        )
+        frame_ok = (
+            all(frame is not None for frame in frames)
+            and all(curr >= prev for prev, curr in zip(frames, frames[1:], strict=False))
+            and (frames[-1] - frames[0]) * 1000.0 / hz <= wrap_tolerance_ms
+        )
+        if timer_ok and frame_ok:
+            leading_progress_override = {index: 0.0 for index in range(prefix_end)}
+
     samples: List[Dict[str, Any]] = []
     last_progress = None
-
-    for pt in lap_track:
-        progress = _optional_float(pt.get("norm_pos"))
+    for index, pt in enumerate(lap_track):
+        progress = leading_progress_override.get(index, _optional_float(pt.get("norm_pos")))
         if progress is None or progress < 0.0 or progress > 1.0:
             continue
+        # Retain the established small-reversal tolerance. Large backward
+        # jumps are excluded from canonical interpolation; the report still
+        # receives the untouched raw track when it needs the elapsed axis.
         if last_progress is not None and progress + 0.02 < last_progress:
             continue
         sample = dict(pt)

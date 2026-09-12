@@ -24,8 +24,8 @@ def build_corner_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
-    best_lap = ctx.best_lap
+    laps = list(ctx.trusted_valid_laps)
+    best_lap = ctx.coaching_reference_lap
     assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
     corner_speeds = ctx.corner_speeds
@@ -259,8 +259,8 @@ def build_straight_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
-    best_lap = ctx.best_lap
+    laps = list(ctx.trusted_valid_laps)
+    best_lap = ctx.coaching_reference_lap
     assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
     reference_lap_num = ctx.reference_lap_num
@@ -379,8 +379,8 @@ def build_braking_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
-    best_lap = ctx.best_lap
+    laps = list(ctx.trusted_valid_laps)
+    best_lap = ctx.coaching_reference_lap
     assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
     reference_lap_num = ctx.reference_lap_num
@@ -512,8 +512,8 @@ def build_grip_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
-    best_lap = ctx.best_lap
+    laps = list(ctx.trusted_valid_laps)
+    best_lap = ctx.coaching_reference_lap
     assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
     hz = ctx.hz
@@ -635,8 +635,8 @@ def build_time_loss_sections(
     ctx: PromptContext,
     lap_corner_map: Dict[int, Dict[int, Dict]],
 ) -> List[str]:
-    laps = list(ctx.valid_laps)
-    best_lap = ctx.best_lap
+    laps = list(ctx.trusted_valid_laps)
+    best_lap = ctx.coaching_reference_lap
     assert best_lap is not None  # noqa: S101
     ref_corners = list(ctx.ref_corners)
     reference_lap_num = ctx.reference_lap_num
@@ -674,8 +674,17 @@ def build_time_loss_sections(
         _actual_best_time = best_lap["lap_time_s"]
         _total_gap = sum(_corner_gaps.values())
         _theoretical_best = _actual_best_time - _total_gap
+        _actual_time_label = (
+            "actual best"
+            if ctx.best_lap is not None
+            and ctx.best_lap.get("lap_num") == best_lap.get("lap_num")
+            else f"reference lap #{best_lap['lap_num']}"
+        )
         lines.append("THEORETICAL BEST LAP:")
-        lines.append(f"  Theoretical best: {_theoretical_best:.2f}s (actual best: {_actual_best_time:.2f}s)")
+        lines.append(
+            f"  Theoretical best: {_theoretical_best:.2f}s "
+            f"({_actual_time_label}: {_actual_best_time:.2f}s)"
+        )
         lines.append(f"  Potential gain: {_total_gap:.2f}s across {len(_corner_gaps)} corners")
         lines.append("  Per-corner best segments vs best lap segments:")
         for spec in ref_corners:
