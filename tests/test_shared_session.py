@@ -445,6 +445,59 @@ def test_graphics_completion_validity_survives_physical_counter_reuse_after_pit(
     assert completion.is_valid is False
 
 
+def test_graphics_car_switch_does_not_reinterpret_queued_completion() -> None:
+    """A display-name switch cannot turn BMW's finish into Alfa's lap one."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW M3", car_uuid="bmw-uuid")
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW M3",
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 108000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW M3",
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 108315,
+            "is_valid_lap": True,
+        }
+    )
+    completions = manager.get_lap_completions_after(0.0)
+    assert len(completions) == 1
+    assert completions[0].session_id == "bmw-session"
+    assert completions[0].car_model == "BMW M3"
+
+    # ACE can leave BMW's last time in the mapping while publishing the next
+    # display-name/car snapshot. The switch establishes a fresh baseline.
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "Alfa Romeo Giulia GTAm",
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 108315,
+            "is_valid_lap": False,
+        }
+    )
+    assert [item.lap_time_ms for item in manager.get_lap_completions_after(0.0)] == [108315]
+
+    manager.begin_session(
+        "alfa-session",
+        car_model="ks_alfa_romeo_giulia_gtam",
+        car_uuid="alfa-uuid",
+    )
+    assert manager.get_lap_completions_for_session_after(
+        0.0, session_id="alfa-session", origin_epoch=manager.get_session_origin().epoch
+    ) == []
+
+
 def test_graphics_retains_multiple_unconsumed_lap_completions() -> None:
     """Delayed log polling must not collapse a multi-lap SHM backlog."""
     manager = SharedSessionManager()
@@ -480,18 +533,18 @@ def test_lap_completion_matching_tolerates_rounding_once_and_rejects_outside() -
     manager = SharedSessionManager()
     manager.update_from_graphics_shm(
         {
-            "total_lap_count": 0,
-            "current_lap_time_ms": 100000,
-            "last_laptime_ms": 0,
-            "is_valid_lap": False,
+        "total_lap_count": 0,
+        "current_lap_time_ms": 100000,
+        "last_laptime_ms": 0,
+        "is_valid_lap": False,
         }
     )
     manager.update_from_graphics_shm(
         {
-            "total_lap_count": 1,
-            "current_lap_time_ms": 10,
-            "last_laptime_ms": 100000,
-            "is_valid_lap": True,
+        "total_lap_count": 1,
+        "current_lap_time_ms": 10,
+        "last_laptime_ms": 100000,
+        "is_valid_lap": True,
         }
     )
 
@@ -589,8 +642,8 @@ def test_log_heuristic_valid_overwrites_shm_invalid() -> None:
     # SHM reports lap 2 as invalid (per-frame flag while lap was in progress)
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 2,
-            "is_invalid": True,
+        "session_current_lap": 2,
+        "is_invalid": True,
         }
     )
     assert manager.get_lap_validity(2) is False
@@ -628,10 +681,10 @@ def test_log_heuristic_valid_wins_over_shm_invalid() -> None:
     # Lap 1 finishes; lap 2 starts and is immediately invalidated per SHM.
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 0,
-            "total_lap_count": 1,
-            "is_valid_lap": False,
-            "current_lap_time_ms": 44573,
+        "session_current_lap": 0,
+        "total_lap_count": 1,
+        "is_valid_lap": False,
+        "current_lap_time_ms": 44573,
         }
     )
 
@@ -703,8 +756,8 @@ def test_shm_valid_does_not_block_log_outlap() -> None:
     # SHM reports lap 3 as valid (normal in-progress frame)
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 3,
-            "is_invalid": False,
+        "session_current_lap": 3,
+        "is_invalid": False,
         }
     )
     assert manager.get_lap_validity(3) is True
@@ -736,8 +789,8 @@ def test_authoritative_log_valid_overrides_shm_invalid() -> None:
     # SHM reports lap 5 as invalid
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 5,
-            "is_invalid": True,
+        "session_current_lap": 5,
+        "is_invalid": True,
         }
     )
     assert manager.get_lap_validity(5) is False
@@ -771,8 +824,8 @@ def test_shm_invalid_does_not_block_log_invalid_split() -> None:
 
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 2,
-            "is_invalid": True,
+        "session_current_lap": 2,
+        "is_invalid": True,
         }
     )
 
@@ -802,8 +855,8 @@ def test_shm_validity_repeated_frames_are_idempotent() -> None:
     # First frame: lap 1, invalid=False
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 1,
-            "is_invalid": False,
+        "session_current_lap": 1,
+        "is_invalid": False,
         }
     )
     assert manager.get_lap_validity(1) is True
@@ -811,8 +864,8 @@ def test_shm_validity_repeated_frames_are_idempotent() -> None:
     # Second frame: same state — validity should remain unchanged
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 1,
-            "is_invalid": False,
+        "session_current_lap": 1,
+        "is_invalid": False,
         }
     )
     assert manager.get_lap_validity(1) is True
@@ -820,8 +873,8 @@ def test_shm_validity_repeated_frames_are_idempotent() -> None:
     # Third frame: is_invalid transitions to True — should update
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 1,
-            "is_invalid": True,
+        "session_current_lap": 1,
+        "is_invalid": True,
         }
     )
     assert manager.get_lap_validity(1) is False
@@ -1092,12 +1145,12 @@ def test_shm_is_valid_lap_false_with_active_timing_marks_invalid() -> None:
 
     manager.update_from_graphics_shm(
         {
-            "total_lap_count": 1,
-            "is_valid_lap": False,
-            "current_lap_time_ms": 40374,
-            "session_current_lap": 0,
-            "is_invalid": None,
-            "timing_is_invalid": None,
+        "total_lap_count": 1,
+        "is_valid_lap": False,
+        "current_lap_time_ms": 40374,
+        "session_current_lap": 0,
+        "is_invalid": None,
+        "timing_is_invalid": None,
         }
     )
 
@@ -1113,12 +1166,12 @@ def test_shm_is_valid_lap_false_with_zero_lap_time_skipped() -> None:
 
     manager.update_from_graphics_shm(
         {
-            "total_lap_count": 0,
-            "is_valid_lap": False,
-            "current_lap_time_ms": 0,
-            "session_current_lap": 0,
-            "is_invalid": None,
-            "timing_is_invalid": None,
+        "total_lap_count": 0,
+        "is_valid_lap": False,
+        "current_lap_time_ms": 0,
+        "session_current_lap": 0,
+        "is_invalid": None,
+        "timing_is_invalid": None,
         }
     )
 
@@ -1134,12 +1187,12 @@ def test_log_heuristic_valid_wins_over_shm_invalid_peek_path() -> None:
 
     manager.update_from_graphics_shm(
         {
-            "total_lap_count": 1,
-            "is_valid_lap": False,
-            "current_lap_time_ms": 40374,
-            "session_current_lap": 0,
-            "is_invalid": None,
-            "timing_is_invalid": None,
+        "total_lap_count": 1,
+        "is_valid_lap": False,
+        "current_lap_time_ms": 40374,
+        "session_current_lap": 0,
+        "is_invalid": None,
+        "timing_is_invalid": None,
         }
     )
     assert manager.get_lap_validity(2) is False
@@ -1181,11 +1234,11 @@ def test_shm_stale_last_laptime_scrubbed_when_no_laps_completed() -> None:
     # but last_laptime_ms carries a stale value from the previous session.
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 0,  # fallback path
-            "total_lap_count": 0,  # no laps completed yet
-            "last_laptime_ms": 83456,  # stale! (1:23.456 from old session)
-            "current_lap_time_ms": 5000,
-            "best_laptime_ms": 0,
+        "session_current_lap": 0,       # fallback path
+        "total_lap_count": 0,           # no laps completed yet
+        "last_laptime_ms": 83456,       # stale! (1:23.456 from old session)
+        "current_lap_time_ms": 5000,
+        "best_laptime_ms": 0,
         }
     )
 
@@ -1210,11 +1263,11 @@ def test_shm_stale_last_laptime_not_scrubbed_when_laps_exist() -> None:
     # Simulate SHM data mid-session: lap 3 in progress, 2 laps completed.
     manager.update_from_graphics_shm(
         {
-            "session_current_lap": 3,
-            "total_lap_count": 2,
-            "last_laptime_ms": 120123,  # legitimate last lap time
-            "current_lap_time_ms": 61234,
-            "best_laptime_ms": 119999,
+        "session_current_lap": 3,
+        "total_lap_count": 2,
+        "last_laptime_ms": 120123,      # legitimate last lap time
+        "current_lap_time_ms": 61234,
+        "best_laptime_ms": 119999,
         }
     )
 
@@ -1224,3 +1277,97 @@ def test_shm_stale_last_laptime_not_scrubbed_when_laps_exist() -> None:
     assert timing.last_lap_time_ms == 120123, (
         f"Legitimate last_laptime_ms should be preserved, but got {timing.last_lap_time_ms}"
     )
+
+
+def test_graphics_transaction_aborts_when_session_changes_during_timing_publish() -> None:
+    """A reentrant epoch change cannot write the old sample into Alfa."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW")
+    original = manager.update_lap_timing_from_graphics_shm
+    changed = False
+
+    def interleave(*args, **kwargs):
+        nonlocal changed
+        if not changed:
+            changed = True
+            manager.begin_session("alfa-session", car_model="Alfa")
+        return original(*args, **kwargs)
+
+    manager.update_lap_timing_from_graphics_shm = interleave
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW",
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "current_lap_time_ms": 6_000,
+            "last_laptime_ms": 0,
+            "total_lap_count": 0,
+            "is_valid_lap": True,
+        }
+    )
+
+    assert manager.get_active_session_id() == "alfa-session"
+    assert manager.get_all_lap_times() == {}
+    assert manager.get_all_lap_validity() == {}
+    assert manager.get_current_lap_time() is None
+    assert manager.get_fuel_data().current_fuel is None
+
+
+def test_static_publish_rechecks_graphics_origin_after_session_interleave() -> None:
+    """Static data from the old car cannot follow a reentrant epoch change."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW")
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW",
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "current_lap_time_ms": 6_000,
+            "total_lap_count": 0,
+        }
+    )
+    original = manager.update_session_metadata_from_static_shm
+    changed = False
+
+    def interleave(static_data):
+        nonlocal changed
+        if not changed:
+            changed = True
+            manager.begin_session("alfa-session", car_model="Alfa")
+        return original(static_data)
+
+    manager.update_session_metadata_from_static_shm = interleave
+    manager.update_from_static_shm({"track": "BMW Track"})
+
+    assert manager.get_active_session_id() == "alfa-session"
+    assert manager.get_session_metadata()["track"] == "Unknown"
+
+
+def test_physics_publish_rechecks_graphics_origin_after_session_interleave() -> None:
+    """Physics from the old car cannot follow a reentrant epoch change."""
+    manager = SharedSessionManager()
+    manager.begin_session("bmw-session", car_model="BMW")
+    manager.update_from_graphics_shm(
+        {
+            "car_model": "BMW",
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "current_lap_time_ms": 6_000,
+            "total_lap_count": 0,
+        }
+    )
+    original = manager.update_from_physics_shm
+    changed = False
+
+    def interleave(physics_data):
+        nonlocal changed
+        if not changed:
+            changed = True
+            manager.begin_session("alfa-session", car_model="Alfa")
+        return original(physics_data)
+
+    manager.update_from_physics_shm = interleave
+    manager.update_from_physics_shm({"speed_kmh": 222.0})
+
+    assert manager.get_active_session_id() == "alfa-session"
+    assert manager._session_data.max_speed is None

@@ -11,8 +11,20 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from ..models import LapData, SessionData, SharedSessionManager
-from ..utils.structured_logger import Component, log_debug, log_error, log_exception, log_info, log_warning
+from ..models import (
+    LapData,
+    SessionData,
+    SharedSessionManager,
+    SubmissionSnapshot,
+)
+from ..utils.structured_logger import (
+    Component,
+    log_debug,
+    log_error,
+    log_exception,
+    log_info,
+    log_warning,
+)
 from ..version import USER_AGENT, VERSION
 from .security import (
     GameProcessStatus,
@@ -153,27 +165,35 @@ class APIClient:
                 message="Game must be running to submit laps",
             )
 
-        final_user_id, shared_player, preflight_error = self._validate_submission_preflight(
+        final_user_id, shared_snapshot, preflight_error = self._validate_submission_preflight(
             session=session,
             effective_is_valid=effective_is_valid,
             user_id=user_id,
             submit_invalid=submit_invalid,
+            lap_number=lap.lap_number,
         )
         if preflight_error is not None:
             return preflight_error
-        assert final_user_id is not None  # noqa: S101
-        assert shared_player is not None  # noqa: S101
+        if final_user_id is None:
+            return SubmissionResult(
+                status=SubmissionStatus.ERROR,
+                message="No Steam ID detected - please start a session in game",
+            )
 
         payload, payload_error = self._build_submission_payload(
             session=session,
             lap=lap,
             final_user_id=final_user_id,
-            shared_player=shared_player,
+            shared_snapshot=shared_snapshot,
             effective_is_valid=effective_is_valid,
         )
         if payload_error is not None:
             return payload_error
-        assert payload is not None  # noqa: S101
+        if payload is None:
+            return SubmissionResult(
+                status=SubmissionStatus.ERROR,
+                message="Unable to build lap submission payload",
+            )
 
         signed_payload = sign_payload(payload)
         local_sig_valid = verify_signature_locally(signed_payload)
@@ -208,7 +228,10 @@ class APIClient:
         effective_is_valid: bool,
         user_id: Optional[str],
         submit_invalid: bool,
-    ) -> tuple[Optional[str], Any, Optional[SubmissionResult]]:
+        lap_number: Optional[int] = None,
+    ) -> tuple[
+        Optional[str], Optional[SubmissionSnapshot], Optional[SubmissionResult]
+    ]:
         """Validate submission policy and resolve the authoritative user."""
         if not effective_is_valid and not submit_invalid:
             log_debug(
@@ -219,32 +242,57 @@ class APIClient:
                 None,
                 None,
                 SubmissionResult(
-                    status=SubmissionStatus.INVALID_LAP,
-                    message="Lap was invalidated (penalty or off-track)",
+                status=SubmissionStatus.INVALID_LAP,
+                message="Lap was invalidated (penalty or off-track)",
                 ),
             )
 
-        shared_player = self._session_manager.get_player_identification()
-        final_user_id = user_id or session.player_id or shared_player.steam_id
+        get_origin = getattr(self._session_manager, "get_session_origin", None)
+        get_snapshot = getattr(self._session_manager, "get_submission_snapshot_for_origin", None)
+        shared_snapshot: Optional[SubmissionSnapshot] = None
+        shared_player = None
+        relation = None
+        initial_state = False
+        if not callable(get_origin) or not callable(get_snapshot):
+            # Legacy test doubles and older integrations have no provenance
+            # API. Preserve their original getter precedence without inventing
+            # a modern overlay.
+            get_player = getattr(self._session_manager, "get_player_identification", None)
+            shared_player = get_player() if callable(get_player) else None
+            final_user_id = user_id or session.player_id or getattr(shared_player, "steam_id", None)
+        else:
+            origin = get_origin()
+            initial_state = origin.session_id is None and origin.epoch == 0
+            result = get_snapshot(origin, lap_number=lap_number, session_id=session.session_id)
+            relation = getattr(result, "relation", None)
+            shared_snapshot = getattr(result, "snapshot", None)
+            if not isinstance(shared_snapshot, SubmissionSnapshot):
+                shared_snapshot = None
+            shared_player = shared_snapshot
+            final_user_id = user_id or session.player_id or getattr(shared_player, "steam_id", None)
         log_debug(
             Component.API,
             "User ID resolution",
             user_id=user_id,
             session_player_id=session.player_id,
-            shared_steam_id=shared_player.steam_id,
+            shared_steam_id=getattr(shared_player, "steam_id", None),
+            shared_belongs_to_session=shared_snapshot is not None,
             final_user_id=final_user_id,
         )
         if not final_user_id:
             log_warning(Component.API, "Rejected: No user ID")
-            return (
-                None,
-                shared_player,
-                SubmissionResult(
-                    status=SubmissionStatus.ERROR,
-                    message="No Steam ID detected - please start a session in game",
-                ),
+            return None, shared_snapshot, SubmissionResult(
+                status=SubmissionStatus.ERROR,
+                message="No Steam ID detected - please start a session in game",
             )
-        return final_user_id, shared_player, None
+        relation_value = getattr(relation, "value", relation)
+        accepted_snapshot = relation_value in {"active", "late_bound", "closed"}
+        # At process bootstrap there is no established session owner. Keep the
+        # historical identity-only fallback while avoiding an unrelated
+        # metadata/timing overlay from the manager's initial placeholder state.
+        if initial_state:
+            shared_snapshot = None
+        return final_user_id, shared_snapshot if accepted_snapshot else None, None
 
     def _build_submission_payload(
         self,
@@ -252,29 +300,89 @@ class APIClient:
         session: SessionData,
         lap: LapData,
         final_user_id: str,
-        shared_player: Any,
+        shared_snapshot: Optional[SubmissionSnapshot],
         effective_is_valid: bool,
     ) -> tuple[Optional[Dict[str, Any]], Optional[SubmissionResult]]:
         """Build the source-aware unsigned payload without changing precedence."""
-        shared_lap_timing = self._session_manager.get_lap_timing_data(lap.lap_number)
-        shared_sector_splits = self._session_manager.get_sector_split_data(lap.lap_number)
-        shared_fuel_data = self._session_manager.get_fuel_data()
-        session_metadata = self._session_manager.get_session_metadata_data()
-
-        effective_track = session.track if session.track and session.track != "Unknown" else session_metadata.track
-        effective_car = (
-            session.car if session.car and session.car != "Unknown" else (shared_player.car_model or session.car)
+        legacy_timing = None
+        legacy_sectors = None
+        legacy_fuel = None
+        legacy_metadata = None
+        legacy_player = None
+        snapshot_track = snapshot_car = snapshot_session_type = None
+        snapshot_game_version = snapshot_session_id = None
+        snapshot_lap_time = snapshot_sectors = snapshot_fuel = None
+        modern_manager = callable(
+            getattr(self._session_manager, "get_session_origin", None)
+        ) and callable(
+            getattr(self._session_manager, "get_submission_snapshot_for_origin", None)
         )
-        effective_session_id = session.session_id or session_metadata.session_id
+        if isinstance(shared_snapshot, SubmissionSnapshot):
+            snapshot_track = shared_snapshot.track
+            snapshot_car = shared_snapshot.car_model
+            snapshot_session_type = shared_snapshot.session_type
+            snapshot_game_version = shared_snapshot.game_version
+            snapshot_session_id = shared_snapshot.retained_session_id
+            snapshot_lap_time = shared_snapshot.lap_time_ms
+            snapshot_sectors = shared_snapshot.sectors
+            snapshot_fuel = shared_snapshot.fuel_per_lap
+        elif not modern_manager:
+            snapshot_track = snapshot_car = snapshot_session_type = snapshot_game_version = None
+            snapshot_session_id = snapshot_lap_time = snapshot_sectors = snapshot_fuel = None
+            get_timing = getattr(self._session_manager, "get_lap_timing_data", None)
+            get_sectors = getattr(self._session_manager, "get_sector_split_data", None)
+            get_fuel = getattr(self._session_manager, "get_fuel_data", None)
+            get_metadata = getattr(self._session_manager, "get_session_metadata_data", None)
+            get_player = getattr(self._session_manager, "get_player_identification", None)
+            legacy_timing = get_timing(lap.lap_number) if callable(get_timing) else None
+            legacy_sectors = get_sectors(lap.lap_number) if callable(get_sectors) else None
+            legacy_fuel = get_fuel() if callable(get_fuel) else None
+            legacy_metadata = get_metadata() if callable(get_metadata) else None
+            legacy_player = get_player() if callable(get_player) else None
+        shared_lap_time = (
+            snapshot_lap_time
+            if isinstance(shared_snapshot, SubmissionSnapshot)
+            else getattr(legacy_timing, "last_lap_time_ms", None)
+        )
+        shared_sector_values = snapshot_sectors if isinstance(shared_snapshot, SubmissionSnapshot) else (
+            getattr(legacy_sectors, "sector1_ms", None),
+            getattr(legacy_sectors, "sector2_ms", None),
+            getattr(legacy_sectors, "sector3_ms", None),
+        )
+        shared_fuel_value = (
+            snapshot_fuel
+            if isinstance(shared_snapshot, SubmissionSnapshot)
+            else getattr(legacy_fuel, "fuel_consumed_lap", None)
+        )
+
+        effective_track = (
+            session.track
+            if session.track and session.track != "Unknown"
+            else (snapshot_track or getattr(legacy_metadata, "track", "Unknown"))
+        )
+        effective_car = (
+            session.car
+            if session.car and session.car != "Unknown"
+            else (
+                snapshot_car or getattr(legacy_player, "car_model", None) or session.car
+            )
+        )
+        effective_session_id = session.session_id or (
+            snapshot_session_id or getattr(legacy_metadata, "session_id", None)
+        )
         effective_session_type = (
             session.session_type
             if session.session_type and session.session_type != "Unknown"
-            else session_metadata.session_type
+            else (
+                snapshot_session_type or getattr(legacy_metadata, "session_type", session.session_type)
+            )
         )
         effective_game_version = (
             session.game_version
             if session.game_version and session.game_version != "Unknown"
-            else session_metadata.game_version
+            else (
+                snapshot_game_version or getattr(legacy_metadata, "game_version", session.game_version)
+            )
         )
 
         track_id = self._normalize_track_id(effective_track)
@@ -285,11 +393,7 @@ class APIClient:
             track_id=track_id,
             car=effective_car,
             lap_time_ms=lap.lap_time_ms,
-            shared_lap_time_ms=getattr(
-                shared_lap_timing,
-                "last_lap_time_ms",
-                None,
-            ),
+            shared_lap_time_ms=shared_lap_time,
         )
 
         # The parser's lap time is authoritative. SHM is only a missing-time
@@ -297,8 +401,8 @@ class APIClient:
         final_time_candidate: Any = lap.lap_time_ms
         if (
             not isinstance(final_time_candidate, (int, float)) or int(final_time_candidate) <= 0
-        ) and shared_lap_timing is not None:
-            final_time_candidate = shared_lap_timing.last_lap_time_ms
+        ) and shared_lap_time is not None:
+            final_time_candidate = shared_lap_time
 
         if not isinstance(final_time_candidate, (int, float)):
             log_debug(Component.API, "Rejected: Lap time unavailable")
@@ -336,21 +440,20 @@ class APIClient:
             "sector2": lap.sector2_ms,
             "sector3": lap.sector3_ms,
         }
-        if shared_sector_splits is not None:
+        if shared_sector_values is not None:
             for field_name in ("sector1", "sector2", "sector3"):
                 value = sector_payload[field_name]
                 if not isinstance(value, (int, float)) or int(value) <= 0:
-                    sector_payload[field_name] = getattr(
-                        shared_sector_splits,
-                        f"{field_name}_ms",
-                    )
+                    sector_payload[field_name] = shared_sector_values[
+                        ("sector1", "sector2", "sector3").index(field_name)
+                    ]
 
         for field_name, value in sector_payload.items():
             if value is not None and int(value) > 0:
                 payload[field_name] = int(value)
 
         # SHM's per-lap fuel is authoritative; parsed log fuel is the fallback.
-        fuel_used_value = shared_fuel_data.fuel_consumed_lap
+        fuel_used_value = shared_fuel_value
         if fuel_used_value is None:
             fuel_used_value = lap.fuel_used
         if fuel_used_value is not None:
@@ -380,10 +483,11 @@ class APIClient:
                 json=signed_payload,
             )
         except httpx.NetworkError as exc:
-            log_error(Component.API, "Network error", error=str(exc))
+            detail = str(exc).strip() or type(exc).__name__
+            log_error(Component.API, "Network error", error=detail)
             return SubmissionResult(
                 status=SubmissionStatus.NETWORK_ERROR,
-                message=f"Network error: {str(exc)}",
+                message=f"Network error: {detail}",
             )
         except httpx.TimeoutException:
             log_error(Component.API, "Request timeout")
@@ -520,12 +624,12 @@ class APIClient:
         # Remove layout suffixes
         for suffix in [" gp", " time attack practice", " practice", " race", " qualify"]:
             if track_id.endswith(suffix):
-                track_id = track_id[: -len(suffix)]
+                track_id = track_id[:-len(suffix)]
 
         # Remove common prefixes
         for prefix in ["circuit de ", "circuit ", "autodromo ", "autódromo "]:
             if track_id.startswith(prefix):
-                track_id = track_id[len(prefix) :]
+                track_id = track_id[len(prefix):]
 
         # Replace spaces with underscores
         track_id = track_id.replace(" ", "_")
@@ -561,7 +665,8 @@ class APIClient:
             return True, "Connected and secret verified"
 
         except httpx.NetworkError as e:
-            return False, f"Network error: {str(e)}"
+            detail = str(e).strip() or type(e).__name__
+            return False, f"Network error: {detail}"
         except httpx.TimeoutException:
             return False, "Connection timed out"
         except (RuntimeError, OSError, ConnectionError) as e:

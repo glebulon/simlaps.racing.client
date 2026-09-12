@@ -127,6 +127,10 @@ class TestSubmitLap:
         sample_lap.fuel_used = None
 
         manager = SharedSessionManager()
+        manager.begin_session(
+            sample_session.session_id,
+            car_model="ferrari_296_gt3",
+        )
         manager.update_player_identification_from_logs(
             {
                 "steam_id": "76561198000000001",
@@ -156,7 +160,7 @@ class TestSubmitLap:
         # rate (L/km) and must never be submitted as fuelUsed.
         manager.update_fuel_from_graphics_shm(
             {
-                "fuel_liter_per_lap": 2.7,  # per-lap consumption
+            "fuel_liter_per_lap": 2.7,  # per-lap consumption
                 "fuel_liter_per_km": 0.04,  # rate only
             }
         )
@@ -263,7 +267,7 @@ class TestSubmitLap:
         # SHM fuel not available (None)
         manager.update_fuel_from_graphics_shm(
             {
-                "fuel_liter_per_km": 0.04  # rate only, no per-lap data
+            "fuel_liter_per_km": 0.04   # rate only, no per-lap data
             }
         )
 
