@@ -7,11 +7,13 @@ Based on test_scripts/telemetry/1-capture.py
 
 import asyncio
 import ctypes
+import inspect
 import json
 import os
 import sys
 import time
 import traceback
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,7 +29,7 @@ from src.core.telemetry_decoder import (
     decode_static,
     peek_graphics_validity,
 )
-from src.models import SharedSessionManager
+from src.models import SessionOriginSnapshot, SharedSessionManager, car_models_match
 from src.utils.structured_logger import Component, log_debug, log_error, log_exception, log_info, log_warning
 
 # Windows-specific imports for safe shared memory access. Keep the public
@@ -80,9 +82,9 @@ SHM_STATIC_NAME: str = f"{SHM_NAME_PREFIX}static"
 # OpenFileMappingW + MapViewOfFile will surface that and the region will
 # simply fail to open — capture continues with whichever regions did connect.
 REGIONS: Dict[str, tuple[str, int]] = {
-    "physics": (SHM_PHYSICS_NAME, PHYSICS_SHM_SIZE),
+    "physics":  (SHM_PHYSICS_NAME,  PHYSICS_SHM_SIZE),
     "graphics": (SHM_GRAPHICS_NAME, GRAPHICS_SHM_SIZE),
-    "static": (SHM_STATIC_NAME, STATIC_SHM_SIZE),
+    "static":   (SHM_STATIC_NAME,   STATIC_SHM_SIZE),
 }
 
 # Candidate Win32 object-manager paths for OpenFileMappingW.
@@ -115,9 +117,26 @@ class FrameData:
     graphics_raw: Optional[str] = None
     static: Dict[str, Any] = field(default_factory=dict)
     static_raw: Optional[str] = None
+    # Ownership is attached to retained frames so a report consumer can
+    # verify that its buffer never crossed a session/car generation.
+    origin_epoch: Optional[int] = None
+    session_id: Optional[str] = None
+    car_model: Optional[str] = None
+    car_uuid: Optional[str] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class CaptureOriginStatus:
+    """A capture-scoped origin synchronization transition."""
+
+    capture_id: str
+    generation: int
+    status: str
+    rejection_count: int
+    rejection_streak: int
 
 
 @dataclass
@@ -309,6 +328,19 @@ class TelemetryCapture:
         self._last_sample_had_data = False
         self._recording_awaiting_boundary = False
         self._awaiting_lap_time_ms: Optional[int] = None
+        # The manager is the authority for origin changes.  Capture freezes
+        # the origin at start so a delayed parser callback cannot make an
+        # already-running buffer adopt a later session.
+        self._capture_origin: Optional[SessionOriginSnapshot] = None
+        self._last_frame_origin_stable = True
+        self._capture_track_name: Optional[str] = None
+        self._origin_rejection_count = 0
+        self._origin_rejection_streak = 0
+        self._origin_warning_emitted = False
+        self._capture_id = ""
+        self._capture_generation = 0
+        self._on_origin_status_callback: Optional[Callable[[CaptureOriginStatus], Any]] = None
+        self._origin_status_tasks: set[asyncio.Task] = set()
 
     def is_capturing(self) -> bool:
         """Check if currently capturing."""
@@ -393,6 +425,97 @@ class TelemetryCapture:
         """Get the current session output prefix."""
         return self._output_prefix
 
+    def get_capture_origin(self) -> Optional[SessionOriginSnapshot]:
+        """Return the immutable origin owned by this capture run."""
+        return self._capture_origin
+
+    def get_capture_track_name(self) -> Optional[str]:
+        """Return track identity frozen for this capture run."""
+        return self._capture_track_name
+
+    def get_capture_identity(self) -> str:
+        """Return the identity for the current capture run."""
+        return self._capture_id
+
+    def get_capture_generation(self) -> int:
+        """Return the invalidation generation for the current capture run."""
+        return self._capture_generation
+
+    def owns_session(self, session_id: Optional[str]) -> bool:
+        """Return whether a lap callback belongs to this capture run.
+
+        A capture that started before the log parser assigned a session id is
+        intentionally anonymous.  It can accept a parser session only when
+        the manager still reports the same origin epoch.  A capture already
+        bound to an id rejects delayed callbacks from any later session even
+        if the shared manager has moved on.
+        """
+        origin = self._capture_origin
+        if origin is None or not session_id:
+            return False
+        if origin.session_id is None:
+            current = self._get_manager_origin()
+            return bool(
+                current
+                and current.epoch == origin.epoch
+                and current.session_id == session_id
+                and current.graphics_ready
+                and car_models_match(
+                    origin.graphics_car_model,
+                    current.graphics_car_model,
+                )
+            )
+        # Once a concrete session id was frozen, do not consult the manager's
+        # newer active id.  Delayed callbacks for this outgoing capture still
+        # belong to its report until the lifecycle replaces the capture.
+        return origin.session_id == session_id
+
+    def _get_manager_origin(self) -> Optional[SessionOriginSnapshot]:
+        """Read the manager's atomic origin."""
+        origin = self._session_manager.get_session_origin()
+        return origin if isinstance(origin, SessionOriginSnapshot) else None
+
+    def _capture_origin_ready(self) -> bool:
+        """Return whether the current sample belongs to this run's origin."""
+        owner = self._capture_origin
+        current = self._get_manager_origin()
+        if owner is None or current is None:
+            return True
+        # Epoch protects against graphics-leading car changes.  Session id
+        # also matters because a parser-led Game Started can reuse the epoch
+        # while graphics is still publishing the outgoing car.
+        return (
+            current.epoch == owner.epoch
+            and current.graphics_ready
+            and (
+                not owner.graphics_ready
+                or car_models_match(
+                    owner.graphics_car_model,
+                    current.graphics_car_model,
+                )
+            )
+            and (
+                owner.session_id is None
+                or current.session_id == owner.session_id
+            )
+        )
+
+    def _confirm_capture_origin(self, current: Optional[SessionOriginSnapshot]) -> None:
+        """Freeze a same-epoch parser identity after graphics confirms it."""
+        owner = self._capture_origin
+        if owner is None or current is None or not current.graphics_ready:
+            return
+        if current.epoch != owner.epoch:
+            return
+        if owner.session_id is not None and current.session_id != owner.session_id:
+            return
+        if owner.graphics_ready and not car_models_match(
+            owner.graphics_car_model, current.graphics_car_model
+        ):
+            return
+        if current.session_id is not None or not owner.graphics_ready:
+            self._capture_origin = current
+
     def set_on_stop_callback(self, callback: Optional[Callable[[str], None]]):
         """Set callback to be called when capture stops.
 
@@ -400,6 +523,87 @@ class TelemetryCapture:
             callback: Function receiving stop reason string
         """
         self._on_stop_callback = callback
+
+    def set_on_origin_status_callback(
+        self,
+        callback: Optional[Callable[[CaptureOriginStatus], Any]],
+    ) -> None:
+        """Set the callback for capture-origin warning/recovery transitions."""
+        self._on_origin_status_callback = callback
+
+    def _emit_origin_status(self, status: str) -> None:
+        """Dispatch one capture-scoped origin status transition."""
+        callback = self._on_origin_status_callback
+        if callback is None or not self._capture_id:
+            return
+        event = CaptureOriginStatus(
+            capture_id=self._capture_id,
+            generation=self._capture_generation,
+            status=status,
+            rejection_count=self._origin_rejection_count,
+            rejection_streak=self._origin_rejection_streak,
+        )
+        try:
+            result = callback(event)
+            if not inspect.isawaitable(result):
+                return
+            task = asyncio.create_task(result)
+            self._origin_status_tasks.add(task)
+
+            def task_done(done: asyncio.Task) -> None:
+                self._origin_status_tasks.discard(done)
+                if done.cancelled():
+                    return
+                try:
+                    error = done.exception()
+                except asyncio.CancelledError:
+                    return
+                if error is not None:
+                    log_error(Component.TELEMETRY, "Origin status callback failed", error=str(error))
+
+            task.add_done_callback(task_done)
+        except Exception as exc:
+            log_error(Component.TELEMETRY, "Origin status callback failed", error=str(exc))
+
+    @staticmethod
+    def _frame_is_active(frame: FrameData) -> bool:
+        """Return whether an origin rejection belongs to an active session."""
+        graphics = frame.graphics if isinstance(frame.graphics, dict) else {}
+        status = str(graphics.get("status_name") or "").replace("-", "_").upper()
+        phase = str(graphics.get("session_phase") or "").replace("-", "_").upper()
+        if status in {"AC_PAUSE", "AC_LOADING", "AC_REPLAY", "AC_RESTART"}:
+            return False
+        if phase in {
+            "ENDED",
+            "WAITING_FOR_PITBOX",
+            "WAITING_FOR_PIT_BOX",
+            "PAUSE",
+            "PAUSED",
+            "LOADING",
+        }:
+            return False
+        return status == "AC_LIVE" or phase in {"PRACTICE", "QUALIFY", "QUALIFYING", "RACE", "SESSION"}
+
+    def _update_origin_status(self, frame: FrameData, origin_ready: bool) -> None:
+        """Maintain cumulative/consecutive origin rejection state."""
+        if origin_ready:
+            self._origin_rejection_streak = 0
+            if self._origin_warning_emitted:
+                self._origin_warning_emitted = False
+                self._emit_origin_status("recovered")
+            return
+
+        self._origin_rejection_count += 1
+        # A graphics phase can remain live while the parser has ended or has
+        # not yet established ownership.  Only warn for an owned session.
+        if not self._session_manager.get_active_session_id() or not self._frame_is_active(frame):
+            self._origin_rejection_streak = 0
+            return
+
+        self._origin_rejection_streak += 1
+        if self._origin_rejection_streak >= 10 and not self._origin_warning_emitted:
+            self._origin_warning_emitted = True
+            self._emit_origin_status("warning")
 
     def get_frame_count(self) -> int:
         """Get number of captured frames."""
@@ -646,6 +850,8 @@ class TelemetryCapture:
             "manual",
             "session_end",
             "session_restart",
+            "session_rollover",
+            "car_removed",
             "disabled",
             "app_close",
         }
@@ -679,6 +885,7 @@ class TelemetryCapture:
     def _capture_frame(self, frame_num: int) -> FrameData:
         """Capture a single frame from shared memory."""
         self._last_sample_had_data = False
+        origin_stable_before = self._capture_origin_ready()
         frame: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "frame_number": frame_num,
@@ -755,13 +962,62 @@ class TelemetryCapture:
             # A failed full decode must not disable the validity-only path.
             self._session_manager.update_from_graphics_shm(graphics_peek)
 
+        # Graphics is the origin detector and must always flow through the
+        # manager.  Static/physics from a transition frame can still belong to
+        # the outgoing car, so accept them only when ownership was stable on
+        # both sides of the graphics update.
+        origin_stable_after_graphics = self._capture_origin_ready()
+        if origin_stable_after_graphics:
+            self._confirm_capture_origin(self._get_manager_origin())
+        expected_origin = self._get_manager_origin()
+        origin_stable = (
+            origin_stable_before
+            and origin_stable_after_graphics
+            and expected_origin is not None
+        )
+
         static_data = frame.get("static") or {}
-        if isinstance(static_data, dict) and not static_data.get("error"):
-            self._session_manager.update_from_static_shm(static_data)
+        static_applied = True
+        if (
+            origin_stable
+            and isinstance(static_data, dict)
+            and not static_data.get("error")
+        ):
+            static_applied = self._session_manager.update_from_static_shm(
+                static_data,
+                expected_origin=expected_origin,
+            )
+            static_track = static_data.get("track")
+            if (
+                static_applied
+                and self._capture_track_name is None
+                and isinstance(static_track, str)
+                and static_track.strip()
+                and static_track.casefold() != "unknown"
+            ):
+                self._capture_track_name = static_track
 
         physics_data = frame.get("physics") or {}
-        if isinstance(physics_data, dict) and not physics_data.get("error"):
-            self._session_manager.update_from_physics_shm(physics_data)
+        physics_applied = True
+        if (
+            origin_stable
+            and static_applied
+            and isinstance(physics_data, dict)
+            and not physics_data.get("error")
+        ):
+            physics_applied = self._session_manager.update_from_physics_shm(
+                physics_data,
+                expected_origin=expected_origin,
+            )
+
+        final_origin = self._get_manager_origin()
+        origin_stable = (
+            origin_stable
+            and static_applied
+            and physics_applied
+            and final_origin == expected_origin
+        )
+        self._last_frame_origin_stable = origin_stable
 
         # Raw hex blobs are only needed for the debug dump paths
         # (save_raw_dump / export_to_jsonl), which are gated on _debug_logs.
@@ -771,6 +1027,13 @@ class TelemetryCapture:
             frame["physics_raw"] = None
             frame["graphics_raw"] = None
             frame["static_raw"] = None
+
+        origin = self._get_manager_origin()
+        if origin is not None:
+            frame["origin_epoch"] = origin.epoch
+            frame["session_id"] = origin.session_id
+            frame["car_model"] = origin.graphics_car_model
+            frame["car_uuid"] = origin.car_uuid
 
         # The caller decides whether to retain this transient frame. In
         # validity-only mode it is discarded after updating shared state.
@@ -812,6 +1075,20 @@ class TelemetryCapture:
             log_info(Component.TELEMETRY, "Game not running yet - will retry in capture loop")
 
         self._running = True
+        self._capture_generation += 1
+        self._capture_id = uuid.uuid4().hex
+        self._capture_origin = self._get_manager_origin()
+        session_metadata = self._session_manager.get_session_metadata_data()
+        track_name = getattr(session_metadata, "track", None)
+        self._capture_track_name = (
+            track_name
+            if self._capture_origin is not None
+            and self._capture_origin.session_id is not None
+            and isinstance(track_name, str)
+            and track_name.strip()
+            and track_name.casefold() != "unknown"
+            else None
+        )
         self._frames = []
         self._lap_boundaries = []
         self._recording_awaiting_boundary = self._record_frames
@@ -823,6 +1100,9 @@ class TelemetryCapture:
         self._stop_reason = None
         self._all_disconnected_since = None
         self._idle_since = None
+        self._origin_rejection_count = 0
+        self._origin_rejection_streak = 0
+        self._origin_warning_emitted = False
 
         # Start the capture loop task
         self._task = asyncio.create_task(self._capture_loop_wrapper())
@@ -946,9 +1226,61 @@ class TelemetryCapture:
                 frame = self._capture_frame(frame_num)
                 if self._last_sample_had_data:
                     self._last_valid_frame_time = now_mono
-                    self._start_recording_at_timing_boundary(frame)
-                    if self._record_frames and not self._recording_awaiting_boundary:
-                        self._frames.append(frame)
+                    origin_ready = (
+                        self._last_frame_origin_stable
+                        and self._capture_origin_ready()
+                    )
+                    self._update_origin_status(frame, origin_ready)
+                    if not origin_ready:
+                        if self._origin_rejection_count in (1, 10):
+                            frozen_origin = self._capture_origin
+                            current_origin = self._get_manager_origin()
+                            rejection_log = (
+                                log_debug
+                                if self._origin_rejection_count == 1
+                                else log_warning
+                            )
+                            rejection_log(
+                                Component.TELEMETRY,
+                                "Capture frame rejected: origin mismatch",
+                                rejection_count=self._origin_rejection_count,
+                                frozen_epoch=(
+                                    frozen_origin.epoch if frozen_origin is not None else None
+                                ),
+                                frozen_session=(
+                                    frozen_origin.session_id if frozen_origin is not None else None
+                                ),
+                                frozen_car=(
+                                    frozen_origin.graphics_car_model
+                                    if frozen_origin is not None
+                                    else None
+                                ),
+                                current_epoch=(
+                                    current_origin.epoch if current_origin is not None else None
+                                ),
+                                current_session=(
+                                    current_origin.session_id if current_origin is not None else None
+                                ),
+                                current_car=(
+                                    current_origin.graphics_car_model
+                                    if current_origin is not None
+                                    else None
+                                ),
+                                frozen_graphics_ready=(
+                                    frozen_origin.graphics_ready
+                                    if frozen_origin is not None
+                                    else None
+                                ),
+                                current_graphics_ready=(
+                                    current_origin.graphics_ready
+                                    if current_origin is not None
+                                    else None
+                                ),
+                            )
+                    if origin_ready:
+                        self._start_recording_at_timing_boundary(frame)
+                        if self._record_frames and not self._recording_awaiting_boundary:
+                            self._frames.append(frame)
                     frame_num += 1
                     self._all_disconnected_since = None
 
@@ -956,7 +1288,11 @@ class TelemetryCapture:
                     # started. Validity-only capture must remain available for
                     # the lifetime of ACE, and an armed recorder may sit in the
                     # pits for several minutes before its clean start boundary.
-                    if self._record_frames and not self._recording_awaiting_boundary:
+                    if (
+                        origin_ready
+                        and self._record_frames
+                        and not self._recording_awaiting_boundary
+                    ):
                         physics = frame.physics if frame.physics else {}
                         speed_kmh = physics.get("speed_kmh", 0) if isinstance(physics, dict) else 0
                         if speed_kmh < 1.0:
@@ -985,7 +1321,13 @@ class TelemetryCapture:
                         log_info(Component.TELEMETRY, f"First frame captured - {mode_label}")
                 if frame_num % int(self._hz * 5) == 0 and frame_num > 0:
                     if frame_num % int(self._hz * 30) == 0:  # Log every 30 seconds at 10Hz
-                        log_info(Component.TELEMETRY, "Capture progress", frames=frame_num)
+                        log_info(
+                            Component.TELEMETRY,
+                            "Capture progress",
+                            sampled_frames=frame_num,
+                            retained_frames=len(self._frames),
+                            origin_rejections=self._origin_rejection_count,
+                        )
 
                 next_deadline += self._interval
                 sleep_for = next_deadline - time.perf_counter()
@@ -1002,6 +1344,12 @@ class TelemetryCapture:
         # Loop exited - perform cleanup
         log_info(Component.TELEMETRY, "Capture loop ended", reason=self._stop_reason or "manual_stop")
         self._running = False
+        # Invalidate any origin callbacks queued just before an automatic
+        # disconnect/heartbeat stop so they cannot overwrite the final UI
+        # state or a replacement capture's status.
+        self._capture_generation += 1
+        self._origin_rejection_streak = 0
+        self._origin_warning_emitted = False
 
         self._close_readers()
 
@@ -1047,6 +1395,9 @@ class TelemetryCapture:
         log_info(Component.TELEMETRY, "Capture stopped", reason=reason, frames=len(self._frames))
         self._stop_reason = reason
         self._running = False
+        self._capture_generation += 1
+        self._origin_rejection_streak = 0
+        self._origin_warning_emitted = False
 
         # Wait for the capture loop task to finish if it exists
         if self._task and not self._task.done():
