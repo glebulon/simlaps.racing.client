@@ -454,25 +454,108 @@ class TestAPIClientAdvanced:
         assert client.server_url == "https://newserver.example.com"
 
     def test_normalize_track_id_basic(self):
-        """Test track ID normalization."""
+        """Known track names resolve to the canonical catalog key."""
         client = APIClient()
 
         result = client._normalize_track_id("Spa Francorchamps")
-        assert result == "spa_francorchamps"
+        assert result == "circuit_de_spa_francorchamps"
 
     def test_normalize_track_id_with_suffix(self):
-        """Test track ID normalization with suffix removal."""
+        """Session-type suffixes are stripped before catalog resolution."""
         client = APIClient()
 
         result = client._normalize_track_id("Spa Francorchamps GP")
-        assert result == "spa_francorchamps"
+        assert result == "circuit_de_spa_francorchamps"
 
     def test_normalize_track_id_with_prefix(self):
-        """Test track ID normalization with prefix removal."""
+        """Prefixed display names resolve to the canonical catalog key."""
         client = APIClient()
 
         result = client._normalize_track_id("Circuit de Spa Francorchamps")
-        assert "spa" in result
+        assert result == "circuit_de_spa_francorchamps"
+
+    def test_normalize_track_id_all_source_variants_resolve_identically(self):
+        """Every raw source variant must produce the same canonical ID."""
+        client = APIClient()
+
+        for raw in (
+            "circuit_de_spa_francorchamps",  # SHM static / content folder
+            "Circuit de Spa Francorchamps",  # log TRACK NAME
+            "Circuit de Spa-Francorchamps",  # hyphenated display name
+            "Spa-Francorchamps",
+            "spa_francorchamps",
+            "Spa Francorchamps Race",
+        ):
+            assert client._normalize_track_id(raw) == "circuit_de_spa_francorchamps"
+
+    def test_normalize_track_id_unknown_track_falls_back_to_slug(self):
+        """Unknown tracks get a deterministic slug, never a wrong catalog key."""
+        client = APIClient()
+
+        assert client._normalize_track_id("Some Unknown Track Race") == "some_unknown_track"
+        # Must not fuzzy-match onto 'spa' despite the shared prefix.
+        assert client._normalize_track_id("Spainville Circuit") == "spainville_circuit"
+
+    # Server-canonical track IDs — the database is authoritative and these
+    # must round-trip unchanged through _normalize_track_id.
+    DB_TRACK_IDS = [
+        "brands_hatch",
+        "brands_hatch_indy",
+        "circuit_de_spa_francorchamps",
+        "circuit_of_the_americas",
+        "circuit_of_the_americas_national",
+        "donington_park",
+        "donington_park_national",
+        "fuji_speedway",
+        "fuji_speedway_gp_short",
+        "imola",
+        "kyalami",
+        "laguna_seca",
+        "monza",
+        "mount_panorama",
+        "nurburgring_24h",
+        "nurburgring_gp_strecke",
+        "nurburgring_nordschleife",
+        "nurburgring_sprint",
+        "nurburgring_touristenfahrten",
+        "oulton_park_fosters",
+        "oulton_park_international",
+        "paul_ricard_layout_1a_v2",
+        "paul_ricard_layout_1c_v2",
+        "paul_ricard_layout_3a",
+        "paul_ricard_layout_3c",
+        "red_bull_ring",
+        "red_bull_ring_national",
+        "road_atlanta",
+        "sebring_international_raceway",
+        "suzuka",
+        "suzuka_east",
+        "suzuka_west",
+        "watkins_glen_international",
+        "watkins_glen_international_gp_inner_loop",
+        "watkins_glen_international_short",
+        "watkins_glen_international_short_inner_loop",
+    ]
+
+    @pytest.mark.parametrize("track_id", DB_TRACK_IDS)
+    def test_normalize_track_id_db_names_round_trip(self, track_id):
+        """Every server track ID must normalize to itself."""
+        client = APIClient()
+        assert client._normalize_track_id(track_id) == track_id
+
+    def test_normalize_track_id_nurburgring_gp_maps_to_gp_strecke(self):
+        """Catalog key 'nurburgring_gp' is 'nurburgring_gp_strecke' server-side."""
+        client = APIClient()
+        assert client._normalize_track_id("nurburgring_gp") == "nurburgring_gp_strecke"
+        assert client._normalize_track_id("Nurburgring GP") == "nurburgring_gp_strecke"
+
+    def test_normalize_track_id_truncated_watkins_glen(self):
+        """SHM-truncated 'watkins_glen_internati' resolves to the full ID."""
+        client = APIClient()
+        assert (
+            client._normalize_track_id("watkins_glen_internati")
+            == "watkins_glen_international"
+        )
 
     @pytest.mark.asyncio
     @patch("httpx.AsyncClient.get")

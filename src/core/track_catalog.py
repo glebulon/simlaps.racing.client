@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from importlib import resources
 from pathlib import Path
 from typing import Optional
@@ -160,6 +161,31 @@ def select_track_profile(
                 return track_key, build_track_profile(track_key, track["default_config"])
 
     return None, None
+
+
+def track_slug(name: Optional[str]) -> str:
+    """Deterministic slug: lowercase, any non-alphanumeric run -> '_'."""
+    return re.sub(r"[^a-z0-9]+", "_", (name or "").lower()).strip("_")
+
+
+def resolve_track_key(track_name: Optional[str]) -> Optional[str]:
+    """Resolve a raw track name to a canonical catalog key.
+
+    Exact matching only after slug normalization (spaces, underscores and
+    hyphens all collapse to '_'), so 'Spa-Francorchamps', 'spa francorchamps'
+    and 'circuit_de_spa_francorchamps' all resolve to the same key.
+    Unlike ``find_track_by_name`` there is no prefix fuzzy matching, so an
+    unknown track can never collapse onto a catalog entry.
+    """
+    slug = track_slug(track_name)
+    if not slug:
+        return None
+    if slug in TRACK_CATALOG:
+        return slug
+    for track_key, track in TRACK_CATALOG.items():
+        if slug in {track_slug(alias) for alias in track.get("aliases", [])}:
+            return track_key
+    return None
 
 
 def find_track_by_name(track_name: str) -> tuple:
