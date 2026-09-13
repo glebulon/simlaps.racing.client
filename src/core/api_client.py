@@ -23,6 +23,7 @@ from .security import (
     sign_payload,
     verify_signature_locally,
 )
+from .track_catalog import resolve_track_key, track_slug
 
 
 class SubmissionStatus(Enum):
@@ -504,36 +505,69 @@ class APIClient:
             message=f"Server error: {response.status_code}",
         )
 
+    # Session-type words the game appends to track descriptions. Stripped
+    # before the catalog retry so e.g. "Spa Francorchamps Race" still
+    # resolves to the canonical key. Longest first.
+    _SESSION_SUFFIXES = (
+        "_time_attack_practice",
+        "_time_attack",
+        "_race_race",
+        "_race",
+        "_practice",
+        "_qualifying",
+        "_qualify",
+        "_hotlap",
+        "_drift",
+        "_gp",
+    )
+
+    # Server-canonical track IDs that differ from local catalog keys/aliases.
+    # The database is authoritative for trackId: the catalog is a telemetry
+    # corner-profile index whose keys and aliases do not always match the
+    # server's distinct track IDs (e.g. catalog key "nurburgring_gp" is
+    # "nurburgring_gp_strecke" server-side, and "nurburgring_24h" is a
+    # nordschleife alias locally but a separate track server-side).
+    _TRACK_ID_OVERRIDES = {
+        "nurburgring_gp": "nurburgring_gp_strecke",
+        "nurburgring_gp_strecke": "nurburgring_gp_strecke",
+        "nurburgring_24h": "nurburgring_24h",
+        "nurburgring_sprint": "nurburgring_sprint",
+        "nurburgring_touristenfahrten": "nurburgring_touristenfahrten",
+        "donington_park": "donington_park",
+        "red_bull_ring_national": "red_bull_ring_national",
+    }
+
     def _normalize_track_id(self, track_name: str) -> str:
+        """Normalize a raw track name to the canonical server track ID.
+
+        Resolution order:
+          1. Server-ID override (DB-authoritative names that differ from
+             catalog keys/aliases).
+          2. Exact catalog key/alias match -> canonical key, so
+             "Spa-Francorchamps", "spa_francorchamps" and
+             "Circuit de Spa Francorchamps" all become
+             "circuit_de_spa_francorchamps".
+          3. Session-type suffix stripped, override + catalog retried.
+          4. Deterministic slug fallback for unknown tracks.
         """
-        Normalize track name to ID format.
+        slug = track_slug(track_name)
+        if slug in self._TRACK_ID_OVERRIDES:
+            return self._TRACK_ID_OVERRIDES[slug]
 
-        Args:
-            track_name: Track name from log
+        key = resolve_track_key(track_name)
+        if key:
+            return self._TRACK_ID_OVERRIDES.get(key, key)
 
-        Returns:
-            Normalized track ID
-        """
-        # Remove common suffixes and prefixes
-        track_id = track_name.lower()
-
-        # Remove layout suffixes
-        for suffix in [" gp", " time attack practice", " practice", " race", " qualify"]:
-            if track_id.endswith(suffix):
-                track_id = track_id[: -len(suffix)]
-
-        # Remove common prefixes
-        for prefix in ["circuit de ", "circuit ", "autodromo ", "autódromo "]:
-            if track_id.startswith(prefix):
-                track_id = track_id[len(prefix) :]
-
-        # Replace spaces with underscores
-        track_id = track_id.replace(" ", "_")
-
-        # Remove special characters
-        track_id = "".join(c for c in track_id if c.isalnum() or c == "_")
-
-        return track_id
+        for suffix in self._SESSION_SUFFIXES:
+            if slug.endswith(suffix):
+                slug = slug[: -len(suffix)]
+                break
+        if slug in self._TRACK_ID_OVERRIDES:
+            return self._TRACK_ID_OVERRIDES[slug]
+        stripped_key = resolve_track_key(slug)
+        if stripped_key:
+            return self._TRACK_ID_OVERRIDES.get(stripped_key, stripped_key)
+        return slug
 
     async def test_connection(self) -> tuple[bool, str]:
         """
