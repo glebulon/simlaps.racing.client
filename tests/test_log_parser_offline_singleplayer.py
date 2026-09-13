@@ -112,3 +112,135 @@ class TestOfflineSinglePlayerFallbackSession:
         parser = LogParser()
         parser._process_line(SPLIT_START)
         assert parser.current_session is None
+
+
+GAME_STARTED_BRANDS = (
+    "[2026-09-12 00:00:00.000] [gameplay] [info] Game Started! "
+    "GameModeType_PRACTICE | Brands Hatch Practice  1080 seconds "
+    "@2014/8/15 10:45:0 | ks_bmw_m4_gt3 | GameModeSelectionWeatherType_CLEAR "
+    "| 0 opponents | AssistPresetListType_CUSTOM"
+)
+TRACK_NAME_SAME = (
+    "[2026-09-12 00:01:00.000] [gameface] [info] TRACK NAME brands hatch"
+)
+TRACK_NAME_INDY = (
+    "[2026-09-12 00:30:00.000] [gameface] [info] TRACK NAME brands hatch indy"
+)
+CAR_UUID_B_DASHED = "aaaaaaaa-1111-2222-3333-444444444444"
+CAR_UUID_B_RUNTIME = "aaaaaaaa11112222-3333444444444444"
+SET_NEW_CAR_B = (
+    "[2026-09-12 00:30:05.000] [gameplay] [info] ACEVO-2629 "
+    "onSetPlayerCurrentCarCommand: Set new car "
+    f"{CAR_UUID_B_DASHED} content\\cars\\ks_mercedes_amg_gt2\\presets\\x"
+)
+CREATING_CAR_B = (
+    "[2026-09-12 00:30:06.000] [server] [info] [C:4|G:0] "
+    f"[ServerVehicleSystem][{CAR_UUID_B_RUNTIME}] Creating Car "
+    f"(Glebulon  \t{STEAM_ID})"
+)
+EXIT_REQUEST = (
+    "[2026-09-12 00:29:00.000] [gameface] [info] request made "
+    "GameModeRequestExit"
+)
+RESTART_REQUEST = (
+    "[2026-09-12 00:20:00.000] [gameface] [info] request made "
+    "GameModeRequestRestartSession"
+)
+
+
+def _parser_with_recorded_lap() -> LogParser:
+    """Parser with an open Brands Hatch session holding one completed lap."""
+    parser = LogParser()
+    parser._process_line(GAME_STARTED_BRANDS)
+    parser._process_line(SET_NEW_CAR)
+    parser._process_line(CREATING_CAR)
+    parser._process_line(SPLIT_START)
+    parser._process_line(SPLIT_MID)
+    parser._process_line(PHYSICS_LAP)
+    parser._process_line(NEW_LAP)
+    return parser
+
+
+class TestInferredSessionBoundary:
+    """When the game skips the exit markers, a changed TRACK NAME or player
+    car must finalise the old session rather than rewrite its identity."""
+
+    def test_track_name_change_finalises_open_session(self):
+        parser = _parser_with_recorded_lap()
+        assert parser.current_session is not None
+
+        parser._process_line(TRACK_NAME_INDY)
+
+        # Old session closed with its true identity; the lap stays on it.
+        assert parser.current_session is None
+        assert len(parser.sessions) == 1
+        assert parser.sessions[0].track == "Brands Hatch"
+        assert parser.sessions[0].car == "ks_alpine_a110_s"
+        assert parser.sessions[0].laps
+
+        # The fallback creator was re-armed: driving on the new track starts
+        # a fresh session carrying the new track name.
+        parser._process_line(SPLIT_START)
+        assert parser.current_session is not None
+        assert parser.current_session.track == "brands hatch indy"
+
+    def test_same_track_name_does_not_finalise(self):
+        """TRACK NAME for the same track (different casing/format) must not
+        split the session."""
+        parser = _parser_with_recorded_lap()
+        session = parser.current_session
+
+        parser._process_line(TRACK_NAME_SAME)
+
+        assert parser.current_session is session
+        assert parser.sessions == []
+
+    def test_car_change_finalises_open_session(self):
+        parser = _parser_with_recorded_lap()
+
+        parser._process_line(SET_NEW_CAR_B)
+
+        assert parser.current_session is None
+        assert len(parser.sessions) == 1
+        assert parser.sessions[0].car == "ks_alpine_a110_s"
+
+        parser._process_line(CREATING_CAR_B)
+        assert parser.context.car_uuid == CAR_UUID_B_RUNTIME
+
+        parser._process_line(SPLIT_START)
+        assert parser.current_session is not None
+        assert parser.current_session.car == "ks_mercedes_amg_gt2"
+
+    def test_empty_session_renamed_without_boundary(self):
+        """A session with no recorded content is simply re-identified."""
+        parser = LogParser()
+        parser._process_line(GAME_STARTED_BRANDS)
+        session = parser.current_session
+
+        parser._process_line(TRACK_NAME_INDY)
+
+        assert parser.current_session is session
+        assert session.track == "brands hatch indy"
+
+    def test_exit_request_finalises_session(self):
+        """GameModeRequestExit is honored inside _process_line so the
+        historical pass closes the session too."""
+        parser = _parser_with_recorded_lap()
+
+        parser._process_line(EXIT_REQUEST)
+
+        assert parser.current_session is None
+        assert len(parser.sessions) == 1
+        assert parser.sessions[0].laps
+
+    def test_restart_request_starts_fresh_session(self):
+        """GameModeRequestRestartSession inside _process_line finalises the
+        old session and opens a fresh one of the same type."""
+        parser = _parser_with_recorded_lap()
+
+        parser._process_line(RESTART_REQUEST)
+
+        assert len(parser.sessions) == 1
+        assert parser.current_session is not None
+        assert parser.current_session.laps == []
+        assert parser.current_session.session_type == "PRACTICE"

@@ -73,6 +73,12 @@ class LogParser:
     # cut widget shown) and again when the recovery deadline expires
     # (~3-11s later). Events within this window are treated as duplicates.
     PENALTY_ADDED_DEDUP_SECONDS = 15.0
+    # A rejected segment shorter than this is treated as a pit-lane prefix
+    # (car crossed the timing line right after pit exit, e.g. Laguna Seca),
+    # so the following full circuit is still the outlap. A longer rejected
+    # segment was itself a complete circuit — the outlap ended with it and
+    # the next lap is a normal flying lap.
+    OUTLAP_PREFIX_MAX_MS = 60_000
 
     @staticmethod
     def _find_latest_log(log_dir: Path) -> Optional[Path]:
@@ -132,6 +138,10 @@ class LogParser:
         # recover that timed lap without exposing ordinary structural
         # outlaps in the UI.
         self._outlap_candidate_splits: dict[int, int] = {}
+        # Log timestamp of the most recent "Outplap split" marker. Used to
+        # tell a rejected pit-lane prefix (seconds after the marker) apart
+        # from a rejected full outlap circuit (minutes after the marker).
+        self._outlap_marker_ts: Optional[datetime] = None
 
         # Most recently completed lap, buffered until either:
         #   a) the game's authoritative `Relevant onSplit ... valid` line
@@ -220,7 +230,7 @@ class LogParser:
         self._pats: dict[str, re.Pattern] = {
             "version": re.compile(r"Build release ([^,]+),"),
             "track_name_direct": re.compile(r"TRACK NAME (.+)"),
-            "track_load": re.compile(r"Loading (?:scene|Scene) .+ content\\tracks\\([^\\]+)"),
+            "track_load": re.compile(r"Loading (?:scene|Scene) .*content\\tracks\\([^\\]+)"),
             "driver_line": re.compile(r"\tDriver (.+) on car ([\w_]+)"),
             "connect": re.compile(r"(\d+) connected(?: \([^)]+\))? on car ([\w_]+), with new carId ([a-f0-9\-]+)"),
             "connecting_gamecar": re.compile(r"connecting gamecar ([a-f0-9\-]+) \((.+)\)"),
@@ -407,7 +417,66 @@ class LogParser:
     def _reset_in_progress(self) -> None:
         self._ip = InProgressLap()
         self._outlap_candidate_splits = {}
+        self._outlap_marker_ts = None
         self._pending_penalty_warning = False
+
+    def _session_has_content(self) -> bool:
+        """True when the open session already holds recorded driving data."""
+        return bool(
+            self.current_session
+            and (
+                self.current_session.laps
+                or self._pending_lap is not None
+                or self._ip.splits
+                or self._ip.physics_lap_num
+                or self._ip.is_outlap
+            )
+        )
+
+    @staticmethod
+    def _normalize_track_key(name: Optional[str]) -> str:
+        return re.sub(r"[_\s]+", " ", (name or "").strip().lower())
+
+    def _maybe_boundary_for_identity_change(
+        self, *, track: Optional[str] = None, car_uuid: Optional[str] = None
+    ) -> None:
+        """Finalise the open session when its identity changes underneath it.
+
+        ``GameModeRequestExit``/``END_SESSION``/``remove car`` are the explicit
+        session-end markers, but the game does not always emit them when the
+        player leaves a session (e.g. switching track or car via the menu).
+        Without a boundary, the next session's ``TRACK NAME``/``Creating Car``
+        lines would retroactively rewrite the still-open session's identity
+        and attribute its laps to the new track/car. When the incoming
+        identity differs from the open session's and the session already holds
+        recorded content, finalise it first so its laps keep their true
+        attribution. This is additive: it only fires when the explicit
+        markers were missed.
+        """
+        session = self.current_session
+        if session is None or not self._session_has_content():
+            return
+        changed = False
+        if track and session.track and session.track != "Unknown":
+            changed = self._normalize_track_key(track) != self._normalize_track_key(
+                session.track
+            )
+        if not changed and car_uuid and session.car_uuid:
+            changed = self._normalize_car_uuid(car_uuid) != self._normalize_car_uuid(
+                session.car_uuid
+            )
+        if not changed:
+            return
+        log_debug(
+            Component.LOG_PARSER,
+            f"[SESSION] Identity changed under open session "
+            f"(track {session.track!r} -> {track!r}, "
+            f"car {session.car_uuid} -> {car_uuid}) — finalising old session",
+        )
+        self._finalise_current_session()
+        # The boundary was inferred, not explicit: re-arm the fallback session
+        # creator in case the new session never logs 'Game Started!' either.
+        self._seen_explicit_session_marker = False
 
     def _reset_session_boundary(
         self,
@@ -599,6 +668,35 @@ class LogParser:
             except (RuntimeError, asyncio.CancelledError) as exc:
                 log_debug(Component.LOG_PARSER, f"[ERROR] on_session_end: {exc}")
 
+    def _restart_session_in_place(self) -> None:
+        """Start a fresh session for an in-place pause-menu restart.
+
+        AC Evo restarts the same session in place — no new ``Game Started!``
+        line follows — and only logs the tyre compound at the original session
+        start, so the compound is snapshotted before the reset and restored
+        afterwards; otherwise the restarted session's laps show "Unknown".
+        """
+        prior_session_type = None
+        if self.current_session:
+            prior_session_type = self.current_session.session_type
+        # Reset the status dedup guard so the restart can be observed by
+        # downstream consumers (restart does not emit a fresh Game Started).
+        self._last_emitted_game_status = None
+
+        self._flush_pending_compound_batch()
+        preserved_tyre = self.context.tyre.snapshot()
+
+        # Create a new parser session immediately so subsequent player laps are
+        # not dropped while waiting for optional race-start chatter.
+        self._start_new_session(prior_session_type or "UNKNOWN", "")
+        if self.current_session and preserved_tyre.compound_name != "Unknown":
+            self.context.tyre.set_all(preserved_tyre.compound_name)
+            self.current_session.tyre_compound = preserved_tyre.compound_name
+            log_debug(
+                Component.LOG_PARSER,
+                f"[SESSION_RESTART] Preserved tyre compound {preserved_tyre.compound_name} across restart",
+            )
+
     async def _emit_session_restart(self) -> None:
         """Player clicked Restart Session in the pause menu.
 
@@ -607,34 +705,7 @@ class LogParser:
         be told explicitly to clear any in-flight buffer and start fresh.
         """
         log_debug(Component.LOG_PARSER, "[SESSION_RESTART] user requested restart")
-        prior_session_type = None
-        if self.current_session:
-            prior_session_type = self.current_session.session_type
-        # Reset the status dedup guard so the restart can be observed by
-        # downstream consumers (restart does not emit a fresh Game Started).
-        self._last_emitted_game_status = None
-
-        # AC Evo only logs the tyre compound (setCompound / LOADING TYRE
-        # COMPOUND) at the original session start, NOT after an in-place
-        # restart. A pause-menu restart reuses the same car and tyres, so
-        # snapshot the compound before _start_new_session wipes it and restore
-        # it afterwards; otherwise the restarted session's laps show "Unknown".
-        self._flush_pending_compound_batch()
-        preserved_tyre = self.context.tyre.snapshot()
-
-        # AC Evo may restart in-place without a fresh session-start marker.
-        # Create a new parser session immediately so subsequent player laps are
-        # not dropped while waiting for optional race-start chatter.
-        self._start_new_session(prior_session_type or "UNKNOWN", "")
-
-        if preserved_tyre.compound_name != "Unknown":
-            self.context.tyre = preserved_tyre
-            if self.current_session:
-                self.current_session.tyre_compound = preserved_tyre.compound_name
-            log_debug(
-                Component.LOG_PARSER,
-                f"[SESSION_RESTART] Preserved tyre compound {preserved_tyre.compound_name} across restart",
-            )
+        self._restart_session_in_place()
         if self.on_session_restart:
             try:
                 await self.on_session_restart()
@@ -701,6 +772,7 @@ class LogParser:
             m = self._pats["track_name_direct"].search(line)
             if m:
                 name = m.group(1).strip()
+                self._maybe_boundary_for_identity_change(track=name)
                 self.context.current_track = name
                 if self.current_session:
                     self.current_session.track = name
@@ -801,6 +873,7 @@ class LogParser:
         if "onSetPlayerCurrentCarCommand: Set new car " in line:
             m = self._pats["set_player_car"].search(line)
             if m:
+                self._maybe_boundary_for_identity_change(car_uuid=m.group(1))
                 self._pending_set_car_model[self._normalize_car_uuid(m.group(1))] = m.group(2)
             return
 
@@ -817,6 +890,7 @@ class LogParser:
         if self._is_steam_id(self.context.player_id or "") and pid != self.context.player_id:
             return
 
+        self._maybe_boundary_for_identity_change(car_uuid=car_uuid)
         self.context.player_id = pid
         if player_name:
             self.context.player_name = player_name
@@ -1327,6 +1401,14 @@ class LogParser:
         if "Outplap split" in line:
             if self.current_session and self.current_session.session_type in PRACTICE_LIKE:
                 self._ip.is_outlap = True
+                tm = self._pats["date"].match(line)
+                if tm:
+                    try:
+                        self._outlap_marker_ts = datetime.strptime(
+                            tm.group(1), "%Y-%m-%d %H:%M:%S"
+                        )
+                    except ValueError:
+                        pass
                 log_debug(Component.LOG_PARSER, "[OUTLAP] Outplap split detected")
             else:
                 log_debug(
@@ -1341,8 +1423,44 @@ class LogParser:
                 and self.current_session is not None
                 and self.current_session.session_type in PRACTICE_LIKE
             )
+            marker_ts = self._outlap_marker_ts
+            if preserve_outlap:
+                # Only a short pit-lane prefix keeps the outlap flag. When the
+                # rejected segment was itself a full circuit — minutes elapsed
+                # since the marker, or a long recorded sector time — the
+                # outlap just ended and the next lap is a normal flying lap.
+                segment_ms = 0
+                tm = self._pats["date"].match(line)
+                if marker_ts is not None and tm:
+                    try:
+                        segment_ms = int(
+                            (
+                                datetime.strptime(tm.group(1), "%Y-%m-%d %H:%M:%S")
+                                - marker_ts
+                            ).total_seconds()
+                            * 1000
+                        )
+                    except ValueError:
+                        segment_ms = 0
+                if segment_ms <= 0:
+                    segment_ms = max(
+                        (
+                            *self._outlap_candidate_splits.values(),
+                            *self._ip.splits.values(),
+                        ),
+                        default=0,
+                    )
+                if segment_ms >= self.OUTLAP_PREFIX_MAX_MS:
+                    preserve_outlap = False
+                    log_debug(
+                        Component.LOG_PARSER,
+                        f"[OUTLAP] Rejected segment was a full circuit "
+                        f"({segment_ms} ms) — outlap ends here",
+                    )
             self._reset_in_progress()
             self._ip.is_outlap = preserve_outlap
+            if preserve_outlap:
+                self._outlap_marker_ts = marker_ts
 
     def _handle_physics_lap(self, line: str) -> None:
         if "Lap test evOnLapCompleted" not in line:
@@ -1682,9 +1800,11 @@ class LogParser:
         pending.lap_number = game_lap_number
         prev_state = pending.lap_state
 
-        if prev_state == LapState.OUTLAP:
+        if prev_state == LapState.OUTLAP and not game_valid:
             # OUTLAP is a structural classification, not a validity verdict.
-            # The game flag doesn't change it into a valid lap.
+            # An invalid flag doesn't change it — but a valid one does:
+            # tourist layouts (e.g. Nordschleife) time the first circuit
+            # after pit exit as a real lap.
             pass
         elif game_valid:
             if pending.lap_state != LapState.VALID or not pending.is_valid:
@@ -2154,6 +2274,22 @@ class LogParser:
         """Handle session start/end detection. Returns True if a new session started."""
         if self._handle_session_start(line):
             return True
+        if "request made GameModeRequestRestartSession" in line:
+            # Live tail pre-handles this via _emit_session_restart, which leaves
+            # a fresh empty session — the content guard makes this a no-op
+            # there. This covers the historical pass.
+            if self._session_has_content():
+                self._restart_session_in_place()
+            return False
+        if (
+            "request made GameModeRequestExit" in line
+            or "request made GameModeRequestQuitGame" in line
+        ):
+            # Live tail pre-handles this (flush + emit + finalise + status);
+            # current_session is already None there, so this is a no-op in
+            # live and only acts during the historical pass.
+            self._finalise_current_session()
+            return False
         if "END_SESSION" in line and self.context.car_uuid:
             if self.context.car_uuid in line:
                 log_debug(Component.LOG_PARSER, "[SESSION] END_SESSION for player car — finalising")
