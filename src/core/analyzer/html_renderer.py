@@ -23,6 +23,85 @@ def _escape_json_for_script(data_json: str) -> str:
     return data_json.replace("<", r"\u003c").replace(">", r"\u003e").replace("&", r"\u0026")
 
 
+def _trace_axis(laps: List[Dict], hz: float) -> Dict[str, Any]:
+    """Choose one coordinate system for all raw telemetry traces."""
+    hz_value = float(hz)
+    use_progress = True
+    max_elapsed = 0.0
+    for lap in laps:
+        points = lap.get("track") or []
+        values = []
+        previous = None
+        previous_frame = None
+        for point in points:
+            value = _optional_float(point.get("norm_pos"))
+            frame = _optional_float(point.get("frame"))
+            if (
+                not point.get("has_authoritative_progress")
+                or value is None
+                or value < 0.0
+                or value > 1.0
+                or frame is None
+            ):
+                use_progress = False
+            if previous is not None and value is not None and value < previous:
+                use_progress = False
+            if previous_frame is not None and frame is not None:
+                if frame < previous_frame:
+                    use_progress = False
+            values.append(value)
+            previous = value
+            previous_frame = frame
+            if frame is not None:
+                elapsed = (frame - lap["start_frame"]) / hz_value
+                max_elapsed = max(max_elapsed, elapsed)
+        if len(points) < 2 or len({value for value in values if value is not None}) < 2:
+            use_progress = False
+
+    if use_progress:
+        return {"mode": "progress", "label": "Lap progress (%)", "max": 100.0}
+    return {
+        "mode": "elapsed",
+        "label": "Elapsed time (s)",
+        "max": max(max_elapsed, 1.0),
+    }
+
+
+def _trace_x(point: Dict, lap: Dict, axis: Dict[str, Any], hz: float) -> Optional[float]:
+    if axis["mode"] == "progress":
+        value = _optional_float(point.get("norm_pos"))
+        return value * 100.0 if value is not None else None
+    frame = _optional_float(point.get("frame"))
+    if frame is None:
+        return None
+    return (frame - lap["start_frame"]) / float(hz)
+
+
+def _interpolate_trace_x(
+    points: List[Dict], lap: Dict, frame_target: Any, axis: Dict[str, Any], hz: float
+) -> Optional[float]:
+    target = _optional_float(frame_target)
+    if target is None:
+        return None
+    previous_frame = None
+    previous_x = None
+    for point in points:
+        frame = _optional_float(point.get("frame"))
+        x_value = _trace_x(point, lap, axis, hz)
+        if frame is None or x_value is None:
+            return None
+        if previous_frame is not None and (frame < previous_frame or x_value < previous_x):
+            return None
+        if frame == target:
+            return x_value
+        if previous_frame is not None and previous_frame < target < frame and frame > previous_frame:
+            ratio = (target - previous_frame) / (frame - previous_frame)
+            return previous_x + ratio * (x_value - previous_x)
+        previous_frame = frame
+        previous_x = x_value
+    return None
+
+
 async def render_html(
     data: Dict[str, Any],
     output_dir: str,
@@ -34,50 +113,65 @@ async def render_html(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    trace_axis = _trace_axis(data["laps"], data["hz"])
     laps_json: List[Dict] = []
     for lap in data["laps"]:
-        render_track = lap.get("canonical_track") or lap["track"]
+        raw_track = lap["track"]
+        render_track = lap.get("canonical_track") or raw_track
+
         track_slim = [
             {
-                "frame": pt["frame"],
-                "x": round(_optional_float(pt.get("x")) or 0.0, 2),
-                "z": round(_optional_float(pt.get("z")) or 0.0, 2),
-                "speed": round(_optional_float(pt.get("speed")) or 0.0, 1),
-                "brake": round(_optional_float(pt.get("brake")) or 0.0, 3),
-                "gas": round(_optional_float(pt.get("gas")) or 0.0, 3),
-                "gear": pt["gear"],
-                "steer": round(_optional_float(pt.get("steer")) or 0.0, 6),
-                "yaw_rate": round(_optional_float(pt.get("yaw_rate")) or 0.0, 6),
-                "acc_g_x": round(_optional_float(pt.get("acc_g_x")) or 0.0, 6),
-                "acc_g_z": round(_optional_float(pt.get("acc_g_z")) or 0.0, 6),
-                "brake_temp_fl": round(_optional_float(pt.get("brake_temp_fl")) or 0.0, 2),
-                "brake_temp_fr": round(_optional_float(pt.get("brake_temp_fr")) or 0.0, 2),
-                "brake_temp_rl": round(_optional_float(pt.get("brake_temp_rl")) or 0.0, 2),
-                "brake_temp_rr": round(_optional_float(pt.get("brake_temp_rr")) or 0.0, 2),
+                "frame": point["frame"],
+                "x": round(_optional_float(point.get("x")) or 0.0, 2),
+                "z": round(_optional_float(point.get("z")) or 0.0, 2),
+                "speed": round(_optional_float(point.get("speed")) or 0.0, 1),
+                "brake": round(_optional_float(point.get("brake")) or 0.0, 3),
+                "gas": round(_optional_float(point.get("gas")) or 0.0, 3),
             }
-            for pt in render_track
+            for point in render_track
         ]
-        corners_json = [
+        trace_slim = [
             {
-                "id": c["id"],
-                "name": c.get("name"),
-                "start_frame": c["start_frame"],
-                "end_frame": c["end_frame"],
-                "apex_frame": c["apex_frame"],
-                "apex_speed": round(c["apex_speed"], 1),
-                "entry_speed": round(c["entry_speed"], 1),
-                "exit_speed": round(c["exit_speed"], 1),
-                "apex_x": round(c["apex_x"], 1),
-                "apex_z": round(c["apex_z"], 1),
-                "lap_pos": round(c["lap_pos"], 4),
+                "trace_x": round(_trace_x(point, lap, trace_axis, data["hz"]), 6),
+                "speed": round(_optional_float(point.get("speed")) or 0.0, 1),
+                "brake": round(_optional_float(point.get("brake")) or 0.0, 3),
+                "gas": round(_optional_float(point.get("gas")) or 0.0, 3),
+                "gear": point["gear"],
+                "steer": round(_optional_float(point.get("steer")) or 0.0, 6),
+                "yaw_rate": round(_optional_float(point.get("yaw_rate")) or 0.0, 6),
+                "acc_g_x": round(_optional_float(point.get("acc_g_x")) or 0.0, 6),
+                "acc_g_z": round(_optional_float(point.get("acc_g_z")) or 0.0, 6),
+                "brake_temp_fl": round(_optional_float(point.get("brake_temp_fl")) or 0.0, 2),
+                "brake_temp_fr": round(_optional_float(point.get("brake_temp_fr")) or 0.0, 2),
+                "brake_temp_rl": round(_optional_float(point.get("brake_temp_rl")) or 0.0, 2),
+                "brake_temp_rr": round(_optional_float(point.get("brake_temp_rr")) or 0.0, 2),
             }
-            for c in lap["corners"]
+            for point in raw_track
         ]
+        corners_json = []
+        for corner in lap["corners"]:
+            apex_x = _optional_float(corner.get("apex_x"))
+            apex_z = _optional_float(corner.get("apex_z"))
+            corners_json.append(
+                {
+                    "id": corner["id"],
+                    "name": corner.get("name"),
+                    "apex_frame": corner["apex_frame"],
+                    # Preserve analyzer coordinates when they are finite. The
+                    # browser can use these even when the retained map is sparse.
+                    "apex_x": round(apex_x, 1) if apex_x is not None else None,
+                    "apex_z": round(apex_z, 1) if apex_z is not None else None,
+                    "trace_start_x": _interpolate_trace_x(
+                        raw_track, lap, corner["start_frame"], trace_axis, data["hz"]
+                    ),
+                    "trace_end_x": _interpolate_trace_x(
+                        raw_track, lap, corner["end_frame"], trace_axis, data["hz"]
+                    ),
+                }
+            )
         laps_json.append(
             {
                 "lap_num": lap["lap_num"],
-                "start_frame": lap["start_frame"],
-                "end_frame": lap["end_frame"],
                 "lap_time_s": round(lap["lap_time_s"], 3),
                 "lap_time_str": lap["lap_time_str"],
                 "max_speed": round(lap["max_speed"], 1),
@@ -86,6 +180,7 @@ async def render_html(
                 "is_valid": lap.get("is_valid", True),
                 "confidence_label": lap.get("confidence_label"),
                 "track": track_slim,
+                "trace": trace_slim,
                 "corners": corners_json,
             }
         )
@@ -125,6 +220,7 @@ async def render_html(
             "analysis_mode": data.get("analysis_mode"),
             "analysis_confidence": data.get("analysis_confidence"),
             "analysis_notes": data.get("analysis_notes", []),
+            "trace_axis": trace_axis,
             "ref_corners": ref_corners_json,
             "corner_data": corner_data_json,
             "corner_speeds": corner_speeds_json,
@@ -309,6 +405,20 @@ function brakeColor(v) { const r = Math.round(60 + v * 195); return `rgb(${r},${
 function gasColor(v) { const g = Math.round(60 + v * 175); return `rgb(${Math.round(30*(1-v))},${g},${Math.round(30*(1-v))})`; }
 
 const activeLaps = new Set(DATA.laps.map(l => l.lap_num));
+function traceData(lap, value) {
+  return lap.trace.map(pt => ({ x: pt.trace_x, y: value(pt) }));
+}
+function traceScale() {
+  const axis = DATA.trace_axis;
+  return {
+    type: 'linear', min: 0, max: axis.max,
+    title: { display: true, text: axis.label, color: '#6b7280' },
+    grid: { color: '#1e2028' }, ticks: {
+      color: '#6b7280',
+      callback: v => axis.mode === 'progress' ? v + '%' : Number(v).toFixed(1) + 's',
+    },
+  };
+}
 
 function syncFilterButtons() {
   document.querySelectorAll('.lap-btn').forEach(btn => {
@@ -429,8 +539,13 @@ function drawTrackMap() {
     ctx.moveTo(cx(p0.x), cz(p0.z)); ctx.lineTo(cx(p1.x), cz(p1.z)); ctx.stroke();
   }
   window._cornerHits = [];
+  const finiteCoordinate = value => typeof value === 'number' && Number.isFinite(value);
   lap.corners.forEach((c, idx) => {
-    const p = pts.find(pt => pt.frame === c.apex_frame) || pts[0];
+    const apexX = c.apex_x, apexZ = c.apex_z;
+    const p = finiteCoordinate(apexX) && finiteCoordinate(apexZ)
+      ? { x: apexX, z: apexZ }
+      : pts.find(pt => pt.frame === c.apex_frame);
+    if (!p || !finiteCoordinate(p.x) || !finiteCoordinate(p.z)) return;
     const px = cx(p.x), pz = cz(p.z);
     ctx.beginPath(); ctx.arc(px, pz, 6, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
     ctx.fillStyle = '#000'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -462,26 +577,25 @@ function buildSpeedChart() {
   if (speedChart) speedChart.destroy();
   const datasets = DATA.laps.filter(l => activeLaps.has(l.lap_num)).map(lap => ({
     label: `Lap ${lap.lap_num}${lap.lap_num===DATA.best_lap_num?'*':''} (${lap.lap_time_str})`,
-    data: lap.track.map((pt, i) => ({ x: i / Math.max(lap.track.length - 1, 1) * 100, y: pt.speed })),
+    data: traceData(lap, pt => pt.speed),
     borderColor: lapColor(lap.lap_num), backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.3,
   }));
   const annotations = {};
   const bestLap = DATA.laps.find(l => l.lap_num === DATA.best_lap_num) || null;
   if (bestLap) {
     bestLap.corners.forEach(c => {
-      const s = (c.start_frame - bestLap.start_frame) / Math.max(bestLap.track.length - 1, 1) * 100;
-      const e = (c.end_frame - bestLap.start_frame) / Math.max(bestLap.track.length - 1, 1) * 100;
+      if (c.trace_start_x == null || c.trace_end_x == null || c.trace_end_x < c.trace_start_x) return;
       annotations['corner' + c.id] = {
-        type: 'box', xMin: s, xMax: e,
+        type: 'box', xMin: c.trace_start_x, xMax: c.trace_end_x,
         backgroundColor: 'rgba(255,255,255,0.04)', borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
         label: { content: c.name || ('C' + c.id), display: true, color: '#9ca3af', font: { size: 9 } },
       };
     });
   }
   speedChart = new Chart(ctx, { type: 'line', data: { datasets }, options: {
-    responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+    responsive: true, animation: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
     scales: {
-      x: { type: 'linear', min: 0, max: 100, title: { display: true, text: 'Lap progress (%)', color: '#6b7280' }, grid: { color: '#1e2028' }, ticks: { color: '#6b7280', callback: v => v + '%' } },
+      x: traceScale(),
       y: { title: { display: true, text: 'Speed (km/h)', color: '#6b7280' }, grid: { color: '#1e2028' }, ticks: { color: '#6b7280' } },
     },
     plugins: { legend: { labels: { color: '#e0e2ea', boxWidth: 12 } }, annotation: { annotations } },
@@ -580,24 +694,24 @@ function buildInputsChart() {
     const color = lapColor(lap.lap_num);
     datasets.push({
       label: `L${lap.lap_num} Brake`,
-      data: lap.track.map((pt, i) => ({ x: i / Math.max(lap.track.length - 1, 1) * 100, y: pt.brake * 100 })),
+      data: traceData(lap, pt => pt.brake * 100),
       borderColor: color, backgroundColor: 'transparent', borderWidth: 2, borderDash: [], pointRadius: 0, tension: 0.2,
     });
     datasets.push({
       label: `L${lap.lap_num} Throttle`,
-      data: lap.track.map((pt, i) => ({ x: i / Math.max(lap.track.length - 1, 1) * 100, y: pt.gas * 100 })),
+      data: traceData(lap, pt => pt.gas * 100),
       borderColor: color, backgroundColor: 'transparent', borderWidth: 2, borderDash: [4, 3], pointRadius: 0, tension: 0.2,
     });
   });
   datasets.push({
     label: 'Gear \u00d7 10',
-    data: active[0].track.map((pt, i) => ({ x: i / Math.max(active[0].track.length - 1, 1) * 100, y: pt.gear * 10 })),
+    data: traceData(active[0], pt => pt.gear * 10),
     borderColor: '#eab308', backgroundColor: 'transparent', borderWidth: 1.5, pointRadius: 0, tension: 0, borderDash: [2, 4],
   });
   inputsChart = new Chart(ctx, { type: 'line', data: { datasets }, options: {
     responsive: true, animation: false,
     scales: {
-      x: { type: 'linear', min: 0, max: 100, grid: { color: '#1e2028' }, ticks: { color: '#6b7280', callback: v => v + '%' } },
+      x: traceScale(),
       y: { min: 0, max: 100, grid: { color: '#1e2028' }, ticks: { color: '#6b7280', callback: v => v + '%' } },
     },
     plugins: { legend: { labels: { color: '#e0e2ea', boxWidth: 12, font: { size: 10 } } } },
@@ -629,13 +743,13 @@ function buildDynamicsChart() {
   const mode = document.getElementById('dynamics-mode').value;
   const datasets = active.map(lap => ({
     label: `Lap ${lap.lap_num}${lap.lap_num===DATA.best_lap_num?'*':''} (${lap.lap_time_str})`,
-    data: lap.track.map((pt, i) => ({ x: i / Math.max(lap.track.length - 1, 1) * 100, y: dynValue(pt, mode) })),
+    data: traceData(lap, pt => dynValue(pt, mode)),
     borderColor: lapColor(lap.lap_num), backgroundColor: 'transparent', borderWidth: 1.8, pointRadius: 0, tension: 0.2,
   }));
   dynamicsChart = new Chart(ctx, { type: 'line', data: { datasets }, options: {
-    responsive: true, animation: false, interaction: { mode: 'index', intersect: false },
+    responsive: true, animation: false, interaction: { mode: 'nearest', axis: 'x', intersect: false },
     scales: {
-      x: { type: 'linear', min: 0, max: 100, grid: { color: '#1e2028' }, ticks: { color: '#6b7280', callback: v => v + '%' } },
+      x: traceScale(),
       y: { title: { display: true, text: dynLabel(mode), color: '#6b7280' }, grid: { color: '#1e2028' }, ticks: { color: '#6b7280' } },
     },
     plugins: { legend: { labels: { color: '#e0e2ea', boxWidth: 12 } } },
