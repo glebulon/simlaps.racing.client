@@ -292,7 +292,10 @@ def _select_track_profile_for_analysis(
     track_key, track_profile = select_track_profile(track_name=track_name, config_name=config_name)
     if track_profile:
         return track_key, track_profile
-    return select_track_profile(path=track_name, config_name=config_name)
+    # Analyzer input is a session label, not an arbitrary filesystem path.
+    # Keep unknown labels profileless rather than allowing substring matching
+    # to borrow an unrelated catalog entry.
+    return None, None
 
 
 # ── Car state extraction ──────────────────────────────────────────────────

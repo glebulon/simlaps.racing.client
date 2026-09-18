@@ -215,6 +215,10 @@
       "spa-francorchamps",
       "circuit_de_spa_",
       "spa francorchamps",
+      "spa gp",
+      "spa francorchamps gp",
+      "circuit de spa francorchamps gp",
+      "circuit_de_spa_francorchamps gp",
       "circuit de spa-francorchamps"
     ],
     "default_config": "current",
@@ -1146,6 +1150,7 @@
       "mazda-raceway",
       "weathertech-raceway",
       "laguna seca",
+      "laguna seca gp",
       "mazda raceway laguna seca"
     ],
     "default_config": "full",

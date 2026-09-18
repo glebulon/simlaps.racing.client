@@ -38,15 +38,9 @@ class TestSelectTrackProfile:
         result = _select_track_profile_for_analysis("")
         assert result == (None, None)
 
-    def test_select_track_profile_path_fallback(self):
-        """A path-style name triggers fallback matching (finds Spa)."""
-        result = _select_track_profile_for_analysis("circuit_de_spa_francorchamps gp")
-        assert isinstance(result, tuple)
-        assert len(result) == 2
-        profile = result[1]
-        # Path fallback should resolve to the spa profile
-        assert profile is not None
-        assert "corners" in profile
+    def test_select_unknown_path_style_label_is_profileless(self):
+        """An unknown session label cannot borrow a profile by substring."""
+        assert _select_track_profile_for_analysis("unknown_circuit_de_spa_francorchamps") == (None, None)
 
     def test_select_track_profile_by_static_config_nordschleife(self):
         """Static config "Nordschleife" selects the plain Nordschleife layout."""
@@ -59,6 +53,27 @@ class TestSelectTrackProfile:
         track_key, profile = _select_track_profile_for_analysis("Nurburgring", "GP")
         assert track_key == "nurburgring_gp"
         assert profile["config_key"] == "gp"
+
+    def test_select_split_profile_and_reject_conflict_through_analyzer(self):
+        """The analyzer path preserves explicit layout identity."""
+        track_key, profile = _select_track_profile_for_analysis("Suzuka", "East")
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+        assert _select_track_profile_for_analysis("Suzuka East", "West") == (None, None)
+
+    def test_select_laguna_gp_alias_through_analyzer(self):
+        """The supported session label resolves to Laguna's full profile."""
+        track_key, profile = _select_track_profile_for_analysis("Laguna Seca GP")
+        assert track_key == "laguna_seca"
+        assert profile["config_key"] == "full"
+
+    def test_select_established_spa_gp_labels_through_analyzer(self):
+        """Known Spa GP labels remain explicit catalog aliases."""
+        for label in ("Spa Francorchamps GP", "circuit_de_spa_francorchamps gp"):
+            track_key, profile = _select_track_profile_for_analysis(label)
+            assert track_key == "circuit_de_spa_francorchamps"
+            assert profile["config_key"] == "current"
 
     def test_read_static_track_config_extracts_names(self):
         """Static frames yield authoritative track/config names."""

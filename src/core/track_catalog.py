@@ -112,33 +112,54 @@ def select_track_profile(
         tuple: (track_key, track_profile) or (None, None) if not found
     """
     if track_name:
-        # Collect every catalog entry whose key or aliases match the name.
-        # A single track name can map to several entries (e.g. "Nurburgring"
-        # matches both the Nordschleife and GP catalogs), so we cannot stop
-        # at the first hit when a specific config is requested.
+        # Collect every catalog entry whose normalized key, display name, or
+        # aliases match the name. A single track name can map to several
+        # entries (e.g. "Nurburgring" matches both the Nordschleife and GP
+        # catalogs), so do not stop at the first hit when a layout is given.
+        track_slug_value = track_slug(track_name)
         matching_keys: list[str] = []
-        if track_name in TRACK_CATALOG:
-            matching_keys.append(track_name)
-        tn_lower = track_name.lower()
+        for track_key in TRACK_CATALOG:
+            if track_slug(track_key) == track_slug_value:
+                matching_keys.append(track_key)
+                break
         for track_key, track in TRACK_CATALOG.items():
-            if track_key == track_name:
+            if track_key in matching_keys:
                 continue
-            labels = [track_key, *track.get("aliases", [])]
-            if tn_lower in [label.lower() for label in labels]:
+            labels = [track_key, track.get("name", ""), *track.get("aliases", [])]
+            if any(track_slug(label) == track_slug_value for label in labels):
                 matching_keys.append(track_key)
 
-        # Prefer a config whose key/aliases match config_name across ALL
-        # matching tracks before falling back to any default.
         if config_name:
-            cfg_lower = config_name.lower()
+            config_slug_value = track_slug(config_name)
+
+            # Prefer a config whose normalized key/name/aliases match across
+            # all exact track-name matches.
             for track_key in matching_keys:
                 track = TRACK_CATALOG[track_key]
                 for config_key, config in track["configs"].items():
-                    config_labels = [config_key, *config.get("aliases", [])]
-                    if cfg_lower in [label.lower() for label in config_labels]:
+                    config_labels = [config_key, config.get("name", ""), *config.get("aliases", [])]
+                    if any(track_slug(label) == config_slug_value for label in config_labels):
                         return track_key, build_track_profile(track_key, config_key)
 
-        # Fall back to the default config of the first matching track.
+            # A parent track plus an explicit layout can identify a separate
+            # catalog entry, such as ``Suzuka`` + ``East``. Derive the parent
+            # from the entry labels and its matching config label.
+            for track_key, track in TRACK_CATALOG.items():
+                for config_key, config in track["configs"].items():
+                    config_labels = [config_key, config.get("name", ""), *config.get("aliases", [])]
+                    if not any(track_slug(label) == config_slug_value for label in config_labels):
+                        continue
+                    for label in [track_key, track.get("name", ""), *track.get("aliases", [])]:
+                        label_slug = track_slug(label)
+                        suffix = f"_{config_slug_value}"
+                        if label_slug.endswith(suffix) and label_slug[: -len(suffix)] == track_slug_value:
+                            return track_key, build_track_profile(track_key, config_key)
+
+            # An explicit layout is a constraint. Unknown or conflicting
+            # layouts must not silently select a default profile.
+            return None, None
+
+        # Without an explicit layout, retain the established default choice.
         if matching_keys:
             track_key = matching_keys[0]
             return track_key, build_track_profile(track_key, TRACK_CATALOG[track_key]["default_config"])
@@ -146,15 +167,27 @@ def select_track_profile(
         return None, None
 
     if path:
+        path_parts = [part for part in re.split(r"[\\/]", path) if part]
+        for component in reversed(path_parts):
+            if any(
+                track_slug(label) == track_slug(component)
+                for track_key, track in TRACK_CATALOG.items()
+                for label in [track_key, track.get("name", ""), *track.get("aliases", [])]
+            ):
+                # Reuse normalized name/config handling for an exact path
+                # component before considering the legacy loose substring match.
+                return select_track_profile(track_name=component, config_name=config_name)
+
         path_l = os.path.normpath(path).lower()
         for track_key, track in TRACK_CATALOG.items():
             if any(alias in path_l for alias in track.get("aliases", [])):
                 if config_name:
-                    cfg_lower = config_name.lower()
+                    config_slug_value = track_slug(config_name)
                     for config_key, config in track["configs"].items():
-                        config_labels = [config_key, *config.get("aliases", [])]
-                        if cfg_lower in [label.lower() for label in config_labels]:
+                        config_labels = [config_key, config.get("name", ""), *config.get("aliases", [])]
+                        if any(track_slug(label) == config_slug_value for label in config_labels):
                             return track_key, build_track_profile(track_key, config_key)
+                    return None, None
                 for config_key, config in track["configs"].items():
                     if any(alias in path_l for alias in config.get("aliases", [])):
                         return track_key, build_track_profile(track_key, config_key)

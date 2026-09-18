@@ -46,6 +46,40 @@ class TestSelectTrackProfile:
         assert track_key is not None
         assert profile is not None
 
+    def test_select_split_track_from_display_name(self):
+        """A shipped split-layout display name resolves to its own profile."""
+        track_key, profile = select_track_profile(track_name="Suzuka East")
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_select_split_track_from_parent_and_config(self):
+        """A parent track plus explicit layout selects the split entry."""
+        track_key, profile = select_track_profile(track_name="Suzuka", config_name="East")
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_select_exact_split_path_before_parent_substring(self):
+        """A split path component wins over the parent track alias."""
+        track_key, profile = select_track_profile(path=r"C:\tracks\suzuka_east", config_name="East")
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_exact_ambiguous_path_keeps_config_candidates(self):
+        """An exact ambiguous path component still searches every layout."""
+        track_key, profile = select_track_profile(path=r"C:\tracks\Nurburgring", config_name="GP")
+
+        assert track_key == "nurburgring_gp"
+        assert profile["config_key"] == "gp"
+
+    @pytest.mark.parametrize("config_name", ["West", "Unknown"])
+    def test_explicit_conflicting_or_unknown_config_is_profileless(self, config_name):
+        """An explicit layout cannot silently fall back to a default profile."""
+        assert select_track_profile(track_name="Suzuka East", config_name=config_name) == (None, None)
+        assert select_track_profile(path=r"C:\tracks\suzuka_east", config_name=config_name) == (None, None)
+
     def test_select_by_track_name_not_found(self):
         """Test selecting non-existent track."""
         track_key, profile = select_track_profile(track_name="nonexistent_track")
