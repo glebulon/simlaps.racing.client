@@ -603,6 +603,178 @@ class TestFollowLiveTailing:
     """Test live tailing behavior."""
 
     @pytest.mark.asyncio
+    async def test_partial_line_keeps_shm_completion_maintenance_running(self, tmp_path):
+        """A buffered line must not block the real EOF maintenance path."""
+        log_file = tmp_path / "session.log"
+        log_file.write_text("", encoding="utf-8")
+        manager = SharedSessionManager()
+        emitted = []
+        lap_seen = asyncio.Event()
+        car_id = "4d27cc23-ee6c-e0de-9c38-10448288bcbb"
+
+        async def on_lap(session, lap):
+            emitted.append(lap)
+            lap_seen.set()
+
+        parser = LogParser(
+            log_path=str(log_file),
+            on_lap_complete=on_lap,
+            session_manager=manager,
+        )
+        parser.PENDING_VALIDITY_GRACE_SECONDS = 0.02
+        parser.current_session = SessionData(
+            track="Red Bull Ring GP",
+            car="Mazda Mx5 Nd CUP",
+            session_type="PRACTICE",
+            car_uuid=car_id,
+        )
+        parser.context.car_uuid = car_id
+        parser.context.tyre.set_all("S")
+
+        follow_task = asyncio.create_task(parser.follow(poll_interval=0.005))
+        try:
+            await asyncio.sleep(0.03)
+            with log_file.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "[2026-08-16 12:07:32.800] [gameplay] [info] "
+                    f"New lap carId {car_id}: 02:08.028"
+                )
+
+            manager.update_from_graphics_shm(
+                {
+                    "total_lap_count": 0,
+                    "current_lap_time_ms": 127900,
+                    "last_laptime_ms": 0,
+                    "is_valid_lap": False,
+                }
+            )
+            manager.update_from_graphics_shm(
+                {
+                    "total_lap_count": 0,
+                    "current_lap_time_ms": 50,
+                    "last_laptime_ms": 128028,
+                    "is_valid_lap": True,
+                }
+            )
+
+            await asyncio.wait_for(lap_seen.wait(), timeout=1.0)
+            assert [lap.lap_time_ms for lap in emitted] == [128028]
+
+            # Completing the buffered line must reconcile the same lap, not
+            # create a second callback.
+            with log_file.open("a", encoding="utf-8") as handle:
+                handle.write("\n")
+            await asyncio.sleep(0.05)
+            assert [lap.lap_time_ms for lap in emitted] == [128028]
+        finally:
+            parser.stop()
+            await asyncio.wait_for(follow_task, timeout=1.0)
+
+    @pytest.mark.asyncio
+    async def test_partial_line_does_not_block_pending_lap_grace_flush(self, tmp_path):
+        """The grace fallback still runs while ACE is buffering the next line."""
+        log_file = tmp_path / "session.log"
+        log_file.write_text("", encoding="utf-8")
+        emitted = []
+        lap_seen = asyncio.Event()
+        car_id = "4d27cc23-ee6c-e0de-9c38-10448288bcbb"
+
+        async def on_lap(session, lap):
+            emitted.append(lap)
+            lap_seen.set()
+
+        parser = LogParser(log_path=str(log_file), on_lap_complete=on_lap)
+        parser.PENDING_VALIDITY_GRACE_SECONDS = 0.02
+        parser.current_session = SessionData(
+            track="nurburgring",
+            car="ktm_xbow_gt4",
+            player_id="76561198321627695",
+            session_type="PRACTICE",
+            car_uuid=car_id,
+        )
+        parser.context.player_id = "76561198321627695"
+        parser.context.car_uuid = car_id
+        parser.context.current_track = "nurburgring"
+        parser.context.tyre.set_all("SM")
+        parser._ip.physics_lap_num = 1
+        parser._ip.splits = {0: 516642}
+        parser._ip.fuel_used = 3.2
+        parser._ip.fuel_reliable = True
+
+        follow_task = asyncio.create_task(parser.follow(poll_interval=0.005))
+        try:
+            await asyncio.sleep(0.03)
+            with log_file.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    "[2026-07-26 19:17:37.000] [gameplay] [info] "
+                    f"New lap carId {car_id}: 08:36.642\n"
+                )
+                handle.write("[2026-07-26 19:17:38.000] [gameplay] [info] TRACK NAME changed-track")
+
+            await asyncio.wait_for(lap_seen.wait(), timeout=1.0)
+            assert [lap.lap_time_ms for lap in emitted] == [516642]
+            assert parser._pending_lap is None
+            assert parser.context.current_track == "nurburgring"
+
+            with log_file.open("a", encoding="utf-8") as handle:
+                handle.write("\n")
+            for _ in range(100):
+                if parser.context.current_track == "changed-track":
+                    break
+                await asyncio.sleep(0.005)
+            assert parser.context.current_track == "changed-track"
+            assert [lap.lap_time_ms for lap in emitted] == [516642]
+        finally:
+            parser.stop()
+            await asyncio.wait_for(follow_task, timeout=1.0)
+
+    @pytest.mark.asyncio
+    async def test_partial_line_still_checks_rotation_and_truncation(self, tmp_path):
+        """A partial write cannot suppress input-stream boundary checks."""
+        log_dir = tmp_path / "logs"
+        log_dir.mkdir()
+        old_file = log_dir / "log.txt"
+        old_file.write_text("old\n", encoding="utf-8")
+        statuses = []
+
+        async def on_status(status):
+            statuses.append(status)
+
+        parser = LogParser(log_path=str(log_dir), on_status_change=on_status)
+        parser.current_session = SessionData(track="old", car="old")
+
+        follow_task = asyncio.create_task(parser.follow(poll_interval=0.005))
+        try:
+            await asyncio.sleep(0.03)
+            with old_file.open("a", encoding="utf-8") as handle:
+                handle.write("partial buffered input")
+
+            new_file = log_dir / "new.txt"
+            await asyncio.sleep(0.02)
+            new_file.write_text("new\n", encoding="utf-8")
+            for _ in range(100):
+                if parser.log_path == new_file:
+                    break
+                await asyncio.sleep(0.005)
+            assert parser.log_path == new_file
+            assert any("New game session log detected" in status for status in statuses)
+
+            # The second stream begins with a partial line too. Shrinking the
+            # file must still be observed and reset the new stream context.
+            with new_file.open("a", encoding="utf-8") as handle:
+                handle.write("another buffered input")
+            await asyncio.sleep(0.02)
+            new_file.write_text("", encoding="utf-8")
+            for _ in range(100):
+                if any("Log file reset" in status for status in statuses):
+                    break
+                await asyncio.sleep(0.005)
+            assert any("Log file reset" in status for status in statuses)
+        finally:
+            parser.stop()
+            await asyncio.wait_for(follow_task, timeout=1.0)
+
+    @pytest.mark.asyncio
     async def test_rotation_discards_pending_and_unmatched_shm_lap(self, tmp_path):
         """A rotated input stream cannot reconcile or emit the old stream's lap."""
         log_dir = tmp_path / "logs"

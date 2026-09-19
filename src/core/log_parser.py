@@ -2448,11 +2448,13 @@ class LogParser:
                     line = fh.readline()
 
                     # Guard against processing partially written lines in live-tail.
-                    # If a trailing newline is missing, rewind and retry on next poll.
+                    # If a trailing newline is missing, rewind and let the
+                    # no-data maintenance below run before retrying. ACE can
+                    # buffer a line while SHM completions, grace flushes, and
+                    # log boundaries still need servicing.
                     if line and not line.endswith("\n"):
                         fh.seek(line_start_pos)
-                        await asyncio.sleep(poll_interval)
-                        continue
+                        line = ""
 
                     if line:
                         if "Game Started!" in line:
