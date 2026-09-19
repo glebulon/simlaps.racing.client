@@ -4,6 +4,8 @@ import asyncio
 import json
 import os
 import tempfile
+import threading
+import time
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
@@ -564,10 +566,19 @@ class TestValidityOnlyCaptureLoop:
         capture._recording_awaiting_boundary = True
         capture._running = True
         capture._readers = {"physics": MagicMock(size=4)}
-        lap_times = [78_000, 104, 210]
+        lap_times = [78_000, 79_000, 104, 210]
 
         def sample(frame_number):
             capture._last_sample_had_data = True
+            capture._session_manager.update_from_graphics_shm(
+                {
+                    "status_name": "AC_LIVE",
+                    "total_lap_count": 0,
+                    "current_lap_time_ms": lap_times[frame_number],
+                    "last_laptime_ms": 0,
+                    "is_valid_lap": True,
+                }
+            )
             if frame_number == len(lap_times) - 1:
                 capture._running = False
             return FrameData(
@@ -591,7 +602,68 @@ class TestValidityOnlyCaptureLoop:
             await capture._capture_loop()
 
         assert capture._recording_awaiting_boundary is False
-        assert [frame.frame_number for frame in capture.get_frames()] == [1, 2]
+        assert [frame.frame_number for frame in capture.get_frames()] == [2, 3]
+
+    def test_armed_boundary_holds_ownership_during_session_reset(self):
+        capture = TelemetryCapture(record_frames=True)
+        manager = capture._session_manager
+        for current_time in (78_000, 79_000):
+            manager.update_from_graphics_shm(
+                {
+                    "status_name": "AC_LIVE",
+                    "total_lap_count": 0,
+                    "current_lap_time_ms": current_time,
+                    "last_laptime_ms": 0,
+                    "is_valid_lap": True,
+                }
+            )
+        capture._recording_awaiting_boundary = True
+        capture._awaiting_lap_time_ms = 78_000
+        frame = FrameData(
+            "2026-01-01T00:00:00Z",
+            1,
+            {"speed_kmh": 100.0},
+            graphics={"status_name": "AC_LIVE", "current_lap_time_ms": 104},
+        )
+        reset_started = threading.Event()
+        reset_finished = threading.Event()
+
+        def reset_session():
+            reset_started.set()
+            manager.reset()
+            reset_finished.set()
+
+        real_has_ownership = manager.has_live_timer_ownership
+        reset_thread_holder = []
+
+        def has_ownership_while_reset_attempts():
+            reset_thread = threading.Thread(target=reset_session)
+            reset_thread_holder.append(reset_thread)
+            reset_thread.start()
+            assert reset_started.wait(timeout=1)
+            assert not reset_finished.wait(timeout=0.05)
+            real_has_ownership()
+            # Give an unguarded reset a chance to replace the session before
+            # the recorder clears its armed buffer. The lock-protected path
+            # keeps this blocked until the boundary mutation is complete.
+            time.sleep(0.05)
+            return True
+
+        class BoundaryFrames(list):
+            def clear(self):
+                assert not reset_finished.is_set()
+                super().clear()
+
+        capture._frames = BoundaryFrames([FrameData("2026-01-01T00:00:00Z", 0, {})])
+
+        with patch.object(manager, "has_live_timer_ownership", side_effect=has_ownership_while_reset_attempts):
+            assert capture._start_recording_at_timing_boundary(frame) is True
+
+        assert capture._recording_awaiting_boundary is False
+        reset_thread_holder[0].join(timeout=1)
+        assert not reset_thread_holder[0].is_alive()
+        assert reset_finished.is_set()
+        assert manager.has_live_timer_ownership() is False
 
     def test_armed_recording_keeps_race_from_standing_start(self):
         capture = TelemetryCapture(record_frames=True)

@@ -113,6 +113,14 @@ def test_graphics_lap_counter_transition_snapshots_completed_lap() -> None:
             "is_valid_lap": False,
         }
     )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 76000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": False,
+        }
+    )
     assert manager.get_latest_lap_completion() is None
 
     manager.update_from_graphics_shm(
@@ -142,6 +150,15 @@ def test_graphics_terminal_transition_does_not_publish_shutdown_completion() -> 
             "current_lap_time_ms": 75000,
             "last_laptime_ms": 0,
             "is_valid_lap": False,
+            "session_phase": "Session",
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 76000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
             "session_phase": "Session",
         }
     )
@@ -176,6 +193,15 @@ def test_graphics_active_transition_still_publishes_completion() -> None:
     )
     manager.update_from_graphics_shm(
         {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 76000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+            "session_phase": "Session",
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
             "total_lap_count": 1,
             "current_lap_time_ms": 50,
             "last_laptime_ms": 75684,
@@ -188,6 +214,344 @@ def test_graphics_active_transition_still_publishes_completion() -> None:
     assert completion is not None
     assert completion.lap_time_ms == 75684
 
+
+def test_graphics_stale_counter_waits_for_live_timer_ownership() -> None:
+    """A carried counter/last time cannot create a phantom completion."""
+    manager = SharedSessionManager()
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 111147,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "total_lap_count": 1,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 111147,
+            "is_valid_lap": True,
+        }
+    )
+
+    assert manager.get_lap_completions_after(0.0) == []
+    assert manager.get_all_lap_times() == {}
+
+
+@pytest.mark.parametrize("phase", ["Initialization", "Menu", "Loading"])
+def test_graphics_startup_phases_cannot_arm_completion(phase: str) -> None:
+    manager = SharedSessionManager()
+    for current_time in (1_000, 2_000):
+        manager.update_from_graphics_shm(
+            {
+                "status_name": "AC_LIVE",
+                "session_phase": phase,
+                "total_lap_count": 0,
+                "current_lap_time_ms": current_time,
+                "last_laptime_ms": 0,
+                "is_valid_lap": True,
+            }
+        )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "session_phase": phase,
+            "total_lap_count": 1,
+            "current_lap_time_ms": 50,
+            "last_laptime_ms": 111147,
+            "is_valid_lap": True,
+        }
+    )
+
+    assert manager.get_lap_completions_after(0.0) == []
+
+
+def test_graphics_pause_preserves_timer_ownership_and_invalidity() -> None:
+    manager = SharedSessionManager()
+    for current_time in (90_000, 91_000):
+        manager.update_from_graphics_shm(
+            {
+                "status_name": "AC_LIVE",
+                "total_lap_count": 0,
+                "current_lap_time_ms": current_time,
+                "last_laptime_ms": 0,
+                "is_valid_lap": False,
+            }
+        )
+
+    # The pause clears the visible timer but must preserve the active verdict
+    # and timer baseline for a finish reported by a later paused sample.
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_PAUSE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    validity = manager.get_lap_validity_data(1)
+    assert validity is not None
+    assert validity.is_valid is False
+
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_PAUSE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 91_147,
+            "is_valid_lap": True,
+        }
+    )
+    completion = manager.get_latest_lap_completion()
+    assert completion is not None
+    assert completion.lap_time_ms == 91_147
+    assert completion.is_valid is False
+
+
+def test_graphics_ordinary_pause_resume_keeps_invalid_verdict_until_next_boundary() -> None:
+    manager = SharedSessionManager()
+    for current_time in (90_000, 91_000):
+        manager.update_from_graphics_shm(
+            {
+                "status_name": "AC_LIVE",
+                "total_lap_count": 0,
+                "current_lap_time_ms": current_time,
+                "last_laptime_ms": 0,
+                "is_valid_lap": False,
+            }
+        )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_PAUSE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 91_100,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 92_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "total_lap_count": 1,
+            "current_lap_time_ms": 50,
+            "last_laptime_ms": 91_147,
+            "is_valid_lap": True,
+        }
+    )
+
+    completion = manager.get_latest_lap_completion()
+    assert completion is not None
+    assert completion.is_valid is False
+
+
+def test_graphics_pause_resume_low_timer_starts_fresh_epoch() -> None:
+    manager = SharedSessionManager()
+    for current_time in (90_000, 91_000):
+        manager.update_from_graphics_shm(
+            {
+                "status_name": "AC_LIVE",
+                "total_lap_count": 0,
+                "current_lap_time_ms": current_time,
+                "last_laptime_ms": 0,
+                "is_valid_lap": False,
+            }
+        )
+
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_PAUSE",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    for current_time in (100, 200):
+        manager.update_from_graphics_shm(
+            {
+                "status_name": "AC_LIVE",
+                "total_lap_count": 0,
+                "current_lap_time_ms": current_time,
+                "last_laptime_ms": 0,
+                "is_valid_lap": True,
+            }
+        )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "total_lap_count": 1,
+            "current_lap_time_ms": 300,
+            "last_laptime_ms": 91_147,
+            "is_valid_lap": True,
+        }
+    )
+
+    completion = manager.get_latest_lap_completion()
+    assert completion is not None
+    assert completion.is_valid is True
+
+
+def test_graphics_paused_counter_finish_resets_verdict_for_resumed_lap() -> None:
+    manager = SharedSessionManager()
+    for current_time in (90_000, 91_000):
+        manager.update_from_graphics_shm(
+            {
+                "status_name": "AC_LIVE",
+                "total_lap_count": 0,
+                "current_lap_time_ms": current_time,
+                "last_laptime_ms": 0,
+                "is_valid_lap": False,
+            }
+        )
+
+    # The timer did not reset in the paused payload, so the counter is the
+    # accepted completion boundary and must still close the invalid lap.
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_PAUSE",
+            "total_lap_count": 1,
+            "current_lap_time_ms": 91_000,
+            "last_laptime_ms": 91_147,
+            "is_valid_lap": True,
+        }
+    )
+    completion = manager.get_latest_lap_completion()
+    assert completion is not None
+    assert completion.is_valid is False
+    next_lap_validity = manager.get_lap_validity_data(2)
+    assert next_lap_validity is not None
+    assert next_lap_validity.is_valid is True
+
+    # Resuming the next lap must establish a fresh valid verdict.
+    for current_time in (1_000, 2_000, 3_000):
+        manager.update_from_graphics_shm(
+            {
+                "status_name": "AC_LIVE",
+                "total_lap_count": 1,
+                "current_lap_time_ms": current_time,
+                "last_laptime_ms": 0,
+                "is_valid_lap": True,
+            }
+        )
+    validity = manager.get_lap_validity_data(2)
+    assert validity is not None
+    assert validity.is_valid is True
+
+
+def test_graphics_terminal_state_requires_fresh_timer_evidence() -> None:
+    manager = SharedSessionManager()
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 1_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 2_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_OFF",
+            "session_phase": "Ended",
+            "total_lap_count": 1,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 91_147,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 1_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 2_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+
+    assert manager.get_lap_completions_after(0.0) == []
+
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_LIVE",
+            "session_phase": "Session",
+            "total_lap_count": 1,
+            "current_lap_time_ms": 50,
+            "last_laptime_ms": 91_147,
+            "is_valid_lap": True,
+        }
+    )
+    completion = manager.get_latest_lap_completion()
+    assert completion is not None
+    assert completion.lap_time_ms == 91_147
+
+
+def test_graphics_replay_state_cannot_publish_stale_completion() -> None:
+    manager = SharedSessionManager()
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_REPLAY",
+            "total_lap_count": 0,
+            "current_lap_time_ms": 90_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "status_name": "AC_REPLAY",
+            "total_lap_count": 1,
+            "current_lap_time_ms": 0,
+            "last_laptime_ms": 90_000,
+            "is_valid_lap": True,
+        }
+    )
+
+    assert manager.get_lap_completions_after(0.0) == []
 
 def test_graphics_disqualified_and_teardown_states_suppress_completion() -> None:
     for phase in ("Disqualified", "Teardown"):
@@ -220,6 +584,14 @@ def test_graphics_timer_reset_snapshots_invalid_lap_before_counter_advances() ->
         {
             "total_lap_count": 1,
             "current_lap_time_ms": 87500,
+            "last_laptime_ms": 0,
+            "is_valid_lap": False,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 1,
+            "current_lap_time_ms": 87600,
             "last_laptime_ms": 0,
             "is_valid_lap": False,
         }
@@ -299,6 +671,14 @@ def test_counter_jump_publishes_later_completion_after_missed_echo() -> None:
     manager.update_from_graphics_shm(
         {
             "total_lap_count": 0,
+            "current_lap_time_ms": 91_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
             "current_lap_time_ms": 50,
             "last_laptime_ms": 90_000,
             "is_valid_lap": True,
@@ -326,6 +706,14 @@ def test_zero_completed_first_lap_delayed_counter_does_not_duplicate_or_reset_va
         {
             "total_lap_count": 0,
             "current_lap_time_ms": 90_000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": True,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 91_000,
             "last_laptime_ms": 0,
             "is_valid_lap": True,
         }
@@ -368,6 +756,14 @@ def test_graphics_outlap_timer_reset_clears_validity_without_completed_time() ->
         {
             "total_lap_count": 0,
             "current_lap_time_ms": 62000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": False,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 63000,
             "last_laptime_ms": 0,
             "is_valid_lap": False,
         }
@@ -436,6 +832,14 @@ def test_graphics_completion_validity_survives_physical_counter_reuse_after_pit(
     manager.update_from_graphics_shm(
         {
             "total_lap_count": 1,
+            "current_lap_time_ms": 84000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": False,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 1,
             "current_lap_time_ms": 80,
             "last_laptime_ms": 84057,
             "is_valid_lap": True,
@@ -466,6 +870,14 @@ def test_graphics_retains_multiple_unconsumed_lap_completions() -> None:
         )
         manager.update_from_graphics_shm(
             {
+                "total_lap_count": completed_laps - 1,
+                "current_lap_time_ms": lap_time_ms - 40,
+                "last_laptime_ms": 0,
+                "is_valid_lap": is_valid,
+            }
+        )
+        manager.update_from_graphics_shm(
+            {
                 "total_lap_count": completed_laps,
                 "current_lap_time_ms": 50,
                 "last_laptime_ms": lap_time_ms,
@@ -485,6 +897,14 @@ def test_lap_completion_matching_tolerates_rounding_once_and_rejects_outside() -
         {
             "total_lap_count": 0,
             "current_lap_time_ms": 100000,
+            "last_laptime_ms": 0,
+            "is_valid_lap": False,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 100001,
             "last_laptime_ms": 0,
             "is_valid_lap": False,
         }
@@ -517,6 +937,14 @@ def test_graphics_publishes_equal_and_near_equal_consecutive_completions() -> No
             {
                 "total_lap_count": completed_laps - 1,
                 "current_lap_time_ms": 100_000,
+                "last_laptime_ms": 0,
+                "is_valid_lap": True,
+            }
+        )
+        manager.update_from_graphics_shm(
+            {
+                "total_lap_count": completed_laps - 1,
+                "current_lap_time_ms": 100_001,
                 "last_laptime_ms": 0,
                 "is_valid_lap": True,
             }

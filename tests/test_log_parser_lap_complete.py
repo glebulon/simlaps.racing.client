@@ -288,6 +288,14 @@ class TestHandleLapCompleteWithData:
         manager.update_from_graphics_shm(
             {
                 "total_lap_count": 1,
+                "current_lap_time_ms": 84000,
+                "last_laptime_ms": 0,
+                "is_valid_lap": False,
+            }
+        )
+        manager.update_from_graphics_shm(
+            {
+                "total_lap_count": 1,
                 "current_lap_time_ms": 80,
                 "last_laptime_ms": 84057,
                 "is_valid_lap": True,
@@ -797,6 +805,14 @@ def test_equal_time_completions_keep_their_lap_associations() -> None:
         )
         manager.update_from_graphics_shm(
             {
+                "total_lap_count": completed_laps - 1,
+                "current_lap_time_ms": 100_001,
+                "last_laptime_ms": 0,
+                "is_valid_lap": True,
+            }
+        )
+        manager.update_from_graphics_shm(
+            {
                 "total_lap_count": completed_laps,
                 "current_lap_time_ms": 10,
                 "last_laptime_ms": lap_time_ms,
@@ -930,6 +946,13 @@ def test_bound_unknown_completion_is_consumed_when_validity_map_finishes_lap() -
     )
     manager.update_from_graphics_shm(
         {
+            "total_lap_count": 0,
+            "current_lap_time_ms": 100_100,
+            "last_laptime_ms": 0,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
             "total_lap_count": 1,
             "current_lap_time_ms": 10,
             "last_laptime_ms": 100_000,
@@ -995,6 +1018,7 @@ def test_shm_completion_waits_for_log_session_identity() -> None:
 
     manager = SharedSessionManager()
     manager.update_from_graphics_shm({"total_lap_count": 0, "current_lap_time_ms": 100_000})
+    manager.update_from_graphics_shm({"total_lap_count": 0, "current_lap_time_ms": 100_100})
     manager.update_from_graphics_shm(
         {
             "total_lap_count": 1,

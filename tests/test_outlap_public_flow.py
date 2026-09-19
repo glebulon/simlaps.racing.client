@@ -32,6 +32,14 @@ def _publish_shm_completion(
     )
     manager.update_from_graphics_shm(
         {
+            "total_lap_count": completed_laps - 1,
+            "current_lap_time_ms": lap_time_ms - 40,
+            "last_laptime_ms": 0,
+            "is_valid_lap": is_valid,
+        }
+    )
+    manager.update_from_graphics_shm(
+        {
             "total_lap_count": completed_laps,
             "current_lap_time_ms": 50,
             "last_laptime_ms": lap_time_ms,
