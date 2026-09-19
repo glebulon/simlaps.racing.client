@@ -127,11 +127,12 @@ class TestSubmitLap:
         sample_lap.fuel_used = None
 
         manager = SharedSessionManager()
-        manager.update_player_identification_from_logs(
-            {
-                "steam_id": "76561198000000001",
-                "car_model": "ferrari_296_gt3",
-            }
+        manager.update_session_metadata_from_logs(
+            SessionData(
+                session_id=sample_session.session_id,
+                player_id="76561198000000001",
+                car="ferrari_296_gt3",
+            )
         )
         manager.update_session_metadata_from_static_shm(
             {
@@ -206,9 +207,23 @@ class TestSubmitLap:
         sample_lap.sector3_ms = 43596
 
         manager = SharedSessionManager()
+        manager.update_session_metadata_from_logs(
+            SessionData(
+                session_id=sample_session.session_id,
+                game_version=sample_session.game_version,
+                session_type=sample_session.session_type,
+                car=sample_session.car,
+                track=sample_session.track,
+                player_id=sample_session.player_id,
+            )
+        )
         # Simulate the incident state: SHM last_laptime_ms for the lap-2 entry
         # is lap 1's completed time (116010), not lap 2's.
         manager.update_lap_timing_from_graphics_shm(2, {"last_laptime_ms": 116010})
+        manager.update_sector_splits_from_logs(
+            2,
+            {"sector1_ms": 50000, "sector2_ms": 33000, "sector3_ms": 33010},
+        )
 
         client = APIClient(session_manager=manager)
         result = await client.submit_lap(sample_session, sample_lap)
@@ -246,11 +261,12 @@ class TestSubmitLap:
         sample_lap.fuel_used = 3.5  # logs have fuel data
 
         manager = SharedSessionManager()
-        manager.update_player_identification_from_logs(
-            {
-                "steam_id": "76561198000000001",
-                "car_model": "ferrari_296_gt3",
-            }
+        manager.update_session_metadata_from_logs(
+            SessionData(
+                session_id=sample_session.session_id,
+                player_id="76561198000000001",
+                car="ferrari_296_gt3",
+            )
         )
         manager.update_session_metadata_from_static_shm(
             {
@@ -274,6 +290,136 @@ class TestSubmitLap:
         payload = mock_post.call_args.kwargs["json"]
         # Logs fuel should be used as fallback when SHM fuel is None
         assert payload["fuelUsed"] == 3.5
+
+    @pytest.mark.asyncio
+    @patch("src.core.api_client.is_game_running")
+    @patch("httpx.AsyncClient.post")
+    async def test_submit_lap_does_not_borrow_foreign_session_fallbacks(
+        self,
+        mock_post,
+        mock_game_running,
+        sample_session,
+        sample_lap,
+    ):
+        mock_game_running.return_value = GameProcessStatus.RUNNING
+        response = MagicMock(status_code=201)
+        response.json.return_value = {"id": "lap-foreign"}
+        mock_post.return_value = response
+
+        sample_session.session_id = "session-a"
+        sample_session.player_id = "player-a"
+        sample_session.track = "Unknown"
+        sample_session.car = "Unknown"
+        sample_session.session_type = "Unknown"
+        sample_session.game_version = "Unknown"
+        sample_lap.sector1_ms = None
+        sample_lap.sector2_ms = None
+        sample_lap.sector3_ms = None
+        sample_lap.fuel_used = 1.2
+
+        manager = SharedSessionManager()
+        foreign_session = SessionData(
+            session_id="session-b",
+            game_version="foreign-version",
+            session_type="RACE",
+            car="foreign-car",
+            track="foreign-track",
+            player_id="player-b",
+        )
+        foreign_lap = LapData(
+            lap_number=sample_lap.lap_number,
+            physics_lap_number=1,
+            lap_time_ms=100000,
+            lap_time_str="1:40.000",
+            sector1_ms=30000,
+            sector2_ms=35000,
+            sector3_ms=35000,
+            is_valid=True,
+        )
+        manager.update_lap_from_logs(foreign_lap, session_data=foreign_session)
+        manager.update_lap_timing_from_graphics_shm(
+            sample_lap.lap_number, {"last_laptime_ms": 100000}
+        )
+        manager.update_fuel_from_graphics_shm({"fuel_liter_per_lap": 9.0})
+
+        result = await APIClient(session_manager=manager).submit_lap(sample_session, sample_lap)
+
+        assert result.status == SubmissionStatus.SUCCESS
+        payload = mock_post.call_args.kwargs["json"]
+        assert payload["userId"] == "player-a"
+        assert payload["trackId"] == "unknown"
+        assert payload["carId"] == "Unknown"
+        assert payload["sessionType"] == "Unknown"
+        assert payload["gameVersion"] == "Unknown"
+        assert "sector1" not in payload
+        assert "sector2" not in payload
+        assert "sector3" not in payload
+        assert payload["fuelUsed"] == 1.2
+
+    @pytest.mark.asyncio
+    @patch("src.core.api_client.sign_payload")
+    @patch("src.core.api_client.is_game_running")
+    @patch("httpx.AsyncClient.post")
+    async def test_submit_lap_does_not_rescue_missing_time_from_foreign_session(
+        self,
+        mock_post,
+        mock_game_running,
+        mock_sign,
+        sample_session,
+        sample_lap,
+    ):
+        mock_game_running.return_value = GameProcessStatus.RUNNING
+        sample_session.session_id = "session-a"
+        sample_session.player_id = "player-a"
+        sample_lap.lap_time_ms = 0
+
+        manager = SharedSessionManager()
+        manager.update_lap_from_logs(
+            LapData(
+                lap_number=sample_lap.lap_number,
+                physics_lap_number=1,
+                lap_time_ms=100000,
+                lap_time_str="1:40.000",
+                is_valid=True,
+            ),
+            session_data=SessionData(session_id="session-b", player_id="player-b"),
+        )
+        manager.update_lap_timing_from_graphics_shm(
+            sample_lap.lap_number, {"last_laptime_ms": 100000}
+        )
+
+        result = await APIClient(session_manager=manager).submit_lap(sample_session, sample_lap)
+
+        assert result.status == SubmissionStatus.INVALID_LAP
+        mock_sign.assert_not_called()
+        mock_post.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch("src.core.api_client.sign_payload")
+    @patch("src.core.api_client.is_game_running")
+    @patch("httpx.AsyncClient.post")
+    async def test_submit_lap_missing_identity_does_not_sign_or_post(
+        self,
+        mock_post,
+        mock_game_running,
+        mock_sign,
+        sample_session,
+        sample_lap,
+    ):
+        mock_game_running.return_value = GameProcessStatus.RUNNING
+        sample_session.session_id = "session-a"
+        sample_session.player_id = None
+
+        manager = SharedSessionManager()
+        manager.update_session_metadata_from_logs(
+            SessionData(session_id="session-b", player_id="player-b")
+        )
+
+        result = await APIClient(session_manager=manager).submit_lap(sample_session, sample_lap)
+
+        assert result.status == SubmissionStatus.ERROR
+        mock_sign.assert_not_called()
+        mock_post.assert_not_called()
 
     @pytest.mark.asyncio
     @patch("src.core.api_client.is_game_running")
@@ -904,7 +1050,8 @@ class TestNoSecret:
         signer = MagicMock(side_effect=AssertionError("signing must not run"))
         monkeypatch.setattr("src.core.api_client.is_game_running", game_check)
         monkeypatch.setattr("src.core.api_client.sign_payload", signer)
-        client = APIClient()
+        manager = MagicMock()
+        client = APIClient(session_manager=manager)
         get_client = AsyncMock(side_effect=AssertionError("HTTP client must not be created"))
         monkeypatch.setattr(client, "_get_client", get_client)
         session = SimpleNamespace(player_id="76561198321627695")
@@ -923,6 +1070,7 @@ class TestNoSecret:
         signer.assert_not_called()
         get_client.assert_not_awaited()
         mock_post.assert_not_called()
+        manager.get_submission_fallbacks.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_test_secret_no_secret(self):

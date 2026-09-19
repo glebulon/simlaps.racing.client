@@ -117,6 +117,22 @@ class SectorSplitData:
     source: str = "logs"
 
 
+@dataclass(frozen=True)
+class SubmissionFallbackSnapshot:
+    """Immutable submission fallbacks copied for a matching session."""
+
+    game_version: str
+    session_type: str
+    track: str
+    player_id: Optional[str]
+    car_model: Optional[str]
+    last_lap_time_ms: Optional[int]
+    sector1_ms: Optional[int]
+    sector2_ms: Optional[int]
+    sector3_ms: Optional[int]
+    fuel_consumed_lap: Optional[float]
+
+
 @dataclass
 class SessionMetadataData:
     """Session metadata from Static SHM (or logs as fallback)."""
@@ -291,6 +307,34 @@ class SharedSessionManager:
     def get_session_metadata_data(self) -> SessionMetadataData:
         with self._lock:
             return replace(self._session_data.session_metadata)
+
+    def get_submission_fallbacks(
+        self,
+        session_id: Optional[str],
+        lap_number: int,
+    ) -> Optional[SubmissionFallbackSnapshot]:
+        """Copy submission fallbacks only from the requested logged session."""
+        with self._lock:
+            metadata = self._session_data.session_metadata
+            if not session_id or not metadata.session_id or metadata.session_id != session_id:
+                return None
+
+            player = self._session_data.player_identification
+            timing = self._session_data.lap_timing.get(lap_number)
+            sectors = self._session_data.sector_splits.get(lap_number)
+            fuel = self._session_data.fuel_data
+            return SubmissionFallbackSnapshot(
+                game_version=metadata.game_version,
+                session_type=metadata.session_type,
+                track=metadata.track,
+                player_id=player.steam_id,
+                car_model=player.car_model,
+                last_lap_time_ms=timing.last_lap_time_ms if timing else None,
+                sector1_ms=sectors.sector1_ms if sectors else None,
+                sector2_ms=sectors.sector2_ms if sectors else None,
+                sector3_ms=sectors.sector3_ms if sectors else None,
+                fuel_consumed_lap=fuel.fuel_consumed_lap,
+            )
 
     # Legacy accessors
     def get_lap_time(self, lap_num: int) -> Optional[float]:
@@ -577,19 +621,19 @@ class SharedSessionManager:
 
     # Legacy update entry points
     def update_lap_from_logs(self, lap_data: LapData, session_data: Optional[SessionData] = None) -> None:
-        if session_data is not None:
-            self.update_session_metadata_from_logs(session_data)
-
-        self.update_sector_splits_from_logs(
-            lap_data.lap_number,
-            {
-                "sector1_ms": lap_data.sector1_ms,
-                "sector2_ms": lap_data.sector2_ms,
-                "sector3_ms": lap_data.sector3_ms,
-            },
-        )
-
         with self._lock:
+            if session_data is not None:
+                self.update_session_metadata_from_logs(session_data)
+
+            self.update_sector_splits_from_logs(
+                lap_data.lap_number,
+                {
+                    "sector1_ms": lap_data.sector1_ms,
+                    "sector2_ms": lap_data.sector2_ms,
+                    "sector3_ms": lap_data.sector3_ms,
+                },
+            )
+
             timing = self._session_data.lap_timing.get(lap_data.lap_number)
             if timing is None:
                 timing = LapTimingData(lap_number=lap_data.lap_number)
@@ -637,20 +681,21 @@ class SharedSessionManager:
             self._mark_source("session_type", "logs")
             self._mark_source("track", "logs")
 
-        self.update_player_identification_from_logs(
-            {
-                "steam_id": session_data.player_id,
-                "player_name": session_data.player_name,
-                "car_uuid": session_data.car_uuid,
-                "car_model": session_data.car,
-            }
-        )
+            self.update_player_identification_from_logs(
+                {
+                    "steam_id": session_data.player_id,
+                    "player_name": session_data.player_name,
+                    "car_uuid": session_data.car_uuid,
+                    "car_model": session_data.car,
+                }
+            )
 
     def update_from_logs(self, log_session_data: SessionData) -> None:
-        self.update_session_metadata_from_logs(log_session_data)
+        with self._lock:
+            self.update_session_metadata_from_logs(log_session_data)
 
-        for lap in log_session_data.laps:
-            self.update_lap_from_logs(lap)
+            for lap in log_session_data.laps:
+                self.update_lap_from_logs(lap)
 
     def update_from_static_shm(self, static_data: Dict[str, Any]) -> None:
         self.update_session_metadata_from_static_shm(static_data)

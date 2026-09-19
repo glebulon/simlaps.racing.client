@@ -3,7 +3,10 @@
 import time
 import tracemalloc
 from concurrent.futures import ThreadPoolExecutor
+from threading import Event, Thread
 from unittest.mock import MagicMock
+
+import pytest
 
 from src.models import (
     LapData,
@@ -578,6 +581,165 @@ def test_update_lap_from_logs_populates_player_and_sector_data() -> None:
     assert sectors.sector1_ms == 32000
     assert sectors.sector2_ms == 33000
     assert sectors.sector3_ms == 35000
+
+
+def test_submission_fallback_snapshot_requires_matching_session_and_is_immutable() -> None:
+    manager = SharedSessionManager()
+    session_a = SessionData(
+        session_id="session-a",
+        game_version="0.9.4",
+        session_type="PRACTICE",
+        car="car-a",
+        track="track-a",
+        player_id="player-a",
+    )
+    lap_a = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100000,
+        lap_time_str="1:40.000",
+        sector1_ms=30000,
+        sector2_ms=35000,
+        sector3_ms=35000,
+        is_valid=True,
+    )
+
+    manager.update_lap_from_logs(lap_a, session_data=session_a)
+    manager.update_fuel_from_graphics_shm({"fuel_liter_per_lap": 1.2})
+
+    snapshot = manager.get_submission_fallbacks("session-a", 1)
+    assert snapshot is not None
+    assert snapshot.player_id == "player-a"
+    assert snapshot.car_model == "car-a"
+    assert snapshot.track == "track-a"
+    assert snapshot.last_lap_time_ms is None
+    assert snapshot.sector1_ms == 30000
+    assert snapshot.fuel_consumed_lap == 1.2
+
+    assert manager.get_submission_fallbacks("session-b", 1) is None
+    assert manager.get_submission_fallbacks("session-a", 2) is not None
+
+    manager.reset()
+    manager.update_session_metadata_from_logs(
+        SessionData(
+            session_id="session-b",
+            game_version="0.9.5",
+            session_type="RACE",
+            car="car-b",
+            track="track-b",
+            player_id="player-b",
+        )
+    )
+    assert snapshot.track == "track-a"
+    assert snapshot.player_id == "player-a"
+    assert manager.get_submission_fallbacks("session-a", 1) is None
+
+
+@pytest.mark.parametrize("callback", ["metadata", "lap", "bulk"])
+def test_log_callbacks_are_atomic_against_reset_and_new_session(callback: str) -> None:
+    manager = SharedSessionManager()
+    session_a = SessionData(
+        session_id="session-a",
+        car="car-a",
+        track="track-a",
+        player_id="player-a",
+        player_name="Driver A",
+        car_uuid="uuid-a",
+    )
+    session_b = SessionData(
+        session_id="session-b",
+        car="car-b",
+        track="track-b",
+        player_id="player-b",
+        player_name="Driver B",
+        car_uuid="uuid-b",
+    )
+    lap_a = LapData(
+        lap_number=1,
+        physics_lap_number=1,
+        lap_time_ms=100000,
+        lap_time_str="1:40.000",
+        sector1_ms=30000,
+        sector2_ms=35000,
+        sector3_ms=35000,
+        is_valid=True,
+    )
+    metadata_ready = Event()
+    allow_a = Event()
+    b_started = Event()
+    b_reset_done = Event()
+    original_method = getattr(manager, {
+        "metadata": "update_player_identification_from_logs",
+        "lap": "update_sector_splits_from_logs",
+        "bulk": "update_lap_from_logs",
+    }[callback])
+
+    def pause_inside_callback(*args, **kwargs) -> None:
+        metadata_ready.set()
+        allow_a.wait(timeout=1.0)
+        original_method(*args, **kwargs)
+
+    setattr(
+        manager,
+        {
+            "metadata": "update_player_identification_from_logs",
+            "lap": "update_sector_splits_from_logs",
+            "bulk": "update_lap_from_logs",
+        }[callback],
+        pause_inside_callback,
+    )
+
+    def update_a() -> None:
+        if callback == "metadata":
+            manager.update_session_metadata_from_logs(session_a)
+        elif callback == "lap":
+            manager.update_lap_from_logs(lap_a, session_data=session_a)
+        else:
+            session_a.laps = [lap_a]
+            manager.update_from_logs(session_a)
+
+    def reset_and_start_b() -> None:
+        b_started.set()
+        manager.reset()
+        b_reset_done.set()
+        manager.update_session_metadata_from_logs(session_b)
+
+    thread_a = Thread(target=update_a)
+    thread_b = Thread(target=reset_and_start_b)
+    try:
+        thread_a.start()
+        assert metadata_ready.wait(timeout=1.0)
+        thread_b.start()
+        assert b_started.wait(timeout=1.0)
+        # On the old implementation reset completes while update A is paused
+        # between metadata and lap writes.  The replacement holds the lock
+        # across the complete public callback, so B remains blocked here.
+        assert not b_reset_done.wait(timeout=0.1)
+        allow_a.set()
+    finally:
+        allow_a.set()
+        thread_a.join(timeout=1.0)
+        thread_b.join(timeout=1.0)
+        setattr(
+            manager,
+            {
+                "metadata": "update_player_identification_from_logs",
+                "lap": "update_sector_splits_from_logs",
+                "bulk": "update_lap_from_logs",
+            }[callback],
+            original_method,
+        )
+
+    final_metadata = manager.get_session_metadata_data()
+    assert final_metadata.session_id == "session-b"
+    assert final_metadata.track == "track-b"
+    identity = manager.get_player_identification()
+    assert identity.steam_id == "player-b"
+    assert identity.player_name == "Driver B"
+    assert identity.car_uuid == "uuid-b"
+    assert identity.car_model == "car-b"
+    assert manager.get_sector_split_data(1) is None
+    assert manager.get_lap_timing_data(1) is None
 
 
 def test_log_heuristic_valid_overwrites_shm_invalid() -> None:

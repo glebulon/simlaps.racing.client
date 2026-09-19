@@ -27,6 +27,7 @@ from .shared_session import (
     SessionMetadataData,
     SharedSessionData,
     SharedSessionManager,
+    SubmissionFallbackSnapshot,
 )
 from .tyre_state import TyreState
 
@@ -56,6 +57,7 @@ __all__ = [
     "PlayerIdentificationData",
     "SectorSplitData",
     "SessionMetadataData",
+    "SubmissionFallbackSnapshot",
     "SharedSessionData",
     "SharedSessionManager",
 ]

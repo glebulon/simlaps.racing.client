@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-from ..models import LapData, SessionData, SharedSessionManager
+from ..models import LapData, SessionData, SharedSessionManager, SubmissionFallbackSnapshot
 from ..utils.structured_logger import Component, log_debug, log_error, log_exception, log_info, log_warning
 from ..version import USER_AGENT, VERSION
 from .security import (
@@ -154,23 +154,27 @@ class APIClient:
                 message="Game must be running to submit laps",
             )
 
-        final_user_id, shared_player, preflight_error = self._validate_submission_preflight(
+        submission_fallbacks = self._session_manager.get_submission_fallbacks(
+            session.session_id,
+            lap.lap_number,
+        )
+        final_user_id, preflight_error = self._validate_submission_preflight(
             session=session,
             effective_is_valid=effective_is_valid,
             user_id=user_id,
             submit_invalid=submit_invalid,
+            submission_fallbacks=submission_fallbacks,
         )
         if preflight_error is not None:
             return preflight_error
         assert final_user_id is not None  # noqa: S101
-        assert shared_player is not None  # noqa: S101
 
         payload, payload_error = self._build_submission_payload(
             session=session,
             lap=lap,
             final_user_id=final_user_id,
-            shared_player=shared_player,
             effective_is_valid=effective_is_valid,
+            submission_fallbacks=submission_fallbacks,
         )
         if payload_error is not None:
             return payload_error
@@ -209,7 +213,8 @@ class APIClient:
         effective_is_valid: bool,
         user_id: Optional[str],
         submit_invalid: bool,
-    ) -> tuple[Optional[str], Any, Optional[SubmissionResult]]:
+        submission_fallbacks: Optional[SubmissionFallbackSnapshot],
+    ) -> tuple[Optional[str], Optional[SubmissionResult]]:
         """Validate submission policy and resolve the authoritative user."""
         if not effective_is_valid and not submit_invalid:
             log_debug(
@@ -218,34 +223,33 @@ class APIClient:
             )
             return (
                 None,
-                None,
                 SubmissionResult(
                     status=SubmissionStatus.INVALID_LAP,
                     message="Lap was invalidated (penalty or off-track)",
                 ),
             )
 
-        shared_player = self._session_manager.get_player_identification()
-        final_user_id = user_id or session.player_id or shared_player.steam_id
+        final_user_id = user_id or session.player_id or (
+            submission_fallbacks.player_id if submission_fallbacks is not None else None
+        )
         log_debug(
             Component.API,
             "User ID resolution",
             user_id=user_id,
             session_player_id=session.player_id,
-            shared_steam_id=shared_player.steam_id,
+            shared_steam_id=(submission_fallbacks.player_id if submission_fallbacks is not None else None),
             final_user_id=final_user_id,
         )
         if not final_user_id:
             log_warning(Component.API, "Rejected: No user ID")
             return (
                 None,
-                shared_player,
                 SubmissionResult(
                     status=SubmissionStatus.ERROR,
                     message="No Steam ID detected - please start a session in game",
                 ),
             )
-        return final_user_id, shared_player, None
+        return final_user_id, None
 
     def _build_submission_payload(
         self,
@@ -253,29 +257,42 @@ class APIClient:
         session: SessionData,
         lap: LapData,
         final_user_id: str,
-        shared_player: Any,
         effective_is_valid: bool,
+        submission_fallbacks: Optional[SubmissionFallbackSnapshot],
     ) -> tuple[Optional[Dict[str, Any]], Optional[SubmissionResult]]:
         """Build the source-aware unsigned payload without changing precedence."""
-        shared_lap_timing = self._session_manager.get_lap_timing_data(lap.lap_number)
-        shared_sector_splits = self._session_manager.get_sector_split_data(lap.lap_number)
-        shared_fuel_data = self._session_manager.get_fuel_data()
-        session_metadata = self._session_manager.get_session_metadata_data()
-
-        effective_track = session.track if session.track and session.track != "Unknown" else session_metadata.track
-        effective_car = (
-            session.car if session.car and session.car != "Unknown" else (shared_player.car_model or session.car)
+        effective_track = (
+            session.track
+            if session.track and session.track != "Unknown"
+            else (submission_fallbacks.track if submission_fallbacks is not None else session.track)
         )
-        effective_session_id = session.session_id or session_metadata.session_id
+        effective_car = (
+            session.car
+            if session.car and session.car != "Unknown"
+            else (
+                submission_fallbacks.car_model
+                if submission_fallbacks is not None and submission_fallbacks.car_model
+                else session.car
+            )
+        )
+        effective_session_id = session.session_id
         effective_session_type = (
             session.session_type
             if session.session_type and session.session_type != "Unknown"
-            else session_metadata.session_type
+            else (
+                submission_fallbacks.session_type
+                if submission_fallbacks is not None
+                else session.session_type
+            )
         )
         effective_game_version = (
             session.game_version
             if session.game_version and session.game_version != "Unknown"
-            else session_metadata.game_version
+            else (
+                submission_fallbacks.game_version
+                if submission_fallbacks is not None
+                else session.game_version
+            )
         )
 
         track_id = self._normalize_track_id(effective_track)
@@ -286,10 +303,8 @@ class APIClient:
             track_id=track_id,
             car=effective_car,
             lap_time_ms=lap.lap_time_ms,
-            shared_lap_time_ms=getattr(
-                shared_lap_timing,
-                "last_lap_time_ms",
-                None,
+            shared_lap_time_ms=(
+                submission_fallbacks.last_lap_time_ms if submission_fallbacks is not None else None
             ),
         )
 
@@ -298,8 +313,8 @@ class APIClient:
         final_time_candidate: Any = lap.lap_time_ms
         if (
             not isinstance(final_time_candidate, (int, float)) or int(final_time_candidate) <= 0
-        ) and shared_lap_timing is not None:
-            final_time_candidate = shared_lap_timing.last_lap_time_ms
+        ) and submission_fallbacks is not None:
+            final_time_candidate = submission_fallbacks.last_lap_time_ms
 
         if not isinstance(final_time_candidate, (int, float)):
             log_debug(Component.API, "Rejected: Lap time unavailable")
@@ -337,21 +352,26 @@ class APIClient:
             "sector2": lap.sector2_ms,
             "sector3": lap.sector3_ms,
         }
-        if shared_sector_splits is not None:
-            for field_name in ("sector1", "sector2", "sector3"):
+        if submission_fallbacks is not None:
+            for field_name, fallback in (
+                ("sector1", submission_fallbacks.sector1_ms),
+                ("sector2", submission_fallbacks.sector2_ms),
+                ("sector3", submission_fallbacks.sector3_ms),
+            ):
                 value = sector_payload[field_name]
                 if not isinstance(value, (int, float)) or int(value) <= 0:
-                    sector_payload[field_name] = getattr(
-                        shared_sector_splits,
-                        f"{field_name}_ms",
-                    )
+                    sector_payload[field_name] = fallback
 
         for field_name, value in sector_payload.items():
             if value is not None and int(value) > 0:
                 payload[field_name] = int(value)
 
         # SHM's per-lap fuel is authoritative; parsed log fuel is the fallback.
-        fuel_used_value = shared_fuel_data.fuel_consumed_lap
+        fuel_used_value = (
+            submission_fallbacks.fuel_consumed_lap
+            if submission_fallbacks is not None
+            else None
+        )
         if fuel_used_value is None:
             fuel_used_value = lap.fuel_used
         if fuel_used_value is not None:
