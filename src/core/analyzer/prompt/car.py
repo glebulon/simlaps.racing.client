@@ -6,12 +6,12 @@ from typing import Dict, List
 from src.core.analyzer.metrics import analyze_brake_thermals, analyze_suspension
 from src.core.car_tuning_catalog import format_tuning_block
 
-from .context import PromptContext
+from .context import PromptContext, lap_result_key
 
 
 def build_aero_sections(
     ctx: PromptContext,
-    lap_corner_map: Dict[int, Dict[int, Dict]],
+    lap_corner_map: Dict[str | int, Dict[int, Dict]],
 ) -> List[str]:
     laps = list(ctx.coached_laps)
     list(ctx.ref_corners)
@@ -28,6 +28,7 @@ def build_aero_sections(
         # Analyze DRS usage patterns
         drs_usage_per_lap = {}
         for lap in laps:
+            lap_key = lap_result_key(lap)
             lap_num = lap["lap_num"]
             lap_track = lap.get("track", [])
             drs_active_frames = 0
@@ -41,7 +42,7 @@ def build_aero_sections(
 
             if drs_available_frames > 0:
                 drs_usage_pct = (drs_active_frames / drs_available_frames) * 100
-                drs_usage_per_lap[lap_num] = {
+                drs_usage_per_lap[lap_key] = {
                     "active_frames": drs_active_frames,
                     "available_frames": drs_available_frames,
                     "usage_pct": drs_usage_pct,
@@ -174,7 +175,7 @@ def build_aero_sections(
 
 def build_gearing_sections(
     ctx: PromptContext,
-    lap_corner_map: Dict[int, Dict[int, Dict]],
+    lap_corner_map: Dict[str | int, Dict[int, Dict]],
 ) -> List[str]:
     laps = list(ctx.coached_laps)
     ref_corners = list(ctx.ref_corners)
@@ -195,7 +196,7 @@ def build_gearing_sections(
 
             gear_data = []
             for lap in laps:
-                corner = lap_corner_map[lap["lap_num"]].get(cid)
+                corner = lap_corner_map[lap_result_key(lap)].get(cid)
                 if not corner:
                     continue
 
@@ -215,12 +216,12 @@ def build_gearing_sections(
                         gear = _pt.get("gear", 0)
                         rpm_pct = _pt.get("rpm_percent")
                         if gear_window is not None:
-                            gear_data.append((lap["lap_num"], gear, gear_window, rpm_pct, _label))
+                            gear_data.append((lap_result_key(lap), lap["lap_num"], gear, gear_window, rpm_pct, _label))
 
             if gear_data:
                 lines.append(f"  {name}:")
                 for item in gear_data:
-                    ln, gear, gw, rpm_pct, label = item
+                    _key, ln, gear, gw, rpm_pct, label = item
                     rpm_str = f" RPM:{rpm_pct:.0%}" if rpm_pct else ""
                     gear_hint = ""
                     if gw < 0.80:
@@ -229,13 +230,14 @@ def build_gearing_sections(
                         gear_hint = " <- suboptimal, consider lower gear"
                     lines.append(f"    Lap {ln} ({label}): Gear {gear}  GearOpt={gw:.2f}{rpm_str}{gear_hint}")
                 # Flag gear changes mid-corner
-                _by_lap: Dict[int, List[int]] = {}
-                for ln, gear, gw, rpm_pct, label in gear_data:  # noqa: B007
-                    _by_lap.setdefault(ln, []).append(gear)
-                for ln, gears in _by_lap.items():
+                _by_lap: Dict[str | int, List[int]] = {}
+                for key, _ln, gear, _gw, _rpm_pct, _label in gear_data:  # noqa: B007
+                    _by_lap.setdefault(key, []).append(gear)
+                for key, gears in _by_lap.items():
                     if len(set(gears)) > 1:
+                        display_lap_num = next(item[1] for item in gear_data if item[0] == key)
                         lines.append(
-                            f"    >> Lap {ln}: Gear changes mid-corner ({' → '.join(str(g) for g in gears)}) — consider earlier downshift"  # noqa: E501
+                            f"    >> Lap {display_lap_num}: Gear changes mid-corner ({' → '.join(str(g) for g in gears)}) — consider earlier downshift"  # noqa: E501
                         )
                 lines.append("")
 
@@ -244,7 +246,7 @@ def build_gearing_sections(
 
 def build_brake_sections(
     ctx: PromptContext,
-    lap_corner_map: Dict[int, Dict[int, Dict]],
+    lap_corner_map: Dict[str | int, Dict[int, Dict]],
 ) -> List[str]:
     laps = list(ctx.coached_laps)
     ref_corners = list(ctx.ref_corners)
@@ -265,7 +267,7 @@ def build_brake_sections(
 
             bias_data = []
             for lap in laps:
-                corner = lap_corner_map[lap["lap_num"]].get(cid)
+                corner = lap_corner_map[lap_result_key(lap)].get(cid)
                 if not corner:
                     continue
 
@@ -312,7 +314,7 @@ def build_brake_sections(
             for spec in ref_corners:
                 cid = spec["id"]
                 for lap in laps:
-                    corner = lap_corner_map[lap["lap_num"]].get(cid)
+                    corner = lap_corner_map[lap_result_key(lap)].get(cid)
                     if not corner:
                         continue
                     corner_track = [
@@ -360,7 +362,7 @@ def build_brake_sections(
 
 def build_suspension_sections(
     ctx: PromptContext,
-    lap_corner_map: Dict[int, Dict[int, Dict]],
+    lap_corner_map: Dict[str | int, Dict[int, Dict]],
 ) -> List[str]:
     data = ctx.data
     laps = list(ctx.coached_laps)
@@ -386,7 +388,7 @@ def build_suspension_sections(
 
 def build_car_sections(
     ctx: PromptContext,
-    lap_corner_map: Dict[int, Dict[int, Dict]],
+    lap_corner_map: Dict[str | int, Dict[int, Dict]],
 ) -> List[str]:
     lines: List[str] = []
     tuning_block = format_tuning_block(ctx.car_model)

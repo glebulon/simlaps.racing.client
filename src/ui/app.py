@@ -257,7 +257,7 @@ class SimLapsApp:
                 record_frames=self._config.telemetry_enabled,
             )
             # Set up auto-stop callback to trigger analysis
-            self._telemetry_capture.set_on_stop_callback(self._on_telemetry_auto_stop)
+            self._telemetry_capture.set_on_stop_snapshot_callback(self._on_telemetry_auto_stop)
 
             if self._config.telemetry_enabled:
                 self._telemetry_analyzer = TelemetryAnalyzer(
@@ -528,6 +528,10 @@ class SimLapsApp:
 
     async def _on_lap_update(self, session: SessionData, lap: LapData):
         """Refresh a SHM-first lap after ACE eventually flushes its log data."""
+        if self._telemetry_capture:
+            reconcile_boundary = getattr(self._telemetry_capture, "reconcile_lap_boundary", None)
+            if callable(reconcile_boundary):
+                reconcile_boundary(session.session_id, lap)
         if self._home_page:
             self._home_page.refresh_lap(lap)
         history_entry = self._get_history_entry_for_lap(lap)
@@ -621,20 +625,26 @@ class SimLapsApp:
 
     async def _start_telemetry_capture(self):
         """Start telemetry capture when game session begins."""
-        await self._telemetry_lifecycle_service.start_capture(
-            telemetry_capture=self._telemetry_capture,
-            home_page=self._home_page,
-            telemetry_enabled=self._config.telemetry_enabled,
-        )
+        start_kwargs = {
+            "telemetry_capture": self._telemetry_capture,
+            "home_page": self._home_page,
+            "telemetry_enabled": self._config.telemetry_enabled,
+        }
+        if hasattr(self, "_current_track_name"):
+            start_kwargs["track_name"] = self._current_track_name
+        if hasattr(self, "_session_manager"):
+            start_kwargs["car_model"] = self._session_manager.get_car()
+        await self._telemetry_lifecycle_service.start_capture(**start_kwargs)
 
-    async def _on_telemetry_auto_stop(self, reason: str):
+    async def _on_telemetry_auto_stop(self, reason: str, snapshot=None):
         """Handle automatic stop of telemetry capture (game crash/quit detected)."""
         await self._telemetry_lifecycle_service.handle_auto_stop(
             reason=reason,
             telemetry_capture=self._telemetry_capture,
             telemetry_analyzer=self._telemetry_analyzer,
             home_page=self._home_page,
-            current_track_name=self._current_track_name,
+            current_track_name=getattr(self, "_current_track_name", None),
+            snapshot=snapshot,
         )
 
     async def _stop_telemetry_capture(self, reason: str = "session_end", discard: bool = False):

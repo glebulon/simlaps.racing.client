@@ -4,15 +4,22 @@ Advanced tests for telemetry capture to improve coverage.
 Tests capture loop, session management, and error recovery.
 """
 
+import asyncio
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from src.core.security import GameProcessStatus
 from src.core.telemetry_capture import (
     REGIONS,
     FrameData,
+    LapBoundary,
     RegionReader,
     TelemetryCapture,
 )
+from src.ui.services.telemetry_lifecycle_service import TelemetryLifecycleService
 
 
 class TestTelemetryCaptureLoop:
@@ -280,6 +287,90 @@ class TestCallbackSystem:
 
         # Should not error
         assert capture._on_stop_callback is None
+
+    def test_stop_snapshot_survives_immediate_next_capture_state_reset(self):
+        capture = TelemetryCapture(hz=10.0)
+        old_frame = FrameData("2026-01-01T00:00:00Z", 1, {"speed_kmh": 100.0})
+        capture._frames = [old_frame]
+        capture._output_prefix = "old-capture"
+        capture._stop_reason = "game_not_running"
+        capture.set_source_context(track_name="Old Track", car_model="Old Car")
+        snapshot = capture._freeze_stop_snapshot()
+
+        capture._frames = [FrameData("2026-01-01T00:00:01Z", 1, {"speed_kmh": 50.0})]
+        capture._output_prefix = "new-capture"
+        capture.set_source_context(track_name="New Track", car_model="New Car")
+
+        assert snapshot.output_prefix == "old-capture"
+        assert snapshot.track_name == "Old Track"
+        assert snapshot.car_model == "Old Car"
+        assert snapshot.frames == (old_frame,)
+
+    @pytest.mark.asyncio
+    async def test_internal_stop_callback_receives_old_snapshot_after_immediate_restart(self, monkeypatch):
+        capture = TelemetryCapture(hz=1000.0)
+        old_frame = FrameData("2026-01-01T00:00:00Z", 1, {"speed_kmh": 100.0})
+        observed = []
+        analyzed = []
+        game_states = iter((GameProcessStatus.RUNNING, GameProcessStatus.NOT_RUNNING))
+
+        capture._connect_regions = lambda: {"physics": SimpleNamespace(size=1)}
+        capture._reconnect_missing = lambda _readers: None
+        capture._close_readers = lambda: None
+
+        def fake_frame(_frame_number):
+            capture._last_sample_had_data = True
+            if not capture._lap_boundaries:
+                capture._lap_boundaries.append(
+                    LapBoundary(0, 20_000, 4, "VALID", "old-session", "old-result", 4)
+                )
+            return old_frame
+
+        capture._capture_frame = fake_frame
+        prefixes = iter(("old-prefix", "new-prefix"))
+        capture._make_output_prefix = lambda: next(prefixes)
+        monkeypatch.setattr("src.core.telemetry_capture.is_game_running", lambda: next(game_states))
+        capture.set_source_context(track_name="Old Track", car_model="Old Car")
+
+        class Analyzer:
+            async def analyze(self, frames, **kwargs):
+                analyzed.append((frames, kwargs))
+                return SimpleNamespace(laps_detected=1, best_lap_time=20.0, html_path="old.html")
+
+        async def on_stop(reason, snapshot):
+            await asyncio.sleep(0)
+            observed.append(snapshot)
+            await TelemetryLifecycleService().handle_auto_stop(
+                reason=reason,
+                telemetry_capture=capture,
+                telemetry_analyzer=Analyzer(),
+                home_page=None,
+                current_track_name="New Track",
+                snapshot=snapshot,
+            )
+
+        capture.set_on_stop_snapshot_callback(on_stop)
+        assert await capture.start_capture()
+        capture._recording_awaiting_boundary = False
+        await capture._task
+
+        # Start the next capture before the scheduled finalizer resumes.
+        assert await capture.start_capture()
+        capture._running = False
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+        assert observed
+        assert observed[0].output_prefix != capture.get_output_prefix()
+        assert observed[0].track_name == "Old Track"
+        assert observed[0].car_model == "Old Car"
+        assert observed[0].frames == (old_frame,)
+        assert observed[0].lap_boundaries[0].result_id == "old-result"
+        assert analyzed[0][0] == [old_frame]
+        assert analyzed[0][1]["output_prefix"] == "old-prefix"
+        assert analyzed[0][1]["track_name"] == "Old Track"
+        assert analyzed[0][1]["car_name"] == "Old Car"
+        assert analyzed[0][1]["game_lap_boundaries"][0].result_id == "old-result"
 
 
 class TestRegionDiscovery:

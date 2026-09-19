@@ -941,8 +941,24 @@ class SharedSessionManager:
             self._mark_source("max_speed", "shm_physics")
             self._mark_source("car_setup", "shm_physics")
 
-    def update_from_telemetry(self, telemetry_data: Dict[str, Any]) -> None:
+    def update_from_telemetry(
+        self,
+        telemetry_data: Dict[str, Any],
+        *,
+        expected_session_id: Optional[str] = None,
+    ) -> bool:
+        """Apply a telemetry summary only while its session still owns the manager.
+
+        The ownership check and field writes share the manager lock so a
+        session rollover cannot occur between validating an old report and
+        applying its summary.
+        """
         with self._lock:
+            if (
+                expected_session_id is not None
+                and self._session_data.session_metadata.session_id != expected_session_id
+            ):
+                return False
             max_speed = telemetry_data.get("max_speed")
             if isinstance(max_speed, (int, float)):
                 self._session_data.max_speed = float(max_speed)
@@ -956,6 +972,7 @@ class SharedSessionManager:
                 self._session_data.tyre_compound = tyre_compound
 
             self._mark_source("telemetry_summary", "calculated")
+            return True
 
     def get_data_sources(self) -> Dict[str, Set[str]]:
         """Return a snapshot of data source tracking (thread-safe)."""

@@ -141,7 +141,10 @@ async def test_captured_two_complete_laps_reach_analyzer(captured_rows, tmp_path
     assert result.best_lap_time == pytest.approx(54.453, abs=0.2)
     assert Path(result.html_path).is_file()
     assert Path(result.ai_prompt_path).read_text(encoding="utf-8")
-    assert rendered_data["valid_lap_nums"] == [1]
+    # No identity-bearing log result accompanied this SHM-only replay, so a
+    # shared manager verdict keyed by the reused display number is not copied
+    # into the report.
+    assert rendered_data["valid_lap_nums"] == [1, 2]
     assert rendered_data["best_lap_num"] == 2
     assert rendered_data["reference_lap_num"] == 2
     assert rendered_data["comparison_lap_num"] == 1

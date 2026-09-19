@@ -1196,7 +1196,8 @@ class TestTelemetryAnalyzer:
         )
         # Lap 3 arrived after lap 4 and differs from SHM by 1 ms. Its invalid
         # type must follow the nearest lap time rather than callback order.
-        # The invalid fifth-lap callback is absent and comes from shared state.
+        # The fifth callback is absent. Its timing boundary remains available,
+        # but no unrelated displayed-number map may supply a verdict.
         delayed_markers = [
             (60, 66393, 1, "VALID"),
             (120, 65559, 2, "VALID"),
@@ -1217,9 +1218,11 @@ class TestTelemetryAnalyzer:
 
         assert result.laps_detected == 5
         data = html_spy.await_args.args[0]
-        assert [lap["lap_num"] for lap in data["laps"]] == [1, 2, 3, 4, 5]
-        assert [lap["lap_time_s"] for lap in data["laps"]] == pytest.approx([66.393, 65.559, 66.174, 64.428, 78.888])
-        assert [lap["is_valid"] for lap in data["laps"]] == [True, True, False, True, False]
+        # The displayed number follows the late callback's corrected result;
+        # physical ordering and the original callback number remain separate.
+        assert [lap["lap_num"] for lap in data["laps"]] == [1, 2, 4, 3, 5]
+        assert [lap["lap_time_s"] for lap in data["laps"]] == pytest.approx([66.393, 65.559, 66.175, 64.428, 78.888])
+        assert [lap["is_valid"] for lap in data["laps"]] == [True, True, False, True, True]
         assert [lap["end_frame"] for lap in data["laps"]] == [60, 120, 180, 240, 300]
         assert any("realigned" in note for note in data["analysis_notes"])
 
@@ -1229,27 +1232,30 @@ class TestTelemetryAnalyzer:
         eligible for best/reference selection — validity does not gate coaching."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
-        lap_times = [70000, 60000, 65000, 75000]
+        # Keep the synthetic frame cadence consistent with the official
+        # durations so invalid laps remain eligible for the established
+        # trustworthy-invalid coaching policy.
+        lap_times = [6000, 5900, 6000, 5900]
         frames = []
         last_lap_time = 0
         for frame_num in range(300):
             if frame_num in (60, 120, 180, 240):
                 last_lap_time = lap_times[(frame_num // 60) - 1]
-            frames.append(
-                create_mock_frame(
-                    frame_num,
-                    speed=(333.0 if 60 <= frame_num < 120 else 100.0),
-                    position=(frame_num % 60) / 60,
-                    last_lap_time_ms=last_lap_time,
-                )
+            sample = create_mock_frame(
+                frame_num,
+                speed=(333.0 if 60 <= frame_num < 120 else 100.0),
+                position=(frame_num % 60) / 60,
+                last_lap_time_ms=last_lap_time,
             )
+            sample.graphics["current_time_ms"] = (frame_num % 60) * 100
+            frames.append(sample)
 
         analyzer = TelemetryAnalyzer(output_dir=str(tmp_path))
         markers = [
-            (60, 70000, 1, "VALID"),
-            (120, 60000, 2, "INVALID_GAME"),
-            (180, 65000, 3, "VALID"),
-            (240, 75000, 4, "INVALID_GAME"),
+            (60, 6000, 1, "VALID"),
+            (120, 5900, 2, "INVALID_GAME"),
+            (180, 6000, 3, "VALID"),
+            (240, 5900, 4, "INVALID_GAME"),
         ]
 
         with (
@@ -1269,34 +1275,33 @@ class TestTelemetryAnalyzer:
         assert data["best_lap_num"] == 2
         assert data["reference_lap_num"] is not None
         assert data["comparison_lap_num"] is not None
-        assert result.best_lap_time == pytest.approx(60.0)
+        assert result.best_lap_time == pytest.approx(5.9)
 
         summary = json.loads((tmp_path / "session_history.jsonl").read_text().strip())
-        assert summary["best_lap_time_s"] == pytest.approx(60.0)
+        assert summary["best_lap_time_s"] == pytest.approx(5.9)
         assert summary["top_speed"] == pytest.approx(333.0)
         assert summary["laps"] == 4
 
     @pytest.mark.asyncio
     async def test_analyze_all_invalid_session_still_produces_coaching(self, tmp_path):
-        """An all-invalid session still gets a best lap and full coaching —
-        validity is display metadata, not a gate on analysis."""
+        """Trustworthy invalid laps remain available under the upstream policy."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         frames = []
         last_lap_time = 0
         for frame_num in range(180):
             if frame_num == 60:
-                last_lap_time = 60000
+                last_lap_time = 6000
             elif frame_num == 120:
-                last_lap_time = 59000
-            frames.append(
-                create_mock_frame(
-                    frame_num,
-                    speed=100.0,
-                    position=(frame_num % 60) / 60,
-                    last_lap_time_ms=last_lap_time,
-                )
+                last_lap_time = 5900
+            sample = create_mock_frame(
+                frame_num,
+                speed=100.0,
+                position=(frame_num % 60) / 60,
+                last_lap_time_ms=last_lap_time,
             )
+            sample.graphics["current_time_ms"] = (frame_num % 60) * 100
+            frames.append(sample)
 
         analyzer = TelemetryAnalyzer(output_dir=str(tmp_path))
         with (
@@ -1307,19 +1312,20 @@ class TestTelemetryAnalyzer:
                 frames,
                 hz=10.0,
                 game_lap_boundaries=[
-                    (60, 60000, 1, "INVALID_GAME"),
-                    (120, 59000, 2, "INVALID_GAME"),
+                    (60, 6000, 1, "INVALID_GAME"),
+                    (120, 5900, 2, "INVALID_GAME"),
                 ],
                 output_prefix="all_invalid",
             )
 
         data = html_spy.await_args.args[0]
         assert data["best_lap_num"] == 2
-        assert result.best_lap_time == pytest.approx(59.0)
+        assert result.best_lap_time == pytest.approx(5.9)
         assert [lap["is_valid"] for lap in data["laps"]] == [False, False]
+        assert all(lap["derived_metrics_trustworthy"] for lap in data["laps"])
         assert not any("No valid completed laps" in note for note in data["analysis_notes"])
         summary = json.loads((tmp_path / "session_history.jsonl").read_text().strip())
-        assert summary["best_lap_time_s"] == pytest.approx(59.0)
+        assert summary["best_lap_time_s"] == pytest.approx(5.9)
 
     @pytest.mark.asyncio
     async def test_analyze_compares_with_summary_before_persisting_current_session(self, tmp_path):
@@ -1389,8 +1395,8 @@ class TestTelemetryAnalyzer:
         assert result.best_lap_time == pytest.approx(140.0)
 
     @pytest.mark.asyncio
-    async def test_analyze_prefers_shared_session_lap_data(self):
-        """Analyzer should use shared-session lap timing/validity when available."""
+    async def test_analyze_keeps_legacy_boundary_results_out_of_unrelated_maps(self):
+        """Legacy boundaries retain their own results instead of shared-number overlays."""
         from src.core.telemetry_analyzer import TelemetryAnalyzer
 
         frames = [create_mock_frame(i, speed=90.0 + (i % 40), position=i * 0.01) for i in range(220)]
@@ -1405,12 +1411,7 @@ class TestTelemetryAnalyzer:
         manager.update_lap_validity_from_graphics_shm(2, True)
 
         analyzer = TelemetryAnalyzer(output_dir="tests/output", session_manager=manager)
-        game_markers = [
-            (50, 153396),
-            (100, 153309),
-            (150, 152460),
-            (200, 152001),
-        ]
+        game_markers = [(50, 5000), (100, 4900), (150, 4800), (200, 4700)]
 
         with patch.object(manager, "update_from_telemetry", wraps=manager.update_from_telemetry) as update_spy:
             result = await analyzer.analyze(
@@ -1422,10 +1423,10 @@ class TestTelemetryAnalyzer:
 
         assert result is not None
         assert result.laps_detected == 4
-        assert abs(result.best_lap_time - 170.0) < 0.001
-        update_spy.assert_called_once()
-        telemetry_summary = update_spy.call_args.args[0]
-        assert telemetry_summary["max_speed"] >= 90.0
+        assert abs(result.best_lap_time - 4.7) < 0.001
+        # The short synthetic segments do not satisfy the official duration
+        # contract, so their derived metrics stay out of aggregates.
+        update_spy.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_analyze_uses_explicit_game_lap_numbers_for_mid_session_capture(self):
@@ -1458,7 +1459,7 @@ class TestTelemetryAnalyzer:
 
         assert result is not None
         assert result.laps_detected == 3
-        assert abs(result.best_lap_time - 130.0) < 0.001
+        assert abs(result.best_lap_time - 133.194) < 0.001
         with open(result.ai_prompt_path, "r", encoding="utf-8") as fh:
             prompt = fh.read()
         assert "Telemetry coaching is running in DIAGNOSTIC mode." in prompt

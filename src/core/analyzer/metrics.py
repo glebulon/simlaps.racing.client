@@ -564,7 +564,7 @@ def analyze_suspension(
             for lap in laps:
                 ln = lap["lap_num"]
                 if lap_corner_map:
-                    _dc = lap_corner_map.get(ln, {}).get(cid)
+                    _dc = lap_corner_map.get(lap.get("result_key") or ln, {}).get(cid)
                     if not _dc:
                         continue
                     _sf = _dc.get("start_frame")
@@ -604,7 +604,7 @@ def analyze_suspension(
         for lap in laps:
             ln = lap["lap_num"]
             if lap_corner_map:
-                _dc = lap_corner_map.get(ln, {}).get(cid)
+                _dc = lap_corner_map.get(lap.get("result_key") or ln, {}).get(cid)
                 if not _dc:
                     continue
                 _sf = _dc.get("start_frame")
@@ -616,7 +616,7 @@ def analyze_suspension(
                         for w in ("fl", "fr", "rl", "rr"):
                             v = pt.get(f"sus_{w}", 0)
                             if isinstance(v, (int, float)) and v > 0:
-                                apex_sus.setdefault(ln, {})[w] = v
+                                apex_sus.setdefault(lap.get("result_key") or ln, {})[w] = v
                         break
             else:
                 for pt in lap.get("track", []):
@@ -647,7 +647,7 @@ def analyze_suspension(
             ln = lap["lap_num"]
             sample = None
             if lap_corner_map:
-                detected_corner = lap_corner_map.get(ln, {}).get(cid)
+                detected_corner = lap_corner_map.get(lap.get("result_key") or ln, {}).get(cid)
                 if not detected_corner:
                     continue
                 start_frame = detected_corner.get("start_frame")

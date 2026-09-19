@@ -282,7 +282,13 @@ async def test_handle_lap_complete_records_telemetry_boundary_when_capturing():
         **deps,
     )
 
-    deps["telemetry_capture"].record_lap_boundary.assert_called_once_with(90000, 1, "VALID")
+    boundary_call = deps["telemetry_capture"].record_lap_boundary.call_args
+    assert boundary_call.args == (90000, 1, "VALID")
+    assert boundary_call.kwargs == {
+        "session_id": session.session_id,
+        "result_id": lap.result_id,
+        "original_lap_number": 1,
+    }
 
 
 @pytest.mark.asyncio
@@ -313,7 +319,13 @@ async def test_handle_lap_complete_records_structural_outlap_boundary():
         **deps,
     )
 
-    deps["telemetry_capture"].record_lap_boundary.assert_called_once_with(120000, 1, "OUTLAP")
+    boundary_call = deps["telemetry_capture"].record_lap_boundary.call_args
+    assert boundary_call.args == (120000, 1, "OUTLAP")
+    assert boundary_call.kwargs == {
+        "session_id": session.session_id,
+        "result_id": lap.result_id,
+        "original_lap_number": 1,
+    }
     # The outlap is presented as an invalid lap so it is never silently
     # dropped, but it must not reach PB or submission.
     deps["home_page"].add_lap.assert_called_once()

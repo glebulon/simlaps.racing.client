@@ -5,7 +5,7 @@ Owns telemetry capture start/stop transitions and post-capture analysis flow.
 
 from typing import TYPE_CHECKING, Optional
 
-from src.core.telemetry_capture import TelemetryCapture
+from src.core.telemetry_capture import CaptureSnapshot, TelemetryCapture
 from src.utils.structured_logger import (
     Component,
     log_debug,
@@ -31,6 +31,8 @@ class TelemetryLifecycleService:
         telemetry_capture: TelemetryCapture | None,
         home_page: HomePage | None,
         telemetry_enabled: bool,
+        track_name: Optional[str] = None,
+        car_model: Optional[str] = None,
     ) -> None:
         """Start telemetry capture when a session becomes active.
 
@@ -60,6 +62,7 @@ class TelemetryLifecycleService:
         # while no session was active.
         if telemetry_capture.record_frames != telemetry_enabled:
             telemetry_capture.set_record_frames(telemetry_enabled)
+        telemetry_capture.set_source_context(track_name=track_name, car_model=car_model)
 
         try:
             mode_label = "full recording" if telemetry_enabled else "validity-only"
@@ -92,6 +95,7 @@ class TelemetryLifecycleService:
         telemetry_analyzer: "TelemetryAnalyzer | None",
         home_page: HomePage | None,
         current_track_name: Optional[str],
+        snapshot: CaptureSnapshot | None = None,
     ) -> None:
         """Handle automatic stop event (crash/quit) and run analysis if frames exist.
 
@@ -99,8 +103,18 @@ class TelemetryLifecycleService:
         recorded.  In validity-only mode there are no frames and no
         analyzer — the method still finalises the capture loop cleanly.
         """
-        output_prefix = telemetry_capture.get_output_prefix() if telemetry_capture else None
-        frame_count = len(telemetry_capture.get_frames()) if telemetry_capture else 0
+        captured_snapshot = telemetry_capture.get_last_stop_snapshot() if telemetry_capture else None
+        snapshot = snapshot or (captured_snapshot if isinstance(captured_snapshot, CaptureSnapshot) else None)
+        output_prefix = (
+            snapshot.output_prefix
+            if snapshot
+            else (telemetry_capture.get_output_prefix() if telemetry_capture else None)
+        )
+        frame_count = (
+            len(snapshot.frames)
+            if snapshot
+            else (len(telemetry_capture.get_frames()) if telemetry_capture else 0)
+        )
         log_info(
             Component.APP,
             "Telemetry auto-stop",
@@ -116,7 +130,7 @@ class TelemetryLifecycleService:
             )
 
         if telemetry_capture:
-            frames = telemetry_capture.get_frames()
+            frames = list(snapshot.frames) if snapshot else telemetry_capture.get_frames()
             frame_count = len(frames)
 
             if frame_count > 0 and telemetry_analyzer is not None:
@@ -124,14 +138,23 @@ class TelemetryLifecycleService:
                 try:
                     if home_page:
                         home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
-                    metadata = telemetry_capture.get_metadata()
-                    lap_boundaries = telemetry_capture.get_lap_boundaries()
+                    metadata = snapshot.metadata if snapshot else telemetry_capture.get_metadata()
+                    lap_boundaries = (
+                        list(snapshot.lap_boundaries)
+                        if snapshot
+                        else telemetry_capture.get_lap_boundaries()
+                    )
                     result = await telemetry_analyzer.analyze(
                         frames,
                         hz=10.0,
                         metadata=metadata,
-                        track_name=current_track_name,
-                        output_prefix=telemetry_capture.get_output_prefix(),
+                        track_name=snapshot.track_name if snapshot else current_track_name,
+                        car_name=(
+                            snapshot.car_model
+                            if snapshot and snapshot.car_model is not None
+                            else ("Unknown Car" if snapshot else None)
+                        ),
+                        output_prefix=output_prefix,
                         game_lap_boundaries=lap_boundaries,
                     )
 
@@ -199,6 +222,12 @@ class TelemetryLifecycleService:
         try:
             log_debug(Component.APP, "Stopping telemetry capture", prefix=telemetry_capture.get_output_prefix())
             frames = await telemetry_capture.stop_capture(reason)
+            captured_snapshot = telemetry_capture.get_last_stop_snapshot()
+            snapshot = (
+                captured_snapshot
+                if isinstance(captured_snapshot, CaptureSnapshot)
+                else None
+            )
             frame_count = len(frames)
             log_info(Component.APP, "Telemetry capture stopped", frames=frame_count, prefix=output_prefix)
 
@@ -214,13 +243,22 @@ class TelemetryLifecycleService:
                 if home_page:
                     home_page.set_telemetry_status(TelemetryStatus.ANALYZING, frame_count)
                 log_info(Component.APP, "Starting telemetry analysis", frames=frame_count, prefix=output_prefix)
-                metadata = telemetry_capture.get_metadata()
-                lap_boundaries = telemetry_capture.get_lap_boundaries()
+                metadata = snapshot.metadata if snapshot else telemetry_capture.get_metadata()
+                lap_boundaries = (
+                    list(snapshot.lap_boundaries)
+                    if snapshot
+                    else telemetry_capture.get_lap_boundaries()
+                )
                 result = await telemetry_analyzer.analyze(
                     frames,
                     hz=10.0,
                     metadata=metadata,
-                    track_name=current_track_name,
+                    track_name=snapshot.track_name if snapshot else current_track_name,
+                    car_name=(
+                        snapshot.car_model
+                        if snapshot and snapshot.car_model is not None
+                        else ("Unknown Car" if snapshot else None)
+                    ),
                     output_prefix=output_prefix,
                     game_lap_boundaries=lap_boundaries,
                 )

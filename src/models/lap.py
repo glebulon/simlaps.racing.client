@@ -131,6 +131,9 @@ class LapData:
 
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
     distance_hundredm: Optional[int] = None
+    # Stable identity shared by the initial completion callback and any late
+    # parser enrichment. Lap numbers are display data and may be corrected.
+    result_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
     def to_dict(self) -> dict:
         return {
@@ -152,6 +155,7 @@ class LapData:
             "stint_number": self.stint_number,
             "timestamp": self.timestamp,
             "distance_hundredm": self.distance_hundredm,
+            "result_id": self.result_id,
         }
 
 

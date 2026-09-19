@@ -10,19 +10,38 @@ def _detect_laps_by_timing_state(track: List[Dict], hz: float = 1.0) -> Optional
     min_lap_frames = max(10, int(round(1.0 * hz)))
     boundaries = []
     prev_last_laptime = None
+    prev_current_lap_time = None
     saw_empty_last_laptime = False
 
     for pt in track:
         last_laptime = pt.get("last_lap_time_ms")
+        current_lap_time = pt.get("lap_time_ms")
+        status_name = str(pt.get("status_name") or "").casefold()
+        session_phase = str(pt.get("session_phase") or "").casefold()
+        physical_live = not any(
+            token in status_name or token in session_phase
+            for token in ("pause", "replay", "menu", "ended", "finish", "pit")
+        )
+        timer_reset = (
+            isinstance(prev_current_lap_time, (int, float))
+            and isinstance(current_lap_time, (int, float))
+            and prev_current_lap_time > 1_000
+            and current_lap_time + 100.0 < prev_current_lap_time
+            and isinstance(last_laptime, (int, float))
+            and last_laptime > 0
+            and physical_live
+        )
         # Zero/None means there is no completed lap (session start, pit
         # outlap, or mappings being cleared during shutdown). It is not a
         # finish-line transition and must not create a zero-second lap.
         if not isinstance(last_laptime, (int, float)) or isinstance(last_laptime, bool) or last_laptime <= 0:
             if prev_last_laptime is None:
                 saw_empty_last_laptime = True
+            if isinstance(current_lap_time, (int, float)):
+                prev_current_lap_time = current_lap_time
             continue
         # Detect when last_laptime changes (lap completion event)
-        completed_transition = (prev_last_laptime is None and saw_empty_last_laptime) or (
+        completed_transition = timer_reset or (prev_last_laptime is None and saw_empty_last_laptime) or (
             prev_last_laptime is not None and last_laptime != prev_last_laptime
         )
         # ACE can synthesize a final lap time while tearing down a race (for
@@ -38,6 +57,8 @@ def _detect_laps_by_timing_state(track: List[Dict], hz: float = 1.0) -> Optional
             if not boundaries or (frame - boundaries[-1]) >= min_lap_frames:
                 boundaries.append(frame)
         prev_last_laptime = last_laptime
+        if isinstance(current_lap_time, (int, float)):
+            prev_current_lap_time = current_lap_time
 
     return boundaries if len(boundaries) >= 1 else None
 
