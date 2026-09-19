@@ -673,19 +673,23 @@ class TestTelemetryCaptureEdgeCases:
         assert capture._readers == {}
 
     def test_should_notify_stop_callback(self):
-        """Test _should_notify_stop_callback logic."""
+        """Internal stops notify; explicit callers own finalization."""
         capture = TelemetryCapture(hz=10.0)
 
         # Should notify for unexpected stops
         capture._stop_reason = "task_exception"
         assert capture._should_notify_stop_callback() is True
 
-        # Should not notify for expected stops
+        # Stop reasons do not determine ownership by themselves.
         capture._stop_reason = "manual"
+        assert capture._should_notify_stop_callback() is True
+
+        # An explicit caller owns finalization for every reason, including
+        # lifecycle reasons that previously required an allowlist.
+        capture._explicit_stop_requested = True
+        capture._stop_reason = "car_removed"
         assert capture._should_notify_stop_callback() is False
         capture._stop_reason = None
-        assert capture._should_notify_stop_callback() is False
-        capture._stop_reason = "session_end"
         assert capture._should_notify_stop_callback() is False
 
     @patch("src.core.telemetry_capture.RegionReader")

@@ -255,12 +255,6 @@ class TelemetryCapture:
     HEARTBEAT_TIMEOUT_SECONDS = 5.0
     # Timeout after 3 seconds with all regions disconnected
     DISCONNECT_TIMEOUT_SECONDS = 3.0
-    # Timeout after 120 seconds of zero speed (race exit to menu detection).
-    # 120s covers pit stops and formation laps without triggering prematurely.
-    # Once lap boundaries are recorded we skip idle timeout entirely and rely
-    # on the "remove car" log signal as the authoritative session-end trigger.
-    IDLE_TIMEOUT_SECONDS = 120.0
-
     def __init__(
         self,
         hz: float = 20.0,
@@ -298,11 +292,13 @@ class TelemetryCapture:
         self._region_paths: Dict[str, str] = {}
         self._last_valid_frame_time: Optional[float] = None
         self._stop_reason: Optional[str] = None
+        # An explicit caller owns finalization.  Internal lifecycle failures
+        # notify the callback so the UI can finalize the capture exactly once.
+        self._explicit_stop_requested = False
         self._on_stop_callback: Optional[Callable[[str], None]] = None
         self._output_dir = output_dir or get_default_output_dir()
         self._all_disconnected_since: Optional[float] = None
         self._output_prefix: Optional[str] = None
-        self._idle_since: Optional[float] = None
         self._lap_boundaries: List[LapBoundary] = []
         self._diag_file: Optional[TextIO] = None
         self._session_manager = session_manager or SharedSessionManager()
@@ -640,15 +636,8 @@ class TelemetryCapture:
         self._readers = {}
 
     def _should_notify_stop_callback(self) -> bool:
-        """Only auto-notify for unexpected/internal stops."""
-        return self._stop_reason not in {
-            None,
-            "manual",
-            "session_end",
-            "session_restart",
-            "disabled",
-            "app_close",
-        }
+        """Notify only when an internal stop owns finalization."""
+        return self._stop_reason is not None and not self._explicit_stop_requested
 
     def _connect_regions(self) -> Dict[str, RegionReader]:
         """Connect to all shared memory regions with single attempt."""
@@ -821,8 +810,8 @@ class TelemetryCapture:
         self._output_prefix = self._make_output_prefix()
         self._last_valid_frame_time = None
         self._stop_reason = None
+        self._explicit_stop_requested = False
         self._all_disconnected_since = None
-        self._idle_since = None
 
         # Start the capture loop task
         self._task = asyncio.create_task(self._capture_loop_wrapper())
@@ -952,33 +941,6 @@ class TelemetryCapture:
                     frame_num += 1
                     self._all_disconnected_since = None
 
-                    # Idle timeout is only meaningful once full recording has
-                    # started. Validity-only capture must remain available for
-                    # the lifetime of ACE, and an armed recorder may sit in the
-                    # pits for several minutes before its clean start boundary.
-                    if self._record_frames and not self._recording_awaiting_boundary:
-                        physics = frame.physics if frame.physics else {}
-                        speed_kmh = physics.get("speed_kmh", 0) if isinstance(physics, dict) else 0
-                        if speed_kmh < 1.0:
-                            if not self._lap_boundaries:
-                                if self._idle_since is None:
-                                    self._idle_since = now_mono
-                                elif now_mono - self._idle_since > self.IDLE_TIMEOUT_SECONDS:
-                                    log_warning(
-                                        Component.TELEMETRY,
-                                        "Idle timeout",
-                                        timeout=f"{self.IDLE_TIMEOUT_SECONDS:.1f}s",
-                                    )
-                                    self._stop_reason = f"idle_timeout ({self.IDLE_TIMEOUT_SECONDS:.1f}s)"
-                                    self._running = False
-                                    break
-                            else:
-                                self._idle_since = None
-                        else:
-                            self._idle_since = None
-                    else:
-                        self._idle_since = None
-
                     # Debug: log first frame
                     if frame_num == 1:
                         mode_label = "validity-only" if not self._record_frames else "telemetry active"
@@ -1045,6 +1007,7 @@ class TelemetryCapture:
             return self._frames.copy()
 
         log_info(Component.TELEMETRY, "Capture stopped", reason=reason, frames=len(self._frames))
+        self._explicit_stop_requested = True
         self._stop_reason = reason
         self._running = False
 

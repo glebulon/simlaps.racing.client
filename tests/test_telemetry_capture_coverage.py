@@ -16,36 +16,29 @@ from src.core.telemetry_capture import (
 
 
 class TestShouldNotifyStopCallback:
-    """Test _should_notify_stop_callback edge cases."""
+    """Test explicit and internal stop ownership."""
 
     def test_notify_for_unexpected_stop(self):
         capture = TelemetryCapture(hz=10.0)
         capture._stop_reason = "heartbeat_timeout"
         assert capture._should_notify_stop_callback() is True
 
-    def test_no_notify_for_manual_stop(self):
+    def test_notify_for_manual_reason_when_stop_is_internal(self):
         capture = TelemetryCapture(hz=10.0)
         capture._stop_reason = "manual"
-        assert capture._should_notify_stop_callback() is False
+        assert capture._should_notify_stop_callback() is True
 
-    def test_no_notify_for_session_end(self):
+    def test_no_notify_for_explicit_stop_regardless_of_reason(self):
         capture = TelemetryCapture(hz=10.0)
-        capture._stop_reason = "session_end"
-        assert capture._should_notify_stop_callback() is False
+        capture._explicit_stop_requested = True
+        for reason in ("manual", "car_removed", "session_end", "session_restart", "disabled", "app_close"):
+            capture._stop_reason = reason
+            assert capture._should_notify_stop_callback() is False
 
-    def test_no_notify_for_session_restart(self):
+    def test_no_notify_without_stop_reason(self):
         capture = TelemetryCapture(hz=10.0)
-        capture._stop_reason = "session_restart"
-        assert capture._should_notify_stop_callback() is False
-
-    def test_no_notify_for_disabled(self):
-        capture = TelemetryCapture(hz=10.0)
-        capture._stop_reason = "disabled"
-        assert capture._should_notify_stop_callback() is False
-
-    def test_no_notify_for_app_close(self):
-        capture = TelemetryCapture(hz=10.0)
-        capture._stop_reason = "app_close"
+        capture._explicit_stop_requested = True
+        capture._stop_reason = None
         assert capture._should_notify_stop_callback() is False
 
     def test_notify_for_none_reason_while_running(self):
@@ -509,13 +502,12 @@ class TestValidityOnlyCaptureLoop:
         ((False, False), (True, True)),
     )
     @pytest.mark.asyncio
-    async def test_idle_timeout_waits_for_full_recording_to_start(
+    async def test_stationary_capture_keeps_sampling_before_recording_boundary(
         self,
         record_frames,
         awaiting_boundary,
     ):
         capture = TelemetryCapture(hz=1000.0, record_frames=record_frames)
-        capture.IDLE_TIMEOUT_SECONDS = 0.0
         capture._recording_awaiting_boundary = awaiting_boundary
         capture._running = True
         capture._readers = {"physics": MagicMock(size=4)}
@@ -544,7 +536,6 @@ class TestValidityOnlyCaptureLoop:
 
         assert seen == [0, 1]
         assert capture.get_stop_reason() is None
-        assert capture._idle_since is None
 
     def test_recording_arms_at_clean_boundary(self):
         capture = TelemetryCapture(record_frames=False)
