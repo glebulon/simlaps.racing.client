@@ -1065,6 +1065,47 @@ class TestTelemetryAnalyzer:
     """Test TelemetryAnalyzer class."""
 
     @pytest.mark.asyncio
+    async def test_analyze_uses_static_track_and_layout_identity(self, tmp_path):
+        """The public analyzer path selects the exact static layout profile."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+
+        frames = [create_mock_frame(i, speed=100.0, position=i * 0.01) for i in range(200)]
+        for frame in frames:
+            frame.static = {"track": "Suzuka", "track_configuration": "East"}
+
+        analyzer = TelemetryAnalyzer(output_dir=str(tmp_path))
+        result = await analyzer.analyze(
+            frames,
+            hz=10.0,
+            game_lap_boundaries=[0, 100, 200],
+            output_prefix="suzuka-east",
+        )
+
+        html = open(result.html_path, encoding="utf-8").read()
+        assert '"track_label": "Suzuka East (East)"' in html
+
+    @pytest.mark.asyncio
+    async def test_analyze_leaves_conflicting_static_layout_profileless(self, tmp_path):
+        """An explicit conflicting static layout cannot select a fallback."""
+        from src.core.telemetry_analyzer import TelemetryAnalyzer
+
+        frames = [create_mock_frame(i, speed=100.0, position=i * 0.01) for i in range(200)]
+        for frame in frames:
+            frame.static = {"track": "Suzuka East", "track_configuration": "West"}
+
+        analyzer = TelemetryAnalyzer(output_dir=str(tmp_path))
+        result = await analyzer.analyze(
+            frames,
+            hz=10.0,
+            game_lap_boundaries=[0, 100, 200],
+            output_prefix="suzuka-conflict",
+        )
+
+        html = open(result.html_path, encoding="utf-8").read()
+        assert '"track_key": null' in html
+        assert '"config_name": null' in html
+
+    @pytest.mark.asyncio
     async def test_analyze_with_captured_data(self, tmp_path):
         """Test TelemetryAnalyzer.analyze with captured telemetry data."""
         import json

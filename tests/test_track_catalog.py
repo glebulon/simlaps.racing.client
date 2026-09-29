@@ -46,6 +46,40 @@ class TestSelectTrackProfile:
         assert track_key is not None
         assert profile is not None
 
+    def test_select_split_track_from_display_name(self):
+        """A shipped split-layout display name resolves to its own profile."""
+        track_key, profile = select_track_profile(track_name="Suzuka East")
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_select_split_track_from_parent_and_config(self):
+        """A parent track plus explicit layout selects the split entry."""
+        track_key, profile = select_track_profile(track_name="Suzuka", config_name="East")
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_select_exact_split_path_before_parent_substring(self):
+        """A split path component wins over the parent track alias."""
+        track_key, profile = select_track_profile(path=r"C:\tracks\suzuka_east", config_name="East")
+
+        assert track_key == "suzuka_east"
+        assert profile["config_key"] == "east"
+
+    def test_exact_ambiguous_path_keeps_config_candidates(self):
+        """An exact ambiguous path component still searches every layout."""
+        track_key, profile = select_track_profile(path=r"C:\tracks\Nurburgring", config_name="GP")
+
+        assert track_key == "nurburgring_gp"
+        assert profile["config_key"] == "gp"
+
+    @pytest.mark.parametrize("config_name", ["West", "Unknown"])
+    def test_explicit_conflicting_or_unknown_config_is_profileless(self, config_name):
+        """An explicit layout cannot silently fall back to a default profile."""
+        assert select_track_profile(track_name="Suzuka East", config_name=config_name) == (None, None)
+        assert select_track_profile(path=r"C:\tracks\suzuka_east", config_name=config_name) == (None, None)
+
     def test_select_by_track_name_not_found(self):
         """Test selecting non-existent track."""
         track_key, profile = select_track_profile(track_name="nonexistent_track")
@@ -235,3 +269,96 @@ class TestNordschleifeConfigSelection:
         assert max(ends) == pytest.approx(0.852)
         assert max(ends) > 0.85
         assert profile["confidence"] == "estimated"
+
+    @pytest.mark.parametrize(
+        "label",
+        ("Nurburgring Nordschleife", "Nurburgring Touristenfahrten", "nurburgring_touristenfahrten"),
+    )
+    def test_nurburgring_layout_labels_override_24h_default(self, label):
+        """Nordschleife and tourist labels select that layout without SHM config."""
+        track_key, profile = select_track_profile(track_name=label)
+
+        assert track_key == "nurburgring_nordschleife"
+        assert profile["config_key"] == "nordschleife"
+
+    def test_unknown_nordschleife_gp_suffix_stays_profileless(self):
+        """A layout token without a matching Nordschleife config stays unknown."""
+        assert select_track_profile(track_name="nurburgring_nordschleife_gp") == (None, None)
+
+
+SINGLE_CONFIG_TRACK_KEYS = tuple(
+    track_key for track_key, track in TRACK_CATALOG.items() if len(track["configs"]) == 1
+)
+
+
+@pytest.mark.parametrize("track_key", SINGLE_CONFIG_TRACK_KEYS)
+@pytest.mark.parametrize("config_name", ("GP", "Full"))
+def test_single_config_generic_labels_select_only_profile(track_key, config_name):
+    """Generic GP/Full labels remain usable when an entry has one layout."""
+    expected_config = next(iter(TRACK_CATALOG[track_key]["configs"]))
+    selected_key, profile = select_track_profile(track_name=track_key, config_name=config_name)
+
+    assert selected_key == track_key
+    assert profile["config_key"] == expected_config
+
+
+@pytest.mark.parametrize("track_key", SINGLE_CONFIG_TRACK_KEYS)
+@pytest.mark.parametrize("config_slug", ("gp", "full"))
+def test_single_config_suffix_labels_resolve_through_analyzer_selector(track_key, config_slug):
+    """Track labels with a final GP/Full token resolve after exact matching fails."""
+    expected_config = next(iter(TRACK_CATALOG[track_key]["configs"]))
+    labels = (
+        f"{track_key}_{config_slug}",
+        f"{TRACK_CATALOG[track_key]['name']} {config_slug.upper()}",
+    )
+
+    for label in labels:
+        selected_key, profile = select_track_profile(track_name=label)
+
+        assert selected_key == track_key
+        assert profile["config_key"] == expected_config
+
+
+@pytest.mark.parametrize(
+    "label,expected_key,expected_config",
+    (
+        ("Brands Hatch GP", "brands_hatch", "gp"),
+        ("Brands Hatch Indy", "brands_hatch_indy", "indy"),
+    ),
+)
+def test_brands_hatch_layout_labels_keep_distinct_profiles(label, expected_key, expected_config):
+    """Brands Hatch GP and Indy labels retain their distinct catalog entries."""
+    selected_key, profile = select_track_profile(track_name=label)
+
+    assert selected_key == expected_key
+    assert profile["config_key"] == expected_config
+
+
+def test_nonempty_config_that_normalizes_empty_is_rejected(monkeypatch):
+    """A punctuation-only config cannot match a missing config name."""
+    monkeypatch.setitem(
+        TRACK_CATALOG,
+        "synthetic_empty_config",
+        {
+            "name": "Synthetic Empty Config",
+            "aliases": ["synthetic_empty_config"],
+            "default_config": "only",
+            "configs": {"only": {"aliases": [], "corners": []}},
+        },
+    )
+
+    assert select_track_profile(track_name="synthetic_empty_config", config_name="!!!") == (None, None)
+    assert select_track_profile(
+        path=r"C:\tracks\prefix_synthetic_empty_config_suffix", config_name="!!!"
+    ) == (None, None)
+
+
+def test_empty_config_name_keeps_absent_config_behavior():
+    """An empty config remains equivalent to omitting the optional selector."""
+    track_key, profile = select_track_profile(track_name="Nurburgring", config_name="")
+    assert track_key == "nurburgring_nordschleife"
+    assert profile["config_key"] == "24h"
+
+    track_key, profile = select_track_profile(track_name="monza_gp", config_name="")
+    assert track_key == "monza"
+    assert profile["config_key"] == "v0_4"
