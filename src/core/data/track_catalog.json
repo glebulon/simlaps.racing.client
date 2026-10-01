@@ -151,7 +151,9 @@
       "indy": {
         "name": "Indy",
         "aliases": [
-          "indy"
+          "indy",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -215,6 +217,10 @@
       "spa-francorchamps",
       "circuit_de_spa_",
       "spa francorchamps",
+      "spa gp",
+      "spa francorchamps gp",
+      "circuit de spa francorchamps gp",
+      "circuit_de_spa_francorchamps gp",
       "circuit de spa-francorchamps"
     ],
     "default_config": "current",
@@ -543,7 +549,9 @@
       "national": {
         "name": "National",
         "aliases": [
-          "national"
+          "national",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -668,7 +676,9 @@
       "national": {
         "name": "National",
         "aliases": [
-          "national"
+          "national",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -751,7 +761,8 @@
       "full": {
         "name": "Full",
         "aliases": [
-          "full"
+          "full",
+          "gp"
         ],
         "corners": [
           {
@@ -880,7 +891,9 @@
       "gp_short": {
         "name": "GP Short",
         "aliases": [
-          "gp_short"
+          "gp_short",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -997,7 +1010,8 @@
       "full": {
         "name": "Full",
         "aliases": [
-          "full"
+          "full",
+          "gp"
         ],
         "corners": [
           {
@@ -1146,6 +1160,7 @@
       "mazda-raceway",
       "weathertech-raceway",
       "laguna seca",
+      "laguna seca gp",
       "mazda raceway laguna seca"
     ],
     "default_config": "full",
@@ -1155,6 +1170,7 @@
         "aliases": [
           "full",
           "11-corner",
+          "gp",
           "11_corner"
         ],
         "corners": [
@@ -1350,7 +1366,8 @@
       "full": {
         "name": "Full",
         "aliases": [
-          "full"
+          "full",
+          "gp"
         ],
         "corners": [
           {
@@ -2394,7 +2411,9 @@
       "fosters": {
         "name": "Fosters",
         "aliases": [
-          "fosters"
+          "fosters",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -2462,7 +2481,9 @@
       "international": {
         "name": "International",
         "aliases": [
-          "international"
+          "international",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -2895,7 +2916,9 @@
       "east": {
         "name": "East",
         "aliases": [
-          "east"
+          "east",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -2962,7 +2985,9 @@
       "west": {
         "name": "West",
         "aliases": [
-          "west"
+          "west",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -3052,7 +3077,8 @@
       "full": {
         "name": "Full",
         "aliases": [
-          "full"
+          "full",
+          "gp"
         ],
         "corners": [
           {
@@ -3153,7 +3179,9 @@
       "short": {
         "name": "Short",
         "aliases": [
-          "short"
+          "short",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -3226,7 +3254,9 @@
       "gp_inner_loop": {
         "name": "GP Inner Loop",
         "aliases": [
-          "gp_inner_loop"
+          "gp_inner_loop",
+          "gp",
+          "full"
         ],
         "corners": [
           {
@@ -3299,7 +3329,9 @@
       "short_inner_loop": {
         "name": "Short Inner Loop",
         "aliases": [
-          "short_inner_loop"
+          "short_inner_loop",
+          "gp",
+          "full"
         ],
         "corners": [
           {
