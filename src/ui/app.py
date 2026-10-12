@@ -39,6 +39,7 @@ from .components.pb_cache_viewer import show_pb_cache_dialog
 from .components.telemetry_status import TelemetryButton
 from .pages.history import HistoryEntry, HistoryPage
 from .pages.home import HomePage
+from .pages.multiplayer_results import MultiplayerResultsPage
 from .pages.settings import SettingsPage
 from .services.app_lifecycle_service import AppLifecycleService
 from .services.lap_processing_service import LapProcessingService
@@ -56,6 +57,7 @@ class AppPage(Enum):
     HOME = "home"
     SETTINGS = "settings"
     HISTORY = "history"
+    MULTIPLAYER_RESULTS = "multiplayer_results"
 
 
 class SimLapsApp:
@@ -112,6 +114,7 @@ class SimLapsApp:
         self._home_page: Optional[HomePage] = None
         self._settings_page: Optional[SettingsPage] = None
         self._history_page: Optional[HistoryPage] = None
+        self._results_page: Optional[MultiplayerResultsPage] = None
         self._current_page = AppPage.HOME
 
         # History tracking
@@ -376,6 +379,7 @@ class SimLapsApp:
             on_history_click=lambda: self._show_page(AppPage.HISTORY),
             on_pb_cache_click=self._show_pb_cache_viewer,
             on_retry_lap=self._on_retry_lap,
+            on_results_click=lambda: self._show_page(AppPage.MULTIPLAYER_RESULTS),
         )
 
         self._settings_page = SettingsPage(
@@ -389,6 +393,7 @@ class SimLapsApp:
         self._history_page = HistoryPage(
             on_back=lambda: self._show_page(AppPage.HOME),
         )
+        self._results_page = MultiplayerResultsPage(on_back=lambda: self._show_page(AppPage.HOME))
 
     def _show_page(self, page: AppPage):
         """Navigate to a page."""
@@ -408,6 +413,9 @@ class SimLapsApp:
         elif page == AppPage.HISTORY:
             self._history_page.set_entries(self._history_entries)
             self.page.add(self._history_page)
+        elif page == AppPage.MULTIPLAYER_RESULTS:
+            self._results_page.load()
+            self.page.add(self._results_page)
 
     def _prune_history_entry_bindings(self) -> None:
         """Drop bindings whose history entries are no longer retained."""
@@ -630,10 +638,12 @@ class SimLapsApp:
             "home_page": self._home_page,
             "telemetry_enabled": self._config.telemetry_enabled,
         }
+        parser = getattr(self, "_log_parser", None)
+        session = parser.current_session if parser else None
         if hasattr(self, "_current_track_name"):
-            start_kwargs["track_name"] = self._current_track_name
+            start_kwargs["track_name"] = session.track if session else self._current_track_name
         if hasattr(self, "_session_manager"):
-            start_kwargs["car_model"] = self._session_manager.get_car()
+            start_kwargs["car_model"] = session.car if session else self._session_manager.get_car()
         await self._telemetry_lifecycle_service.start_capture(**start_kwargs)
 
     async def _on_telemetry_auto_stop(self, reason: str, snapshot=None):

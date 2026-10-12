@@ -12,6 +12,106 @@ from src.core.log_parser import LogParser
 from src.models import LapState, SessionData, SharedSessionManager
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("historical", [False, True])
+async def test_player_car_driving_starts_capture_without_game_started(tmp_path, historical):
+    log_file = tmp_path / "online.log"
+    car = "442adf4c65b34700-1fec06886fcfde97"
+    lines = (
+        "[2026-10-11 20:41:44.652] [gameplay] [info] onSetPlayerCurrentCarCommand: Set new car "
+        "442adf4c-65b3-4700-1fec-06886fcfde97 content\\cars\\ks_porsche_992_gt3_rs\\presets\\preset\n"
+        "[2026-10-11 20:41:44.654] [server] [info] "
+        f"[ServerVehicleSystem][{car}] Creating Car (Glebulon  \t76561198321627695)\n"
+    )
+    driving = "[2026-10-11 20:42:00.000] [gameplay] [info] On Split start false end false id 0 splittime 0\n"
+    log_file.write_text(lines + driving if historical else lines)
+    statuses = []
+    started = asyncio.Event()
+
+    async def on_game(running):
+        statuses.append(running)
+        if running:
+            started.set()
+
+    parser = LogParser(log_path=str(log_file), on_game_status_change=on_game)
+    task = asyncio.create_task(parser.follow(poll_interval=0.005))
+    try:
+        if not historical:
+            await asyncio.sleep(0.05)
+            assert statuses == []
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(driving)
+        await asyncio.wait_for(started.wait(), timeout=1.0)
+        assert statuses == [True]
+        assert parser.current_session is not None
+        assert parser.current_session.car == "ks_porsche_992_gt3_rs"
+    finally:
+        parser.stop()
+        await asyncio.wait_for(task, timeout=1.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("historical", [False, True])
+async def test_online_connect_starts_capture_without_game_started(tmp_path, historical):
+    log_file = tmp_path / "online.log"
+    connection = (
+        "[2026-10-11 20:42:00.000] [network] [info] "
+        "76561198321627695 connected on car ks_porsche_992_gt3_rs, "
+        "with new carId 442adf4c65b34700-1fec06886fcfde97\n"
+    )
+    log_file.write_text(connection if historical else "")
+    statuses = []
+    started = asyncio.Event()
+
+    async def on_game(running):
+        statuses.append(running)
+        if running:
+            started.set()
+
+    parser = LogParser(log_path=str(log_file), on_game_status_change=on_game)
+    task = asyncio.create_task(parser.follow(poll_interval=0.005))
+    try:
+        if not historical:
+            await asyncio.sleep(0.05)
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(connection)
+        await asyncio.wait_for(started.wait(), timeout=1.0)
+        assert statuses == [True]
+        assert parser.current_session is not None
+        assert parser.current_session.car == "ks_porsche_992_gt3_rs"
+    finally:
+        parser.stop()
+        await asyncio.wait_for(task, timeout=1.0)
+
+
+@pytest.mark.asyncio
+async def test_online_rejoin_starts_new_capture_after_car_removed(tmp_path):
+    log_file = tmp_path / "online.log"
+    log_file.write_text("")
+    statuses = []
+
+    async def on_game(running):
+        statuses.append(running)
+
+    parser = LogParser(log_path=str(log_file), on_game_status_change=on_game)
+    task = asyncio.create_task(parser.follow(poll_interval=0.005))
+    car = "442adf4c65b34700-1fec06886fcfde97"
+    connection = f"76561198321627695 connected on car ks_porsche_992_gt3_rs, with new carId {car}\n"
+    try:
+        await asyncio.sleep(0.05)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(connection)
+        await asyncio.sleep(0.05)
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"onSetPlayerCurrentCarCommand: remove car {car}\n")
+            f.write(connection)
+        await asyncio.sleep(0.05)
+        assert statuses == [True, True]
+    finally:
+        parser.stop()
+        await asyncio.wait_for(task, timeout=1.0)
+
+
 class TestFollowCore:
     """Test core follow() functionality."""
 

@@ -68,12 +68,14 @@ class HomePage(ft.Column):
         on_history_click: Optional[Callable] = None,
         on_pb_cache_click: Optional[Callable] = None,
         on_retry_lap: Optional[Callable[[LapCard], None]] = None,
+        on_results_click: Optional[Callable] = None,
     ):
         self.config = config
         self.on_settings_click = on_settings_click
         self.on_history_click = on_history_click
         self.on_pb_cache_click = on_pb_cache_click
         self.on_retry_lap = on_retry_lap
+        self.on_results_click = on_results_click
 
         # Game state
         self._game_running = False
@@ -363,37 +365,44 @@ class HomePage(ft.Column):
         )
 
         # Buttons
+        button_style = ft.ButtonStyle(
+            color="#888888",
+            side=ft.BorderSide(1, "#3d3d5c"),
+            padding=ft.Padding.symmetric(horizontal=6, vertical=8),
+            text_style=ft.TextStyle(size=12),
+        )
         buttons = ft.Container(
             content=ft.Row(
                 [
                     ft.OutlinedButton(
-                        "Settings",
-                        icon=ft.Icons.SETTINGS,
-                        on_click=self._handle_settings_click,
-                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                        "Settings", on_click=self._handle_settings_click, style=button_style, expand=True
                     ),
                     ft.OutlinedButton(
-                        "Submission History",
-                        icon=ft.Icons.HISTORY,
+                        "History",
+                        tooltip="Submission History",
                         on_click=self._handle_history_click,
-                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                        style=button_style,
+                        expand=True,
                     ),
                     ft.OutlinedButton(
-                        "View PB Cache",
-                        icon=ft.Icons.LIST_ALT,
+                        "PB Cache",
+                        tooltip="View PB Cache",
                         on_click=self._handle_pb_cache_click,
-                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                        style=button_style,
+                        expand=True,
                     ),
                     ft.OutlinedButton(
-                        "Logs",
-                        icon=ft.Icons.BUG_REPORT,
-                        on_click=self._handle_logs_click,
-                        style=ft.ButtonStyle(color="#888888", side=ft.BorderSide(1, "#3d3d5c")),
+                        "Multiplayer",
+                        tooltip="Multiplayer Results",
+                        on_click=self._handle_results_click,
+                        style=button_style,
+                        expand=True,
                     ),
+                    ft.OutlinedButton("Logs", on_click=self._handle_logs_click, style=button_style, expand=True),
                 ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                spacing=4,
             ),
-            padding=ft.Padding.only(left=20, right=20, top=16, bottom=16),
+            padding=ft.Padding.only(left=12, right=12, top=16, bottom=16),
             bgcolor="#0f0f1a",
         )
 
@@ -478,6 +487,10 @@ class HomePage(ft.Column):
                     "PB Cache view is not configured yet",
                     "#7c3aed",
                 )
+
+    def _handle_results_click(self, e):
+        if self.on_results_click:
+            self.on_results_click()
 
     def _handle_logs_click(self, e):
         """Handle Logs button click."""

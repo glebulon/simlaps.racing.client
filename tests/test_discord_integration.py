@@ -617,6 +617,27 @@ class TestAppDiscordPosting:
             telemetry_enabled=app._config.telemetry_enabled,
         )
 
+    @pytest.mark.asyncio
+    async def test_start_telemetry_capture_uses_parser_session_metadata(self):
+        app = SimLapsApp.__new__(SimLapsApp)
+        app._config = AppConfig(telemetry_enabled=True)
+        app._home_page = MagicMock()
+        app._telemetry_capture = MagicMock()
+        app._telemetry_lifecycle_service = AsyncMock()
+        app._log_parser = MagicMock(current_session=SessionData(track="spa", car="ks_porsche_992_gt3_rs"))
+        app._session_manager = MagicMock()
+        app._current_track_name = None
+
+        await app._start_telemetry_capture()
+
+        app._telemetry_lifecycle_service.start_capture.assert_awaited_once_with(
+            telemetry_capture=app._telemetry_capture,
+            home_page=app._home_page,
+            telemetry_enabled=True,
+            track_name="spa",
+            car_model="ks_porsche_992_gt3_rs",
+        )
+
     def test_retry_lap_schedules_submit_task_for_matching_history_entry(self):
         app = SimLapsApp.__new__(SimLapsApp)
         app.page = MagicMock()
