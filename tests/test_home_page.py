@@ -31,6 +31,17 @@ async def test_update_banner_download_button_awaits_open_update_url() -> None:
     open_update_url_mock.assert_awaited_once()
 
 
+def test_navigation_buttons_share_compact_row() -> None:
+    home_page = HomePage(AppConfig())
+    buttons = home_page.controls[-2].content
+
+    assert [button.content for button in buttons.controls] == [
+        "Settings", "History", "PB Cache", "Multiplayer", "Logs"
+    ]
+    assert buttons.spacing == 4
+    assert all(button.expand for button in buttons.controls)
+
+
 async def test_open_update_url_awaits_expected_download_url() -> None:
     with patch.object(HomePage, "page", new_callable=PropertyMock) as page_prop:
         page_mock = MagicMock()

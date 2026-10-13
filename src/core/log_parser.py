@@ -820,6 +820,8 @@ class LogParser:
                 self.current_session.fuel_reliable = not self.context.car_is_hybrid
             else:
                 self._start_new_session("UNKNOWN", line)
+            if self._is_steam_id(pid):
+                self._session_active_from_logs = True
 
             log_debug(
                 Component.LOG_PARSER,
@@ -943,6 +945,7 @@ class LogParser:
         )
         if is_practice_split or is_physics_lap or is_player_lap:
             self._start_new_session("PRACTICE", line)
+            self._session_active_from_logs = True
             log_debug(
                 Component.LOG_PARSER,
                 "[SESSION] Fallback PRACTICE session created for offline "
@@ -2508,12 +2511,20 @@ class LogParser:
                             if m and self._is_player_car(m.group(1)):
                                 log_debug(Component.LOG_PARSER, f"[SESSION_END] remove car detected: {m.group(1)}")
                                 await self._emit_session_end()
+                                self._last_emitted_game_status = None
 
                         try:
                             completed = self._process_line(line)
                         except (RuntimeError, ValueError, TypeError) as exc:
                             log_debug(Component.LOG_PARSER, f"[ERROR] Live process_line: {exc}")
                             continue
+
+                        if (
+                            self.current_session
+                            and self._session_active_from_logs
+                            and self._last_emitted_game_status is not True
+                        ):
+                            await self._emit_game_status(True, trigger="session detected from logs")
 
                         if self._reconciled_lap is not None and self.current_session is not None:
                             reconciled = self._reconciled_lap
