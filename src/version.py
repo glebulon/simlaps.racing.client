@@ -12,14 +12,14 @@ GAME_DISPLAY_NAME = "AC EVO"
 
 # Version components
 VERSION_MAJOR = 1
-VERSION_MINOR = 4
-VERSION_PATCH = 5
+VERSION_MINOR = 5
+VERSION_PATCH = 0
 
 # Full version string
 VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_PATCH}"
 
 # Build metadata (set during build process)
-BUILD_DATE = "2026-09-30"
+BUILD_DATE = "2026-10-12"
 BUILD_COMMIT = "8484761"
 
 # User-Agent string for API requests
