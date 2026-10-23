@@ -484,6 +484,9 @@ def build_executable():
             "src.ui",
             "--collect-all",
             "src.utils",
+            # acevo-sdk carries the telemetry core plus bundled catalog JSON.
+            "--collect-all",
+            "acevo",
         ]
     )
 

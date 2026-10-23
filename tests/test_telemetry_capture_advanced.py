@@ -308,11 +308,14 @@ class TestCallbackSystem:
 
     @pytest.mark.asyncio
     async def test_internal_stop_callback_receives_old_snapshot_after_immediate_restart(self, monkeypatch):
-        capture = TelemetryCapture(hz=1000.0)
+        game_states = iter((GameProcessStatus.RUNNING, GameProcessStatus.NOT_RUNNING))
+        capture = TelemetryCapture(
+            hz=1000.0,
+            game_running_callback=lambda: next(game_states) == GameProcessStatus.RUNNING,
+        )
         old_frame = FrameData("2026-01-01T00:00:00Z", 1, {"speed_kmh": 100.0})
         observed = []
         analyzed = []
-        game_states = iter((GameProcessStatus.RUNNING, GameProcessStatus.NOT_RUNNING))
 
         capture._connect_regions = lambda: {"physics": SimpleNamespace(size=1)}
         capture._reconnect_missing = lambda _readers: None
@@ -329,7 +332,6 @@ class TestCallbackSystem:
         capture._capture_frame = fake_frame
         prefixes = iter(("old-prefix", "new-prefix"))
         capture._make_output_prefix = lambda: next(prefixes)
-        monkeypatch.setattr("src.core.telemetry_capture.is_game_running", lambda: next(game_states))
         capture.set_source_context(track_name="Old Track", car_model="Old Car")
 
         class Analyzer:
