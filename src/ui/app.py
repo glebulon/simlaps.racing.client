@@ -19,7 +19,7 @@ from src.core.api_client import APIClient
 from src.core.discord_notifier import DiscordNotifier, create_discord_notifier
 from src.core.log_parser import LogParser
 from src.core.pb_cache import PBCache
-from src.core.security import get_steam_user
+from src.core.security import GameProcessStatus, get_steam_user, is_game_running
 from src.core.telemetry_capture import TelemetryCapture
 from src.core.track_catalog import TRACK_CATALOG
 from src.models import LapData, SessionData, SharedSessionManager
@@ -258,6 +258,7 @@ class SimLapsApp:
                 debug_logs=self._config.telemetry_debug_logs,
                 session_manager=self._session_manager,
                 record_frames=self._config.telemetry_enabled,
+                game_running_callback=lambda: is_game_running() == GameProcessStatus.RUNNING,
             )
             # Set up auto-stop callback to trigger analysis
             self._telemetry_capture.set_on_stop_snapshot_callback(self._on_telemetry_auto_stop)

@@ -5,6 +5,7 @@ Provides consistent, structured logging across all modules with proper
 log levels, component tagging, and debug log integration.
 """
 
+import logging
 import sys
 import time
 from enum import Enum
@@ -162,3 +163,35 @@ def log_critical(component: Component, message: str, **kwargs):
 def log_exception(component: Component, message: str, exception: Exception, **kwargs):
     """Log an exception with traceback."""
     _logger.exception(component, message, exception, **kwargs)
+
+
+class _AcevoLogBridge(logging.Handler):
+    """Forward acevo-sdk log records into the debug-log viewer."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            from ..ui.components.debug_logs import add_debug_log
+
+            add_debug_log(f"[{time.strftime('%H:%M:%S')}] [{record.levelname}] {record.getMessage()}")
+            if record.exc_info:
+                import traceback
+
+                for line in traceback.format_exception(*record.exc_info):
+                    for rendered in line.rstrip().splitlines():
+                        if rendered.strip():
+                            add_debug_log(f"[{time.strftime('%H:%M:%S')}] [TRACEBACK] {rendered}")
+        except Exception:
+            pass
+
+
+def bridge_acevo_logger():
+    """Route the ``acevo`` package logger into the app's debug-log viewer.
+
+    acevo-sdk emits through stdlib ``logging.getLogger("acevo")`` instead of
+    this module, so without a handler its diagnostics are invisible in the
+    Debug Logs page.
+    """
+    acevo_logger = logging.getLogger("acevo")
+    if not any(isinstance(h, _AcevoLogBridge) for h in acevo_logger.handlers):
+        acevo_logger.addHandler(_AcevoLogBridge())
+    acevo_logger.setLevel(logging.DEBUG)

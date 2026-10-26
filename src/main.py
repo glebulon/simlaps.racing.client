@@ -25,6 +25,7 @@ else:
 from src.ui.app import run_app
 from src.utils.structured_logger import (
     Component,
+    bridge_acevo_logger,
     log_exception,
     log_info,
 )
@@ -32,6 +33,7 @@ from src.utils.structured_logger import (
 
 def main():
     """Main entry point for the application."""
+    bridge_acevo_logger()
     try:
         run_app()
     except KeyboardInterrupt:
