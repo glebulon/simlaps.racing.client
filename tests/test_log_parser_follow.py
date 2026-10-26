@@ -23,7 +23,7 @@ async def test_player_car_driving_starts_capture_without_game_started(tmp_path, 
         "[2026-10-11 20:41:44.654] [server] [info] "
         f"[ServerVehicleSystem][{car}] Creating Car (Glebulon  \t76561198321627695)\n"
     )
-    driving = "[2026-10-11 20:42:00.000] [gameplay] [info] On Split start false end false id 0 splittime 0\n"
+    driving = "[2026-10-11 20:42:00.000] [gameplay] [info] Received split: isStart false, isEnd false, index 0 \n"
     log_file.write_text(lines + driving if historical else lines)
     statuses = []
     started = asyncio.Event()

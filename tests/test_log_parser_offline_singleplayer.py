@@ -30,6 +30,10 @@ CREATING_CAR = (
     f"(Glebulon  \t{STEAM_ID})"
 )
 SPLIT_START = "[2026-09-11 13:29:27.842] [gameplay] [info] On Split start false end false id 0 splittime 0"
+# Player-scoped driving signal: emitted only for the local player's own
+# splits, so it can safely arm the fallback session creator (unlike
+# ``On Split``/``evOnLapCompleted`` which fire for every car on track).
+RECEIVED_SPLIT = "[2026-09-11 13:29:20.000] [gameplay] [info] Received split: isStart false, isEnd false, index 0 "
 SPLIT_MID = "[2026-09-11 13:32:14.768] [gameplay] [info] On Split start false end false id 1 splittime 166929"
 PHYSICS_LAP = "[2026-09-11 13:35:30.931] [physics] [info] Lap test evOnLapCompleted 2 completed"
 NEW_LAP = f"[2026-09-11 13:35:30.966] [gameplay] [info] New lap carId {CAR_UUID_RUNTIME}: 08:20.409"
@@ -75,11 +79,12 @@ class TestOfflineSinglePlayerFallbackSession:
         parser._process_line(SET_NEW_CAR)
         parser._process_line(CREATING_CAR)
 
-        # Driving begins — first practice split should create a session.
-        parser._process_line(SPLIT_START)
+        # Driving begins — first player-scoped split should create a session.
+        parser._process_line(RECEIVED_SPLIT)
         assert parser.current_session is not None
         assert parser.current_session.session_type == "PRACTICE"
 
+        parser._process_line(SPLIT_START)
         parser._process_line(SPLIT_MID)
         parser._process_line(PHYSICS_LAP)
         completed = parser._process_line(NEW_LAP)
@@ -110,7 +115,20 @@ class TestOfflineSinglePlayerFallbackSession:
         """Driving signals must not create a session until a player car is
         bound (guards against menu/loading noise)."""
         parser = LogParser()
+        parser._process_line(RECEIVED_SPLIT)
+        assert parser.current_session is None
+
+    def test_other_cars_driving_signals_do_not_create_session(self):
+        """``On Split`` and ``evOnLapCompleted`` fire for every car on track;
+        they must not arm the fallback creator (AI cars finishing after the
+        player's session ended would spawn phantom sessions)."""
+        parser = LogParser()
+        parser._process_line(SET_NEW_CAR)
+        parser._process_line(CREATING_CAR)
+
         parser._process_line(SPLIT_START)
+        parser._process_line(PHYSICS_LAP)
+
         assert parser.current_session is None
 
 
@@ -180,7 +198,7 @@ class TestInferredSessionBoundary:
 
         # The fallback creator was re-armed: driving on the new track starts
         # a fresh session carrying the new track name.
-        parser._process_line(SPLIT_START)
+        parser._process_line(RECEIVED_SPLIT)
         assert parser.current_session is not None
         assert parser.current_session.track == "brands hatch indy"
 
@@ -207,7 +225,7 @@ class TestInferredSessionBoundary:
         parser._process_line(CREATING_CAR_B)
         assert parser.context.car_uuid == CAR_UUID_B_RUNTIME
 
-        parser._process_line(SPLIT_START)
+        parser._process_line(RECEIVED_SPLIT)
         assert parser.current_session is not None
         assert parser.current_session.car == "ks_mercedes_amg_gt2"
 
