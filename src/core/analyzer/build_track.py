@@ -35,6 +35,13 @@ def _contact_point_centroid(value: Any) -> tuple[float, float] | None:
     )
 
 
+def _is_spectating(graphics: Dict[str, Any]) -> bool:
+    """True when the camera is focused on a car other than the player's own."""
+    focused = graphics.get("focused_car_id")
+    player = graphics.get("player_car_id")
+    return focused is not None and player is not None and focused != player
+
+
 def build_track(frames: List[FrameData], hz: float = 1.0, start_idx: int = 0) -> List[Dict]:
     """Build track map from frames."""
     track = []
@@ -175,6 +182,7 @@ def build_track(frames: List[FrameData], hz: float = 1.0, start_idx: int = 0) ->
                 "best_lap_time_ms": gr.get("best_time_ms"),
                 "status_name": gr.get("status_name"),
                 "session_phase": gr.get("session_phase"),
+                "is_spectating": _is_spectating(gr),
                 "tyre_temp_fl": tyre_core_temp[0] if len(tyre_core_temp) > 0 else 0,
                 "tyre_temp_fr": tyre_core_temp[1] if len(tyre_core_temp) > 1 else 0,
                 "tyre_temp_rl": tyre_core_temp[2] if len(tyre_core_temp) > 2 else 0,
