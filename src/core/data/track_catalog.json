@@ -1226,15 +1226,15 @@
           {
             "id": 8,
             "name": "Corkscrew",
-            "start": 0.59,
-            "end": 0.645,
+            "start": 0.645,
+            "end": 0.715,
             "_confidence": "profiled"
           },
           {
             "id": 9,
             "name": "Rainey Curve",
-            "start": 0.7,
-            "end": 0.745,
+            "start": 0.715,
+            "end": 0.79,
             "_confidence": "profiled"
           },
           {
