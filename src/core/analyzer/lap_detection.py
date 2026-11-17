@@ -14,6 +14,9 @@ def _detect_laps_by_timing_state(track: List[Dict], hz: float = 1.0) -> Optional
     saw_empty_last_laptime = False
 
     for pt in track:
+        # While spectating, the timing fields belong to the watched car, not the player.
+        if pt.get("is_spectating"):
+            continue
         last_laptime = pt.get("last_lap_time_ms")
         current_lap_time = pt.get("lap_time_ms")
         status_name = str(pt.get("status_name") or "").casefold()
